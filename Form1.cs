@@ -28,15 +28,28 @@ namespace InstanceManager
         private HashSet<int> _pendingStop = new HashSet<int>();
         // Prevents re-entrant timer ticks while a tick is still executing
         private bool _isUpdatingStatuses;
+        // Currently selected group ID (-1 means no group selected)
+        private int _selectedGroupId = -1;
+        // Prevents timer ticks from running after form begins closing
+        private bool _isClosing;
 
         public Main()
         {
             InitializeComponent();
-            InitializeServices();
-            TerminateAlreadyRunningApps();
-            SetupTimer();
-            LoadApplications();
-            SimpleLogger.Info("Main @ Form1.cs", "Application started");
+            try
+            {
+                InitializeServices();
+                TerminateAlreadyRunningApps();
+                SetupTimer();
+                LoadGroups();
+                UpdateAppButtonsEnabled();
+                SimpleLogger.Info("Main @ Form1.cs", "Application started");
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Fatal("Main @ Form1.cs", $"Critical error during startup: {ex.Message}");
+                MessageBoxHelper.ShowError(this, $"Failed to initialize application:\n\n{ex.Message}");
+            }
         }
 
         private void Main_Load(object sender, EventArgs e)
@@ -119,11 +132,15 @@ namespace InstanceManager
 
         private void StatusUpdateTimer_Tick(object sender, EventArgs e)
         {
-            if (_isUpdatingStatuses) return;
+            if (_isClosing || _isUpdatingStatuses) return;
             _isUpdatingStatuses = true;
             try
             {
                 UpdateApplicationStatuses();
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("StatusUpdateTimer_Tick @ Form1.cs", $"Unhandled error in timer tick: {ex.Message}");
             }
             finally
             {
@@ -131,11 +148,215 @@ namespace InstanceManager
             }
         }
 
-        private void LoadApplications()
+        // ===== Group Management =====
+
+        private void LoadGroups()
         {
             try
             {
-                var apps = _storageService.GetAllApplications();
+                var groups = _storageService.GetAllGroups();
+                GroupListBox.Items.Clear();
+
+                foreach (var group in groups)
+                {
+                    GroupListBox.Items.Add(group);
+                }
+
+                SimpleLogger.Info("LoadGroups @ Form1.cs", $"Loaded {groups.Count} groups");
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("LoadGroups @ Form1.cs", $"Error loading groups: {ex.Message}");
+                MessageBoxHelper.ShowError(this, $"Error loading groups: {ex.Message}");
+            }
+        }
+
+        private void GroupListBox_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            try
+            {
+                var selectedGroup = GroupListBox.SelectedItem as ApplicationGroup;
+                if (selectedGroup != null)
+                {
+                    _selectedGroupId = selectedGroup.GroupId;
+                    SelectedGroupLabel.Text = $"Group: {selectedGroup.GroupName}";
+                    LoadApplicationsForGroup(selectedGroup.GroupId);
+                }
+                else
+                {
+                    _selectedGroupId = -1;
+                    SelectedGroupLabel.Text = "Select a group to manage applications";
+                    AppListView.Items.Clear();
+                }
+                UpdateAppButtonsEnabled();
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("GroupListBox_SelectedIndexChanged @ Form1.cs", $"Error selecting group: {ex.Message}");
+            }
+        }
+
+        private void UpdateAppButtonsEnabled()
+        {
+            bool groupSelected = _selectedGroupId > 0;
+            AddButton.Enabled = groupSelected;
+            EditButton.Enabled = groupSelected;
+            DeleteButton.Enabled = groupSelected;
+            StartButton.Enabled = groupSelected;
+            StopButton.Enabled = groupSelected;
+            StartAllButton.Enabled = groupSelected;
+            StopAllButton.Enabled = groupSelected;
+            RefreshButton.Enabled = groupSelected;
+        }
+
+        private void AddGroupButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                string groupName;
+                var result = InputDialog.Show(this, "Add Group", "Enter group name:", "", out groupName);
+
+                if (result == DialogResult.OK)
+                {
+                    if (string.IsNullOrEmpty(groupName))
+                    {
+                        MessageBoxHelper.ShowWarning(this, "Group name cannot be empty.");
+                        return;
+                    }
+
+                    if (_storageService.GroupNameExists(groupName))
+                    {
+                        MessageBoxHelper.ShowWarning(this, $"A group named '{groupName}' already exists.");
+                        return;
+                    }
+
+                    var group = new ApplicationGroup { GroupName = groupName };
+                    _storageService.AddGroup(group);
+                    GroupListBox.Items.Add(group);
+
+                    // Auto-select the new group
+                    GroupListBox.SelectedItem = group;
+
+                    SimpleLogger.Info("AddGroupButton_Click @ Form1.cs", $"Added group: {groupName}");
+                    MessageBoxHelper.ShowSuccess(this, $"Group '{groupName}' created successfully!");
+                }
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("AddGroupButton_Click @ Form1.cs", $"Error adding group: {ex.Message}");
+                MessageBoxHelper.ShowError(this, $"Error adding group: {ex.Message}");
+            }
+        }
+
+        private void EditGroupButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                var selectedGroup = GroupListBox.SelectedItem as ApplicationGroup;
+                if (selectedGroup == null)
+                {
+                    MessageBoxHelper.ShowInfo(this, "Please select a group to edit.");
+                    return;
+                }
+
+                string newName;
+                var result = InputDialog.Show(this, "Edit Group", "Enter new group name:", selectedGroup.GroupName, out newName);
+
+                if (result == DialogResult.OK)
+                {
+                    if (string.IsNullOrEmpty(newName))
+                    {
+                        MessageBoxHelper.ShowWarning(this, "Group name cannot be empty.");
+                        return;
+                    }
+
+                    if (_storageService.GroupNameExists(newName, selectedGroup.GroupId))
+                    {
+                        MessageBoxHelper.ShowWarning(this, $"A group named '{newName}' already exists.");
+                        return;
+                    }
+
+                    string oldName = selectedGroup.GroupName;
+                    selectedGroup.GroupName = newName;
+                    _storageService.UpdateGroup(selectedGroup);
+
+                    // Refresh the listbox display
+                    int idx = GroupListBox.SelectedIndex;
+                    GroupListBox.Items[idx] = selectedGroup;
+                    SelectedGroupLabel.Text = $"Group: {selectedGroup.GroupName}";
+
+                    SimpleLogger.Info("EditGroupButton_Click @ Form1.cs", $"Renamed group: {oldName} -> {newName}");
+                    MessageBoxHelper.ShowSuccess(this, $"Group renamed to '{newName}' successfully!");
+                }
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("EditGroupButton_Click @ Form1.cs", $"Error editing group: {ex.Message}");
+                MessageBoxHelper.ShowError(this, $"Error editing group: {ex.Message}");
+            }
+        }
+
+        private void DeleteGroupButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                var selectedGroup = GroupListBox.SelectedItem as ApplicationGroup;
+                if (selectedGroup == null)
+                {
+                    MessageBoxHelper.ShowInfo(this, "Please select a group to delete.");
+                    return;
+                }
+
+                var appsInGroup = _storageService.GetApplicationsByGroup(selectedGroup.GroupId);
+                string warning = $"Are you sure you want to delete group '{selectedGroup.GroupName}'?";
+                if (appsInGroup.Count > 0)
+                {
+                    warning += $"\n\nThis will also remove {appsInGroup.Count} application(s) from management.";
+                }
+
+                var result = MessageBoxHelper.ShowQuestion(this, warning, "Confirm Delete Group");
+
+                if (result == DialogResult.Yes)
+                {
+                    // Stop any running apps in this group first
+                    foreach (var app in appsInGroup)
+                    {
+                        if (!string.IsNullOrEmpty(app.Directory) && _processManager.IsApplicationRunning(app))
+                        {
+                            _processManager.StopApplication(app);
+                        }
+                        _authorizedApps.Remove(app.Index);
+                        _notifiedUnauthorized.Remove(app.Index);
+                        _pendingStop.Remove(app.Index);
+                    }
+
+                    string groupName = selectedGroup.GroupName;
+                    _storageService.RemoveGroup(selectedGroup.GroupId);
+                    GroupListBox.Items.Remove(selectedGroup);
+
+                    _selectedGroupId = -1;
+                    SelectedGroupLabel.Text = "Select a group to manage applications";
+                    AppListView.Items.Clear();
+                    UpdateAppButtonsEnabled();
+
+                    SimpleLogger.Info("DeleteGroupButton_Click @ Form1.cs", $"Deleted group: {groupName}");
+                    MessageBoxHelper.ShowSuccess(this, $"Group '{groupName}' and its applications removed.");
+                }
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("DeleteGroupButton_Click @ Form1.cs", $"Error deleting group: {ex.Message}");
+                MessageBoxHelper.ShowError(this, $"Error deleting group: {ex.Message}");
+            }
+        }
+
+        // ===== Application Management =====
+
+        private void LoadApplicationsForGroup(int groupId)
+        {
+            try
+            {
+                var apps = _storageService.GetApplicationsByGroup(groupId);
                 AppListView.Items.Clear();
 
                 foreach (var app in apps)
@@ -143,11 +364,11 @@ namespace InstanceManager
                     AddApplicationToListView(app);
                 }
 
-                SimpleLogger.Info("LoadApplications @ Form1.cs", $"Loaded {apps.Count} applications");
+                SimpleLogger.Info("LoadApplicationsForGroup @ Form1.cs", $"Loaded {apps.Count} applications for group {groupId}");
             }
             catch (Exception ex)
             {
-                SimpleLogger.Error("LoadApplications @ Form1.cs", $"Error loading applications: {ex.Message}");
+                SimpleLogger.Error("LoadApplicationsForGroup @ Form1.cs", $"Error loading applications: {ex.Message}");
                 MessageBoxHelper.ShowError(this, $"Error loading applications: {ex.Message}");
             }
         }
@@ -177,11 +398,29 @@ namespace InstanceManager
         {
             try
             {
-                foreach (ListViewItem item in AppListView.Items)
+                // Update statuses for ALL managed apps (not just the visible group)
+                // to enforce watchdog across all groups
+                var allApps = _storageService.GetAllApplications();
+
+                foreach (var app in allApps)
                 {
-                    var app = item.Tag as ManagedApplication;
-                    if (app == null || string.IsNullOrEmpty(app.Directory))
+                    if (string.IsNullOrEmpty(app.Directory))
                         continue;
+
+                    // Find the corresponding ListView item if this app is in the currently displayed group
+                    ListViewItem item = null;
+                    if (app.GroupId == _selectedGroupId)
+                    {
+                        foreach (ListViewItem lvi in AppListView.Items)
+                        {
+                            var tagApp = lvi.Tag as ManagedApplication;
+                            if (tagApp != null && tagApp.Index == app.Index)
+                            {
+                                item = lvi;
+                                break;
+                            }
+                        }
+                    }
 
                     // Skip watchdog checks for apps the user intentionally stopped
                     if (_pendingStop.Contains(app.Index))
@@ -190,8 +429,7 @@ namespace InstanceManager
                         if (!stillRunning)
                         {
                             _pendingStop.Remove(app.Index);
-                            // Update UI if not already updated by StopButton_Click
-                            if (item.SubItems[3].Text == "Running")
+                            if (item != null && item.SubItems[3].Text == "Running")
                             {
                                 item.SubItems[3].Text = "Stopped";
                                 item.ForeColor = Color.Black;
@@ -200,7 +438,7 @@ namespace InstanceManager
                         continue;
                     }
 
-                    bool wasRunning = item.SubItems[3].Text == "Running";
+                    bool wasRunning = app.IsRunning;
                     bool isRunning = _processManager.IsApplicationRunning(app);
 
                     // Detect unauthorized external launch
@@ -217,26 +455,37 @@ namespace InstanceManager
                         _notifiedUnauthorized.Remove(app.Index);
                         app.IsRunning = false;
                         app.LastStop = DateTime.Now;
-                        item.SubItems[3].Text = "Stopped";
-                        item.SubItems[5].Text = app.GetLastStopDisplay();
-                        item.ForeColor = Color.Black;
                         _storageService.UpdateApplication(app);
+
+                        if (item != null)
+                        {
+                            item.SubItems[3].Text = "Stopped";
+                            item.SubItems[5].Text = app.GetLastStopDisplay();
+                            item.ForeColor = Color.Black;
+                        }
 
                         SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
                             $"'{app.AppName}' was stopped externally");
                     }
 
-                    app.IsRunning = isRunning;
-
-                    if (item.SubItems[3].Text != (isRunning ? "Running" : "Stopped"))
+                    if (app.IsRunning != isRunning)
                     {
-                        item.SubItems[3].Text = isRunning ? "Running" : "Stopped";
-                        item.ForeColor = isRunning ? Color.Green : Color.Black;
+                        app.IsRunning = isRunning;
                         _storageService.UpdateApplication(app);
                     }
 
-                    item.SubItems[4].Text = app.GetLastStartDisplay();
-                    item.SubItems[5].Text = app.GetLastStopDisplay();
+                    if (item != null)
+                    {
+                        string statusText = isRunning ? "Running" : "Stopped";
+                        if (item.SubItems[3].Text != statusText)
+                        {
+                            item.SubItems[3].Text = statusText;
+                            item.ForeColor = isRunning ? Color.Green : Color.Black;
+                        }
+
+                        item.SubItems[4].Text = app.GetLastStartDisplay();
+                        item.SubItems[5].Text = app.GetLastStopDisplay();
+                    }
                 }
             }
             catch (Exception ex)
@@ -257,10 +506,14 @@ namespace InstanceManager
             // Kill the unauthorized process
             _processManager.StopApplication(app);
 
-            // Update UI to reflect stopped state
+            // Update state
             app.IsRunning = false;
-            item.SubItems[3].Text = "Stopped";
-            item.ForeColor = Color.Black;
+
+            if (item != null)
+            {
+                item.SubItems[3].Text = "Stopped";
+                item.ForeColor = Color.Black;
+            }
 
             // Notify user only once per unauthorized attempt
             if (!_notifiedUnauthorized.Contains(app.Index))
@@ -271,31 +524,48 @@ namespace InstanceManager
                 string appName = app.AppName;
 
                 // Use BeginInvoke so the timer isn't blocked while showing the dialog
-                this.BeginInvoke(new Action(() =>
+                // Guard against ObjectDisposedException if form is closing
+                try
                 {
-                    try
+                    if (!_isClosing && IsHandleCreated)
                     {
-                        // Safety check: if user clicked Stop while this was queued, don't show warning
-                        if (_pendingStop.Contains(appIndex))
+                        this.BeginInvoke(new Action(() =>
                         {
-                            SimpleLogger.Debug("HandleUnauthorizedLaunch @ Form1.cs",
-                                $"Suppressed unauthorized warning for '{appName}' - user initiated stop");
-                            return;
-                        }
+                            try
+                            {
+                                if (_isClosing) return;
 
-                        MessageBoxHelper.ShowWarning(this,
-                            $"'{appName}' was launched outside of Instance Manager and has been terminated.\n\n" +
-                            "Please use Instance Manager to start managed applications.");
+                                // Safety check: if user clicked Stop while this was queued, don't show warning
+                                if (_pendingStop.Contains(appIndex))
+                                {
+                                    SimpleLogger.Debug("HandleUnauthorizedLaunch @ Form1.cs",
+                                        $"Suppressed unauthorized warning for '{appName}' - user initiated stop");
+                                    return;
+                                }
 
-                        SimpleLogger.Warn("HandleUnauthorizedLaunch @ Form1.cs",
-                            $"User notified about unauthorized launch of '{appName}'");
+                                MessageBoxHelper.ShowWarning(this,
+                                    $"'{appName}' was launched outside of Instance Manager and has been terminated.\n\n" +
+                                    "Please use Instance Manager to start managed applications.");
+
+                                SimpleLogger.Warn("HandleUnauthorizedLaunch @ Form1.cs",
+                                    $"User notified about unauthorized launch of '{appName}'");
+                            }
+                            catch (Exception ex)
+                            {
+                                SimpleLogger.Error("HandleUnauthorizedLaunch @ Form1.cs",
+                                    $"Error showing unauthorized launch notification: {ex.Message}");
+                            }
+                        }));
                     }
-                    catch (Exception ex)
-                    {
-                        SimpleLogger.Error("HandleUnauthorizedLaunch @ Form1.cs",
-                            $"Error showing unauthorized launch notification: {ex.Message}");
-                    }
-                }));
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Form was disposed between our check and the BeginInvoke call - safe to ignore
+                }
+                catch (InvalidOperationException)
+                {
+                    // Handle was not yet created or was destroyed - safe to ignore
+                }
             }
         }
 
@@ -303,6 +573,12 @@ namespace InstanceManager
         {
             try
             {
+                if (_selectedGroupId <= 0)
+                {
+                    MessageBoxHelper.ShowInfo(this, "Please select a group first.");
+                    return;
+                }
+
                 using (OpenFileDialog dialog = new OpenFileDialog())
                 {
                     dialog.Filter = "Executable Files (*.exe)|*.exe|All Files (*.*)|*.*";
@@ -313,25 +589,26 @@ namespace InstanceManager
                         string appPath = dialog.FileName;
                         string appName = Path.GetFileNameWithoutExtension(appPath);
 
-                        // Check for duplicates
-                        if (_storageService.ApplicationExists(appPath))
+                        // Check for duplicates within the same group
+                        if (_storageService.ApplicationExistsInGroup(appPath, _selectedGroupId))
                         {
-                            SimpleLogger.Warn("AddButton_Click @ Form1.cs", $"Duplicate application detected: {appName} at {appPath}");
-                            MessageBoxHelper.ShowWarning(this, 
-                                $"Application '{appName}' already exists in the management list.\n\nPath: {appPath}");
+                            SimpleLogger.Warn("AddButton_Click @ Form1.cs", $"Duplicate application detected in group: {appName} at {appPath}");
+                            MessageBoxHelper.ShowWarning(this,
+                                $"Application '{appName}' already exists in this group.\n\nPath: {appPath}");
                             return;
                         }
 
                         ManagedApplication app = new ManagedApplication
                         {
                             AppName = appName,
-                            Directory = appPath
+                            Directory = appPath,
+                            GroupId = _selectedGroupId
                         };
 
                         _storageService.AddApplication(app);
                         AddApplicationToListView(app);
 
-                        SimpleLogger.Info("AddButton_Click @ Form1.cs", $"Added new application: {appName}");
+                        SimpleLogger.Info("AddButton_Click @ Form1.cs", $"Added application: {appName} to group {_selectedGroupId}");
                         MessageBoxHelper.ShowSuccess(this, $"Application '{appName}' added successfully!");
                     }
                 }
@@ -371,14 +648,14 @@ namespace InstanceManager
                     if (dialog.ShowDialog(this) == DialogResult.OK)
                     {
                         string newPath = dialog.FileName;
-                        
-                        // Check if the new path is different and if it already exists
-                        if (newPath != app.Directory && _storageService.ApplicationExists(newPath))
+
+                        // Check if the new path is different and if it already exists in this group
+                        if (newPath != app.Directory && _storageService.ApplicationExistsInGroup(newPath, _selectedGroupId))
                         {
                             string newAppName = Path.GetFileNameWithoutExtension(newPath);
                             SimpleLogger.Warn("EditButton_Click @ Form1.cs", $"Duplicate application detected: {newAppName} at {newPath}");
                             MessageBoxHelper.ShowWarning(this,
-                                $"Application '{newAppName}' already exists in the management list.\n\nPath: {newPath}");
+                                $"Application '{newAppName}' already exists in this group.\n\nPath: {newPath}");
                             return;
                         }
 
@@ -464,44 +741,50 @@ namespace InstanceManager
                     return;
                 }
 
-                if (string.IsNullOrEmpty(app.Directory) || !File.Exists(app.Directory))
-                {
-                    MessageBoxHelper.ShowError(this, $"Application file not found: {app.Directory ?? "(empty)"}");
-                    return;
-                }
-
-                if (_processManager.IsApplicationRunning(app))
-                {
-                    MessageBoxHelper.ShowInfo(this, $"'{app.AppName}' is already running!");
-                    return;
-                }
-
-                if (_processManager.StartApplication(app))
-                {
-                    // Mark as authorized so the timer doesn't kill it
-                    _authorizedApps.Add(app.Index);
-                    _notifiedUnauthorized.Remove(app.Index);
-                    _pendingStop.Remove(app.Index);
-
-                    app.LastStart = DateTime.Now;
-                    selectedItem.SubItems[3].Text = "Running";
-                    selectedItem.SubItems[4].Text = app.GetLastStartDisplay();
-                    selectedItem.ForeColor = Color.Green;
-                    app.IsRunning = true;
-                    _storageService.UpdateApplication(app);
-
-                    MessageBoxHelper.ShowSuccess(this, $"'{app.AppName}' started successfully!");
-                }
-                else
-                {
-                    MessageBoxHelper.ShowError(this, $"Failed to start '{app.AppName}'. Check logs for details.");
-                }
+                StartSingleApplication(app, selectedItem);
             }
             catch (Exception ex)
             {
                 SimpleLogger.Error("StartButton_Click @ Form1.cs", $"Error starting application: {ex.Message}");
                 MessageBoxHelper.ShowError(this, $"Error starting application: {ex.Message}");
             }
+        }
+
+        private bool StartSingleApplication(ManagedApplication app, ListViewItem item)
+        {
+            if (string.IsNullOrEmpty(app.Directory) || !File.Exists(app.Directory))
+            {
+                MessageBoxHelper.ShowError(this, $"Application file not found: {app.Directory ?? "(empty)"}");
+                return false;
+            }
+
+            if (_processManager.IsApplicationRunning(app))
+            {
+                SimpleLogger.Info("StartSingleApplication @ Form1.cs", $"'{app.AppName}' is already running, skipping");
+                return true; // Already running is not a failure
+            }
+
+            if (_processManager.StartApplication(app))
+            {
+                _authorizedApps.Add(app.Index);
+                _notifiedUnauthorized.Remove(app.Index);
+                _pendingStop.Remove(app.Index);
+
+                app.LastStart = DateTime.Now;
+                app.IsRunning = true;
+                _storageService.UpdateApplication(app);
+
+                if (item != null)
+                {
+                    item.SubItems[3].Text = "Running";
+                    item.SubItems[4].Text = app.GetLastStartDisplay();
+                    item.ForeColor = Color.Green;
+                }
+
+                return true;
+            }
+
+            return false;
         }
 
         private void StopButton_Click(object sender, EventArgs e)
@@ -539,31 +822,10 @@ namespace InstanceManager
 
                 if (result == DialogResult.Yes)
                 {
-                    _authorizedApps.Remove(app.Index);
-                    _notifiedUnauthorized.Remove(app.Index);
-
-                    if (_processManager.StopApplication(app))
-                    {
-                        app.LastStop = DateTime.Now;
-                        selectedItem.SubItems[3].Text = "Stopped";
-                        selectedItem.SubItems[5].Text = app.GetLastStopDisplay();
-                        selectedItem.ForeColor = Color.Black;
-                        app.IsRunning = false;
-                        _storageService.UpdateApplication(app);
-
-                        _pendingStop.Remove(app.Index);
-
-                        MessageBoxHelper.ShowSuccess(this, $"'{app.AppName}' stopped successfully!");
-                    }
-                    else
-                    {
-                        _pendingStop.Remove(app.Index);
-                        MessageBoxHelper.ShowError(this, $"Failed to stop '{app.AppName}'. Check logs for details.");
-                    }
+                    StopSingleApplication(app, selectedItem);
                 }
                 else
                 {
-                    // User cancelled — remove from pending stop
                     _pendingStop.Remove(app.Index);
                 }
             }
@@ -574,14 +836,195 @@ namespace InstanceManager
             }
         }
 
+        private bool StopSingleApplication(ManagedApplication app, ListViewItem item)
+        {
+            _authorizedApps.Remove(app.Index);
+            _notifiedUnauthorized.Remove(app.Index);
+
+            if (_processManager.StopApplication(app))
+            {
+                app.LastStop = DateTime.Now;
+                app.IsRunning = false;
+                _storageService.UpdateApplication(app);
+
+                _pendingStop.Remove(app.Index);
+
+                if (item != null)
+                {
+                    item.SubItems[3].Text = "Stopped";
+                    item.SubItems[5].Text = app.GetLastStopDisplay();
+                    item.ForeColor = Color.Black;
+                }
+
+                return true;
+            }
+            else
+            {
+                _pendingStop.Remove(app.Index);
+                return false;
+            }
+        }
+
+        private void StartAllButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (_selectedGroupId <= 0)
+                {
+                    MessageBoxHelper.ShowInfo(this, "Please select a group first.");
+                    return;
+                }
+
+                var selectedGroup = GroupListBox.SelectedItem as ApplicationGroup;
+                string groupName = selectedGroup != null ? selectedGroup.GroupName : "this group";
+
+                var confirm = MessageBoxHelper.ShowQuestion(this,
+                    $"Start all applications in '{groupName}'?",
+                    "Confirm Start All");
+
+                if (confirm != DialogResult.Yes)
+                    return;
+
+                int started = 0;
+                int failed = 0;
+                int alreadyRunning = 0;
+
+                foreach (ListViewItem item in AppListView.Items)
+                {
+                    var app = item.Tag as ManagedApplication;
+                    if (app == null) continue;
+
+                    if (_processManager.IsApplicationRunning(app))
+                    {
+                        alreadyRunning++;
+                        continue;
+                    }
+
+                    if (StartSingleApplication(app, item))
+                    {
+                        started++;
+                    }
+                    else
+                    {
+                        failed++;
+                    }
+                }
+
+                string msg = $"Started: {started}";
+                if (alreadyRunning > 0) msg += $", Already running: {alreadyRunning}";
+                if (failed > 0) msg += $", Failed: {failed}";
+
+                SimpleLogger.Info("StartAllButton_Click @ Form1.cs", $"Start All for group {_selectedGroupId}: {msg}");
+
+                if (failed > 0)
+                    MessageBoxHelper.ShowWarning(this, msg);
+                else
+                    MessageBoxHelper.ShowSuccess(this, msg);
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("StartAllButton_Click @ Form1.cs", $"Error starting all: {ex.Message}");
+                MessageBoxHelper.ShowError(this, $"Error starting all applications: {ex.Message}");
+            }
+        }
+
+        private void StopAllButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (_selectedGroupId <= 0)
+                {
+                    MessageBoxHelper.ShowInfo(this, "Please select a group first.");
+                    return;
+                }
+
+                var selectedGroup = GroupListBox.SelectedItem as ApplicationGroup;
+                string groupName = selectedGroup != null ? selectedGroup.GroupName : "this group";
+
+                var confirm = MessageBoxHelper.ShowQuestion(this,
+                    $"Stop all running applications in '{groupName}'?",
+                    "Confirm Stop All");
+
+                if (confirm != DialogResult.Yes)
+                    return;
+
+                int stopped = 0;
+                int failed = 0;
+                int notRunning = 0;
+
+                foreach (ListViewItem item in AppListView.Items)
+                {
+                    var app = item.Tag as ManagedApplication;
+                    if (app == null) continue;
+
+                    if (!_processManager.IsApplicationRunning(app))
+                    {
+                        notRunning++;
+                        continue;
+                    }
+
+                    _pendingStop.Add(app.Index);
+
+                    if (StopSingleApplication(app, item))
+                    {
+                        stopped++;
+                    }
+                    else
+                    {
+                        failed++;
+                    }
+                }
+
+                string msg = $"Stopped: {stopped}";
+                if (notRunning > 0) msg += $", Already stopped: {notRunning}";
+                if (failed > 0) msg += $", Failed: {failed}";
+
+                SimpleLogger.Info("StopAllButton_Click @ Form1.cs", $"Stop All for group {_selectedGroupId}: {msg}");
+
+                if (failed > 0)
+                    MessageBoxHelper.ShowWarning(this, msg);
+                else
+                    MessageBoxHelper.ShowSuccess(this, msg);
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("StopAllButton_Click @ Form1.cs", $"Error stopping all: {ex.Message}");
+                MessageBoxHelper.ShowError(this, $"Error stopping all applications: {ex.Message}");
+            }
+        }
+
         private void RefreshButton_Click(object sender, EventArgs e)
         {
-            // Stop the timer while refreshing to avoid concurrent access to the ListView
             _statusUpdateTimer.Stop();
             try
             {
-                LoadApplications();
-                MessageBoxHelper.ShowSuccess(this, "Application list refreshed!");
+                LoadGroups();
+
+                // Re-select the previously selected group if it still exists
+                if (_selectedGroupId > 0)
+                {
+                    bool found = false;
+                    for (int i = 0; i < GroupListBox.Items.Count; i++)
+                    {
+                        var group = GroupListBox.Items[i] as ApplicationGroup;
+                        if (group != null && group.GroupId == _selectedGroupId)
+                        {
+                            GroupListBox.SelectedIndex = i;
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found)
+                    {
+                        _selectedGroupId = -1;
+                        SelectedGroupLabel.Text = "Select a group to manage applications";
+                        AppListView.Items.Clear();
+                        UpdateAppButtonsEnabled();
+                    }
+                }
+
+                MessageBoxHelper.ShowSuccess(this, "Refreshed!");
             }
             finally
             {
@@ -591,13 +1034,16 @@ namespace InstanceManager
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            base.OnFormClosing(e);
-            
+            _isClosing = true;
+
             if (_statusUpdateTimer != null)
             {
                 _statusUpdateTimer.Stop();
                 _statusUpdateTimer.Dispose();
+                _statusUpdateTimer = null;
             }
+
+            base.OnFormClosing(e);
 
             SimpleLogger.Info("OnFormClosing @ Form1.cs", "Application closing");
         }

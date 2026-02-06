@@ -8,18 +8,31 @@ namespace InstanceManager.Utilities
     {
         private static readonly object _lockObject = new object();
         private static string _logDirectory;
+        private static bool _isInitialized;
 
         static SimpleLogger()
         {
-            _logDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
-            if (!Directory.Exists(_logDirectory))
+            try
             {
-                Directory.CreateDirectory(_logDirectory);
+                _logDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
+                if (!Directory.Exists(_logDirectory))
+                {
+                    Directory.CreateDirectory(_logDirectory);
+                }
+                _isInitialized = true;
+            }
+            catch
+            {
+                // If we can't create the log directory, logging will be silently disabled.
+                // This prevents a TypeInitializationException from crashing the application.
+                _isInitialized = false;
             }
         }
 
         public static void Log(string level, string location, string message)
         {
+            if (!_isInitialized) return;
+
             try
             {
                 lock (_lockObject)

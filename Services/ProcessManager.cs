@@ -13,7 +13,13 @@ namespace InstanceManager.Services
         {
             try
             {
+                if (app == null || string.IsNullOrEmpty(app.Directory))
+                    return false;
+
                 string appName = Path.GetFileNameWithoutExtension(app.Directory);
+                if (string.IsNullOrEmpty(appName))
+                    return false;
+
                 var processes = Process.GetProcessesByName(appName);
                 bool isRunning = processes.Length > 0;
 
@@ -27,7 +33,7 @@ namespace InstanceManager.Services
             }
             catch (Exception ex)
             {
-                SimpleLogger.Error("IsApplicationRunning @ ProcessManager.cs", $"Error checking {app.AppName}: {ex.Message}");
+                SimpleLogger.Error("IsApplicationRunning @ ProcessManager.cs", $"Error checking {(app != null ? app.AppName : "null")}: {ex.Message}");
                 return false;
             }
         }
@@ -36,6 +42,12 @@ namespace InstanceManager.Services
         {
             try
             {
+                if (app == null || string.IsNullOrEmpty(app.Directory))
+                {
+                    SimpleLogger.Error("StartApplication @ ProcessManager.cs", "Cannot start: app or directory is null");
+                    return false;
+                }
+
                 if (IsApplicationRunning(app))
                 {
                     SimpleLogger.Warn("StartApplication @ ProcessManager.cs", $"Cannot start {app.AppName}: Already running");
@@ -80,7 +92,7 @@ namespace InstanceManager.Services
             }
             catch (Exception ex)
             {
-                SimpleLogger.Error("StartApplication @ ProcessManager.cs", $"Error starting {app.AppName}: {ex.Message}");
+                SimpleLogger.Error("StartApplication @ ProcessManager.cs", $"Error starting {(app != null ? app.AppName : "null")}: {ex.Message}");
                 return false;
             }
         }
@@ -89,7 +101,19 @@ namespace InstanceManager.Services
         {
             try
             {
+                if (app == null || string.IsNullOrEmpty(app.Directory))
+                {
+                    SimpleLogger.Warn("StopApplication @ ProcessManager.cs", "Cannot stop: app or directory is null");
+                    return false;
+                }
+
                 string appName = Path.GetFileNameWithoutExtension(app.Directory);
+                if (string.IsNullOrEmpty(appName))
+                {
+                    SimpleLogger.Warn("StopApplication @ ProcessManager.cs", $"Cannot stop {app.AppName}: Unable to determine process name");
+                    return false;
+                }
+
                 var processes = Process.GetProcessesByName(appName);
 
                 if (processes.Length == 0)
@@ -107,8 +131,15 @@ namespace InstanceManager.Services
                         
                         if (!process.WaitForExit(3000))
                         {
-                            process.Kill();
-                            SimpleLogger.Warn("StopApplication @ ProcessManager.cs", $"Force killed {app.AppName} (PID: {pid})");
+                            try
+                            {
+                                process.Kill();
+                                SimpleLogger.Warn("StopApplication @ ProcessManager.cs", $"Force killed {app.AppName} (PID: {pid})");
+                            }
+                            catch (System.ComponentModel.Win32Exception killEx)
+                            {
+                                SimpleLogger.Error("StopApplication @ ProcessManager.cs", $"Access denied killing {app.AppName} (PID: {pid}): {killEx.Message}");
+                            }
                         }
                         else
                         {
@@ -133,7 +164,7 @@ namespace InstanceManager.Services
             }
             catch (Exception ex)
             {
-                SimpleLogger.Error("StopApplication @ ProcessManager.cs", $"Error stopping {app.AppName}: {ex.Message}");
+                SimpleLogger.Error("StopApplication @ ProcessManager.cs", $"Error stopping {(app != null ? app.AppName : "null")}: {ex.Message}");
                 return false;
             }
         }
@@ -142,7 +173,13 @@ namespace InstanceManager.Services
         {
             try
             {
+                if (app == null || string.IsNullOrEmpty(app.Directory))
+                    return 0;
+
                 string appName = Path.GetFileNameWithoutExtension(app.Directory);
+                if (string.IsNullOrEmpty(appName))
+                    return 0;
+
                 var processes = Process.GetProcessesByName(appName);
                 int count = processes.Length;
 

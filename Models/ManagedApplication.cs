@@ -6,6 +6,7 @@ namespace InstanceManager.Models
     public class ManagedApplication
     {
         public int Index { get; set; }
+        public int GroupId { get; set; }
         public string AppName { get; set; }
         public string Directory { get; set; }
         public DateTime AddedDate { get; set; }

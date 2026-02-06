@@ -11,14 +11,80 @@ namespace InstanceManager.Services
     public class StorageService
     {
         private readonly string _storagePath;
+        private readonly string _groupStoragePath;
         private List<ManagedApplication> _applications;
+        private List<ApplicationGroup> _groups;
 
         public StorageService()
         {
             _storagePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "applications.json");
+            _groupStoragePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "groups.json");
             _applications = new List<ManagedApplication>();
+            _groups = new List<ApplicationGroup>();
+            LoadGroups();
             LoadApplications();
         }
+
+        // ===== Group Operations =====
+
+        public List<ApplicationGroup> GetAllGroups()
+        {
+            SimpleLogger.Debug("GetAllGroups @ StorageService.cs", "Retrieving all groups");
+            return _groups.ToList();
+        }
+
+        public ApplicationGroup GetGroup(int groupId)
+        {
+            return _groups.FirstOrDefault(g => g.GroupId == groupId);
+        }
+
+        public void AddGroup(ApplicationGroup group)
+        {
+            group.GroupId = _groups.Count > 0 ? _groups.Max(g => g.GroupId) + 1 : 1;
+            _groups.Add(group);
+            SaveGroups();
+            SimpleLogger.Info("AddGroup @ StorageService.cs", $"Added group: {group.GroupName} (GroupId: {group.GroupId})");
+        }
+
+        public void UpdateGroup(ApplicationGroup group)
+        {
+            var existing = _groups.FirstOrDefault(g => g.GroupId == group.GroupId);
+            if (existing != null)
+            {
+                existing.GroupName = group.GroupName;
+                SaveGroups();
+                SimpleLogger.Info("UpdateGroup @ StorageService.cs", $"Updated group: {group.GroupName} (GroupId: {group.GroupId})");
+            }
+        }
+
+        public void RemoveGroup(int groupId)
+        {
+            var group = _groups.FirstOrDefault(g => g.GroupId == groupId);
+            if (group != null)
+            {
+                // Remove all applications in this group
+                var appsInGroup = _applications.Where(a => a.GroupId == groupId).ToList();
+                foreach (var app in appsInGroup)
+                {
+                    _applications.Remove(app);
+                }
+                _groups.Remove(group);
+                SaveGroups();
+                SaveApplications();
+                SimpleLogger.Info("RemoveGroup @ StorageService.cs",
+                    $"Removed group: {group.GroupName} (GroupId: {groupId}) and {appsInGroup.Count} application(s)");
+            }
+        }
+
+        public bool GroupNameExists(string name, int excludeGroupId = -1)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            return _groups.Any(g => g.GroupId != excludeGroupId &&
+                !string.IsNullOrEmpty(g.GroupName) &&
+                g.GroupName.Equals(name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        // ===== Application Operations =====
 
         public List<ManagedApplication> GetAllApplications()
         {
@@ -26,12 +92,17 @@ namespace InstanceManager.Services
             return _applications.ToList();
         }
 
+        public List<ManagedApplication> GetApplicationsByGroup(int groupId)
+        {
+            return _applications.Where(a => a.GroupId == groupId).ToList();
+        }
+
         public void AddApplication(ManagedApplication app)
         {
             app.Index = _applications.Count > 0 ? _applications.Max(a => a.Index) + 1 : 1;
             _applications.Add(app);
             SaveApplications();
-            SimpleLogger.Info("AddApplication @ StorageService.cs", $"Added application: {app.AppName} (Index: {app.Index})");
+            SimpleLogger.Info("AddApplication @ StorageService.cs", $"Added application: {app.AppName} (Index: {app.Index}, GroupId: {app.GroupId})");
         }
 
         public void RemoveApplication(int index)
@@ -55,6 +126,7 @@ namespace InstanceManager.Services
                 existingApp.IsRunning = app.IsRunning;
                 existingApp.LastStart = app.LastStart;
                 existingApp.LastStop = app.LastStop;
+                existingApp.GroupId = app.GroupId;
                 SaveApplications();
                 SimpleLogger.Info("UpdateApplication @ StorageService.cs", $"Updated application: {app.AppName} (Index: {app.Index})");
             }
@@ -80,6 +152,156 @@ namespace InstanceManager.Services
             return exists;
         }
 
+        public bool ApplicationExistsInGroup(string directory, int groupId)
+        {
+            if (string.IsNullOrEmpty(directory))
+                return false;
+
+            string normalizedPath = directory.ToLowerInvariant().Replace("/", "\\");
+
+            return _applications.Any(app =>
+                app.GroupId == groupId &&
+                !string.IsNullOrEmpty(app.Directory) &&
+                app.Directory.ToLowerInvariant().Replace("/", "\\") == normalizedPath);
+        }
+
+        // ===== Load/Save Groups =====
+
+        private void LoadGroups()
+        {
+            try
+            {
+                if (File.Exists(_groupStoragePath))
+                {
+                    string json = File.ReadAllText(_groupStoragePath);
+                    if (!string.IsNullOrEmpty(json))
+                    {
+                        SimpleLogger.Debug("LoadGroups @ StorageService.cs", $"Loading groups JSON: {json.Substring(0, Math.Min(100, json.Length))}...");
+                        _groups = DeserializeGroups(json);
+                    }
+                    else
+                    {
+                        _groups = new List<ApplicationGroup>();
+                    }
+                    SimpleLogger.Info("LoadGroups @ StorageService.cs", $"Loaded {_groups.Count} groups from storage");
+                }
+                else
+                {
+                    _groups = new List<ApplicationGroup>();
+                    SimpleLogger.Info("LoadGroups @ StorageService.cs", "No existing group storage found, initialized empty list");
+                }
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("LoadGroups @ StorageService.cs", $"Error loading groups: {ex.Message} | StackTrace: {ex.StackTrace}");
+                _groups = new List<ApplicationGroup>();
+            }
+        }
+
+        private void SaveGroups()
+        {
+            try
+            {
+                string json = SerializeGroups(_groups);
+                File.WriteAllText(_groupStoragePath, json);
+                SimpleLogger.Debug("SaveGroups @ StorageService.cs", $"Saved {_groups.Count} groups to storage");
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("SaveGroups @ StorageService.cs", $"Error saving groups: {ex.Message}");
+            }
+        }
+
+        private string SerializeGroups(List<ApplicationGroup> groups)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine("[");
+            for (int i = 0; i < groups.Count; i++)
+            {
+                var g = groups[i];
+                sb.AppendLine("  {");
+                sb.AppendLine($"    \"GroupId\": {g.GroupId},");
+                sb.AppendLine($"    \"GroupName\": \"{EscapeJson(g.GroupName)}\",");
+                sb.AppendLine($"    \"CreatedDate\": \"{g.CreatedDate:yyyy-MM-ddTHH:mm:ss}\"");
+                sb.Append("  }");
+                if (i < groups.Count - 1) sb.AppendLine(",");
+                else sb.AppendLine();
+            }
+            sb.AppendLine("]");
+            return sb.ToString();
+        }
+
+        private List<ApplicationGroup> DeserializeGroups(string json)
+        {
+            List<ApplicationGroup> groups = new List<ApplicationGroup>();
+
+            json = json.Trim();
+            if (!json.StartsWith("[") || !json.EndsWith("]")) return groups;
+
+            string content = json.Substring(1, json.Length - 2).Trim();
+            if (string.IsNullOrEmpty(content)) return groups;
+
+            var objects = SplitJsonObjects(content);
+            foreach (var objStr in objects)
+            {
+                try
+                {
+                    var group = ParseGroupObject(objStr);
+                    if (group != null) groups.Add(group);
+                }
+                catch { }
+            }
+
+            return groups;
+        }
+
+        private ApplicationGroup ParseGroupObject(string objStr)
+        {
+            ApplicationGroup group = new ApplicationGroup();
+
+            objStr = objStr.Trim().Trim('{', '}');
+            var properties = SplitPropertyValues(objStr);
+
+            foreach (var prop in properties)
+            {
+                var colonIndex = prop.IndexOf(':');
+                if (colonIndex == -1) continue;
+
+                string key = prop.Substring(0, colonIndex).Trim().Trim('"');
+                string rawValue = prop.Substring(colonIndex + 1).Trim();
+
+                if (rawValue == "null") continue;
+
+                if (rawValue.StartsWith("\"") && rawValue.EndsWith("\""))
+                {
+                    rawValue = rawValue.Substring(1, rawValue.Length - 2);
+                }
+
+                string value = UnescapeJson(rawValue);
+
+                switch (key)
+                {
+                    case "GroupId":
+                        int gid;
+                        if (int.TryParse(value, out gid))
+                            group.GroupId = gid;
+                        break;
+                    case "GroupName":
+                        group.GroupName = value;
+                        break;
+                    case "CreatedDate":
+                        DateTime dt;
+                        if (DateTime.TryParse(value, out dt))
+                            group.CreatedDate = dt;
+                        break;
+                }
+            }
+
+            return group;
+        }
+
+        // ===== Load/Save Applications =====
+
         private void LoadApplications()
         {
             try
@@ -87,11 +309,17 @@ namespace InstanceManager.Services
                 if (File.Exists(_storagePath))
                 {
                     string json = File.ReadAllText(_storagePath);
-                    SimpleLogger.Debug("LoadApplications @ StorageService.cs", $"Loading JSON: {json.Substring(0, Math.Min(100, json.Length))}...");
-                    _applications = DeserializeApplications(json);
+                    if (!string.IsNullOrEmpty(json))
+                    {
+                        SimpleLogger.Debug("LoadApplications @ StorageService.cs", $"Loading JSON: {json.Substring(0, Math.Min(100, json.Length))}...");
+                        _applications = DeserializeApplications(json);
+                    }
+                    else
+                    {
+                        _applications = new List<ManagedApplication>();
+                    }
                     SimpleLogger.Info("LoadApplications @ StorageService.cs", $"Loaded {_applications.Count} applications from storage");
-                    
-                    // Validate loaded applications
+
                     foreach (var app in _applications)
                     {
                         if (string.IsNullOrEmpty(app.Directory))
@@ -140,6 +368,7 @@ namespace InstanceManager.Services
                 var app = apps[i];
                 sb.AppendLine("  {");
                 sb.AppendLine($"    \"Index\": {app.Index},");
+                sb.AppendLine($"    \"GroupId\": {app.GroupId},");
                 sb.AppendLine($"    \"AppName\": \"{EscapeJson(app.AppName)}\",");
                 sb.AppendLine($"    \"Directory\": \"{EscapeJson(app.Directory)}\",");
                 sb.AppendLine($"    \"AddedDate\": \"{app.AddedDate:yyyy-MM-ddTHH:mm:ss}\",");
@@ -157,7 +386,7 @@ namespace InstanceManager.Services
         private List<ManagedApplication> DeserializeApplications(string json)
         {
             List<ManagedApplication> apps = new List<ManagedApplication>();
-            
+
             json = json.Trim();
             if (!json.StartsWith("[") || !json.EndsWith("]")) return apps;
 
@@ -207,10 +436,9 @@ namespace InstanceManager.Services
         private ManagedApplication ParseApplicationObject(string objStr)
         {
             ManagedApplication app = new ManagedApplication();
-            
+
             objStr = objStr.Trim().Trim('{', '}');
-            
-            // Split by comma, but be careful with commas inside quoted strings
+
             var properties = SplitPropertyValues(objStr);
 
             foreach (var prop in properties)
@@ -220,8 +448,7 @@ namespace InstanceManager.Services
 
                 string key = prop.Substring(0, colonIndex).Trim().Trim('"');
                 string rawValue = prop.Substring(colonIndex + 1).Trim();
-                
-                // Check for null value
+
                 if (rawValue == "null")
                 {
                     switch (key)
@@ -235,14 +462,12 @@ namespace InstanceManager.Services
                     }
                     continue;
                 }
-                
-                // Remove surrounding quotes if present
+
                 if (rawValue.StartsWith("\"") && rawValue.EndsWith("\""))
                 {
                     rawValue = rawValue.Substring(1, rawValue.Length - 2);
                 }
-                
-                // Unescape the value
+
                 string value = UnescapeJson(rawValue);
 
                 switch (key)
@@ -251,6 +476,11 @@ namespace InstanceManager.Services
                         int idx;
                         if (int.TryParse(value, out idx))
                             app.Index = idx;
+                        break;
+                    case "GroupId":
+                        int gid;
+                        if (int.TryParse(value, out gid))
+                            app.GroupId = gid;
                         break;
                     case "AppName":
                         app.AppName = value;
@@ -287,11 +517,11 @@ namespace InstanceManager.Services
             List<string> properties = new List<string>();
             StringBuilder currentProp = new StringBuilder();
             bool inQuotes = false;
-            
+
             for (int i = 0; i < content.Length; i++)
             {
                 char c = content[i];
-                
+
                 if (c == '"' && (i == 0 || content[i - 1] != '\\'))
                 {
                     inQuotes = !inQuotes;
@@ -310,12 +540,12 @@ namespace InstanceManager.Services
                     currentProp.Append(c);
                 }
             }
-            
+
             if (currentProp.Length > 0)
             {
                 properties.Add(currentProp.ToString());
             }
-            
+
             return properties;
         }
 
@@ -328,12 +558,11 @@ namespace InstanceManager.Services
         private string UnescapeJson(string value)
         {
             if (string.IsNullOrEmpty(value)) return "";
-            // Unescape in correct order: first handle escaped backslashes, then other escapes
-            return value.Replace("\\\\", "\x00")  // Temporarily replace \\ with a placeholder
-                        .Replace("\\\"", "\"")      // Replace escaped quotes
-                        .Replace("\\n", "\n")       // Replace escaped newlines
-                        .Replace("\\r", "\r")       // Replace escaped carriage returns
-                        .Replace("\x00", "\\");     // Replace placeholder with single backslash
+            return value.Replace("\\\\", "\x00")
+                        .Replace("\\\"", "\"")
+                        .Replace("\\n", "\n")
+                        .Replace("\\r", "\r")
+                        .Replace("\x00", "\\");
         }
     }
 }
