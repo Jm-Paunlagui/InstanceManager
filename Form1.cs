@@ -34,6 +34,8 @@ namespace InstanceManager
         private bool _isClosing;
         // Tracks when a KeepOpen app crashed and is pending restart (app Index -> restart-eligible time)
         private Dictionary<int, DateTime> _pendingRestart = new Dictionary<int, DateTime>();
+        // Tracks apps that have exhausted max retries and should remain in "Failed" state
+        private HashSet<int> _failedApps = new HashSet<int>();
 
         public Main()
         {
@@ -208,7 +210,7 @@ namespace InstanceManager
             StopButton.Enabled = groupSelected;
             StartAllButton.Enabled = groupSelected;
             StopAllButton.Enabled = groupSelected;
-            SettingsButton.Enabled = groupSelected;
+            LogsButton.Enabled = true;
             RefreshButton.Enabled = groupSelected;
         }
 
@@ -332,6 +334,7 @@ namespace InstanceManager
                         _notifiedUnauthorized.Remove(app.Index);
                         _pendingStop.Remove(app.Index);
                         _pendingRestart.Remove(app.Index);
+                        _failedApps.Remove(app.Index);
                     }
 
                     string groupName = selectedGroup.GroupName;
@@ -465,6 +468,17 @@ namespace InstanceManager
                         continue;
                     }
 
+                    // Skip status updates for apps that have exhausted max retries
+                    if (_failedApps.Contains(app.Index))
+                    {
+                        if (item != null)
+                        {
+                            item.SubItems[3].Text = "Failed";
+                            item.ForeColor = Color.Red;
+                        }
+                        continue;
+                    }
+
                     bool wasRunning = app.IsRunning;
                     bool isRunning = _processManager.IsApplicationRunning(app);
 
@@ -509,6 +523,8 @@ namespace InstanceManager
                             {
                                 SimpleLogger.Error("UpdateApplicationStatuses @ Form1.cs",
                                     $"'{app.AppName}' exceeded max retries ({app.RetryCount}/{app.MaxRetries}). Giving up.");
+
+                                _failedApps.Add(app.Index); // Mark as failed permanently
 
                                 if (item != null)
                                 {
@@ -615,6 +631,7 @@ namespace InstanceManager
                 {
                     SimpleLogger.Error("AttemptAutoRestart @ Form1.cs",
                         $"'{app.AppName}' exceeded max retries ({app.RetryCount}/{app.MaxRetries}). Giving up.");
+                    _failedApps.Add(app.Index);
                     if (item != null)
                     {
                         item.SubItems[3].Text = "Failed";
@@ -627,6 +644,7 @@ namespace InstanceManager
                 {
                     SimpleLogger.Error("AttemptAutoRestart @ Form1.cs",
                         $"Cannot auto-restart '{app.AppName}': file not found at {app.Directory ?? "(empty)"}");
+                    _failedApps.Add(app.Index);
                     if (item != null)
                     {
                         item.SubItems[3].Text = "Failed";
@@ -668,6 +686,8 @@ namespace InstanceManager
                     SimpleLogger.Error("AttemptAutoRestart @ Form1.cs",
                         $"Failed to auto-restart '{app.AppName}' (Retry {app.RetryCount}/{app.MaxRetries})");
 
+                    _failedApps.Add(app.Index);
+
                     if (item != null)
                     {
                         item.SubItems[3].Text = "Failed";
@@ -679,6 +699,8 @@ namespace InstanceManager
             {
                 SimpleLogger.Error("AttemptAutoRestart @ Form1.cs",
                     $"Error auto-restarting '{app.AppName}': {ex.Message}");
+
+                _failedApps.Add(app.Index);
 
                 if (item != null)
                 {
@@ -869,6 +891,12 @@ namespace InstanceManager
                             _pendingRestart.Remove(app.Index);
                         }
 
+                        // If retry count was reset via edit dialog, clear the failed state
+                        if (app.RetryCount < app.MaxRetries)
+                        {
+                            _failedApps.Remove(app.Index);
+                        }
+
                         // Update ListView display for settings columns
                         selectedItem.SubItems[4].Text = app.GetKeepOpenDisplay();
                         selectedItem.SubItems[5].Text = app.CrashCount.ToString();
@@ -916,6 +944,7 @@ namespace InstanceManager
                     _notifiedUnauthorized.Remove(app.Index);
                     _pendingStop.Remove(app.Index);
                     _pendingRestart.Remove(app.Index);
+                    _failedApps.Remove(app.Index);
                     _storageService.RemoveApplication(app.Index);
                     AppListView.Items.Remove(selectedItem);
 
@@ -980,6 +1009,7 @@ namespace InstanceManager
                 _authorizedApps.Add(app.Index);
                 _notifiedUnauthorized.Remove(app.Index);
                 _pendingStop.Remove(app.Index);
+                _failedApps.Remove(app.Index);
 
                 // Reset retry count on manual start so the app gets a fresh set of retries
                 app.RetryCount = 0;
@@ -1176,29 +1206,25 @@ namespace InstanceManager
                     var app = item.Tag as ManagedApplication;
                     if (app == null) continue;
 
-                    // Cancel any pending restart
-                    _pendingRestart.Remove(app.Index);
-
-                    if (!_processManager.IsApplicationRunning(app))
+                    if (_processManager.IsApplicationRunning(app))
                     {
-                        notRunning++;
-                        continue;
-                    }
-
-                    _pendingStop.Add(app.Index);
-
-                    if (StopSingleApplication(app, item))
-                    {
-                        stopped++;
+                        if (StopSingleApplication(app, item))
+                        {
+                            stopped++;
+                        }
+                        else
+                        {
+                            failed++;
+                        }
                     }
                     else
                     {
-                        failed++;
+                        notRunning++;
                     }
                 }
 
                 string msg = $"Stopped: {stopped}";
-                if (notRunning > 0) msg += $", Already stopped: {notRunning}";
+                if (notRunning > 0) msg += $", Not running: {notRunning}";
                 if (failed > 0) msg += $", Failed: {failed}";
 
                 SimpleLogger.Info("StopAllButton_Click @ Form1.cs", $"Stop All for group {_selectedGroupId}: {msg}");
@@ -1215,76 +1241,27 @@ namespace InstanceManager
             }
         }
 
-        private void SettingsButton_Click(object sender, EventArgs e)
+        private void LogsButton_Click(object sender, EventArgs e)
         {
             try
             {
-                if (AppListView.SelectedItems.Count == 0)
+                string logDirectory = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
+
+                if (System.IO.Directory.Exists(logDirectory))
                 {
-                    MessageBoxHelper.ShowInfo(this, "Please select an application to configure.");
-                    return;
+                    System.Diagnostics.Process.Start("explorer.exe", "\"" + logDirectory + "\"");
+                    SimpleLogger.Info("LogsButton_Click @ Form1.cs", $"Opened logs folder: {logDirectory}");
                 }
-
-                var selectedItem = AppListView.SelectedItems[0];
-                var app = selectedItem.Tag as ManagedApplication;
-
-                if (app == null)
+                else
                 {
-                    MessageBoxHelper.ShowError(this, "Selected item has no valid application data.");
-                    return;
-                }
-
-                using (var editForm = new EditAppDialog(app))
-                {
-                    if (editForm.ShowDialog(this) == DialogResult.OK)
-                    {
-                        string newPath = editForm.NewDirectory;
-
-                        // Check if directory changed and if the new path already exists in this group
-                        if (newPath != app.Directory)
-                        {
-                            if (_storageService.ApplicationExistsInGroup(newPath, _selectedGroupId))
-                            {
-                                string newAppName = Path.GetFileNameWithoutExtension(newPath);
-                                SimpleLogger.Warn("SettingsButton_Click @ Form1.cs", $"Duplicate application detected: {newAppName} at {newPath}");
-                                MessageBoxHelper.ShowWarning(this,
-                                    $"Application '{newAppName}' already exists in this group.\n\nPath: {newPath}");
-                                return;
-                            }
-
-                            string oldName = app.AppName;
-                            app.AppName = Path.GetFileNameWithoutExtension(newPath);
-                            app.Directory = newPath;
-
-                            selectedItem.SubItems[1].Text = app.AppName;
-                            selectedItem.SubItems[2].Text = app.Directory;
-
-                            SimpleLogger.Info("SettingsButton_Click @ Form1.cs", $"Edited application path: {oldName} -> {app.AppName}");
-                        }
-
-                        _storageService.UpdateApplication(app);
-
-                        // If KeepOpen was turned off, cancel any pending restart
-                        if (!app.KeepOpen)
-                        {
-                            _pendingRestart.Remove(app.Index);
-                        }
-
-                        // Update ListView display for settings columns
-                        selectedItem.SubItems[4].Text = app.GetKeepOpenDisplay();
-                        selectedItem.SubItems[5].Text = app.CrashCount.ToString();
-                        selectedItem.SubItems[6].Text = app.RetryCount.ToString();
-
-                        SimpleLogger.Info("SettingsButton_Click @ Form1.cs",
-                            $"Updated settings for '{app.AppName}': KeepOpen={app.KeepOpen}, MaxRetries={app.MaxRetries}, StartDelay={app.StartDelaySeconds}s");
-                        MessageBoxHelper.ShowSuccess(this, $"Settings for '{app.AppName}' updated successfully!");
-                    }
+                    MessageBoxHelper.ShowWarning(this, $"Logs folder not found:\n\n{logDirectory}");
+                    SimpleLogger.Warn("LogsButton_Click @ Form1.cs", $"Logs folder does not exist: {logDirectory}");
                 }
             }
             catch (Exception ex)
             {
-                SimpleLogger.Error("SettingsButton_Click @ Form1.cs", $"Error configuring application: {ex.Message}");
-                MessageBoxHelper.ShowError(this, $"Error configuring application: {ex.Message}");
+                SimpleLogger.Error("LogsButton_Click @ Form1.cs", $"Error opening logs folder: {ex.Message}");
+                MessageBoxHelper.ShowError(this, $"Error opening logs folder: {ex.Message}");
             }
         }
 

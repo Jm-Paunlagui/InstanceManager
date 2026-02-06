@@ -61,7 +61,7 @@
             this.DeleteButton = new System.Windows.Forms.Button();
             this.EditButton = new System.Windows.Forms.Button();
             this.AddButton = new System.Windows.Forms.Button();
-            this.SettingsButton = new System.Windows.Forms.Button();
+            this.LogsButton = new System.Windows.Forms.Button();
             this.HeaderPanel.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.LogoPictureBox)).BeginInit();
             this.MainSplitContainer.Panel1.SuspendLayout();
@@ -312,7 +312,7 @@
             // ButtonPanel
             // 
             this.ButtonPanel.BackColor = System.Drawing.Color.WhiteSmoke;
-            this.ButtonPanel.Controls.Add(this.SettingsButton);
+            this.ButtonPanel.Controls.Add(this.LogsButton);
             this.ButtonPanel.Controls.Add(this.RefreshButton);
             this.ButtonPanel.Controls.Add(this.StopAllButton);
             this.ButtonPanel.Controls.Add(this.StartAllButton);
@@ -426,19 +426,19 @@
             this.StopAllButton.UseVisualStyleBackColor = false;
             this.StopAllButton.Click += new System.EventHandler(this.StopAllButton_Click);
             // 
-            // SettingsButton
+            // LogsButton
             // 
-            this.SettingsButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(127)))), ((int)(((byte)(140)))), ((int)(((byte)(141)))));
-            this.SettingsButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.SettingsButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.SettingsButton.ForeColor = System.Drawing.Color.White;
-            this.SettingsButton.Location = new System.Drawing.Point(676, 8);
-            this.SettingsButton.Name = "SettingsButton";
-            this.SettingsButton.Size = new System.Drawing.Size(88, 32);
-            this.SettingsButton.TabIndex = 7;
-            this.SettingsButton.Text = "Settings";
-            this.SettingsButton.UseVisualStyleBackColor = false;
-            this.SettingsButton.Click += new System.EventHandler(this.SettingsButton_Click);
+            this.LogsButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(155)))), ((int)(((byte)(89)))), ((int)(((byte)(182)))));
+            this.LogsButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.LogsButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.LogsButton.ForeColor = System.Drawing.Color.White;
+            this.LogsButton.Location = new System.Drawing.Point(676, 8);
+            this.LogsButton.Name = "LogsButton";
+            this.LogsButton.Size = new System.Drawing.Size(88, 32);
+            this.LogsButton.TabIndex = 7;
+            this.LogsButton.Text = "Logs";
+            this.LogsButton.UseVisualStyleBackColor = false;
+            this.LogsButton.Click += new System.EventHandler(this.LogsButton_Click);
             // 
             // RefreshButton
             // 
@@ -509,7 +509,7 @@
         private System.Windows.Forms.Button StopButton;
         private System.Windows.Forms.Button StartAllButton;
         private System.Windows.Forms.Button StopAllButton;
-        private System.Windows.Forms.Button SettingsButton;
+        private System.Windows.Forms.Button LogsButton;
         private System.Windows.Forms.Button RefreshButton;
     }
 }
