@@ -21,21 +21,139 @@ namespace InstanceManager.Services
                     return false;
 
                 var processes = Process.GetProcessesByName(appName);
-                bool isRunning = processes.Length > 0;
+                bool hasWindowedProcess = false;
 
                 foreach (var p in processes)
                 {
-                    p.Dispose();
+                    try
+                    {
+                        if (p.MainWindowHandle != IntPtr.Zero)
+                        {
+                            hasWindowedProcess = true;
+                        }
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Process already exited
+                    }
+                    finally
+                    {
+                        p.Dispose();
+                    }
                 }
 
-                SimpleLogger.Debug("IsApplicationRunning @ ProcessManager.cs", $"Checked {app.AppName}: {(isRunning ? "Running" : "Not Running")}");
-                return isRunning;
+                SimpleLogger.Debug("IsApplicationRunning @ ProcessManager.cs",
+                    $"Checked {app.AppName}: ProcessCount={processes.Length}, HasWindow={hasWindowedProcess}");
+                return hasWindowedProcess;
             }
             catch (Exception ex)
             {
                 SimpleLogger.Error("IsApplicationRunning @ ProcessManager.cs", $"Error checking {(app != null ? app.AppName : "null")}: {ex.Message}");
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Checks if any process with the app's name exists (including background/zombie processes without a window).
+        /// </summary>
+        public bool HasBackgroundProcess(ManagedApplication app)
+        {
+            try
+            {
+                if (app == null || string.IsNullOrEmpty(app.Directory))
+                    return false;
+
+                string appName = Path.GetFileNameWithoutExtension(app.Directory);
+                if (string.IsNullOrEmpty(appName))
+                    return false;
+
+                var processes = Process.GetProcessesByName(appName);
+                bool hasBackground = false;
+
+                foreach (var p in processes)
+                {
+                    try
+                    {
+                        if (p.MainWindowHandle == IntPtr.Zero)
+                        {
+                            hasBackground = true;
+                        }
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Process already exited
+                    }
+                    finally
+                    {
+                        p.Dispose();
+                    }
+                }
+
+                return hasBackground;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Kills any background (windowless) processes matching the app's name.
+        /// Returns the number of processes killed.
+        /// </summary>
+        public int KillBackgroundProcesses(ManagedApplication app)
+        {
+            int killed = 0;
+            try
+            {
+                if (app == null || string.IsNullOrEmpty(app.Directory))
+                    return 0;
+
+                string appName = Path.GetFileNameWithoutExtension(app.Directory);
+                if (string.IsNullOrEmpty(appName))
+                    return 0;
+
+                var processes = Process.GetProcessesByName(appName);
+
+                foreach (var process in processes)
+                {
+                    try
+                    {
+                        if (process.MainWindowHandle == IntPtr.Zero)
+                        {
+                            int pid = process.Id;
+                            process.Kill();
+                            killed++;
+                            SimpleLogger.Warn("KillBackgroundProcesses @ ProcessManager.cs",
+                                $"Killed background process for {app.AppName} (PID: {pid})");
+                        }
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Process already exited
+                    }
+                    catch (System.ComponentModel.Win32Exception killEx)
+                    {
+                        SimpleLogger.Error("KillBackgroundProcesses @ ProcessManager.cs",
+                            $"Access denied killing background process for {app.AppName}: {killEx.Message}");
+                    }
+                    catch (Exception ex)
+                    {
+                        SimpleLogger.Error("KillBackgroundProcesses @ ProcessManager.cs",
+                            $"Error killing background process for {app.AppName}: {ex.Message}");
+                    }
+                    finally
+                    {
+                        process.Dispose();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("KillBackgroundProcesses @ ProcessManager.cs",
+                    $"Error killing background processes for {(app != null ? app.AppName : "null")}: {ex.Message}");
+            }
+            return killed;
         }
 
         public bool StartApplication(ManagedApplication app)
@@ -52,6 +170,14 @@ namespace InstanceManager.Services
                 {
                     SimpleLogger.Warn("StartApplication @ ProcessManager.cs", $"Cannot start {app.AppName}: Already running");
                     return false;
+                }
+
+                // Kill any lingering background processes before starting fresh
+                int bgKilled = KillBackgroundProcesses(app);
+                if (bgKilled > 0)
+                {
+                    SimpleLogger.Info("StartApplication @ ProcessManager.cs",
+                        $"Cleaned up {bgKilled} background process(es) for {app.AppName} before starting");
                 }
 
                 if (!File.Exists(app.Directory))
@@ -127,23 +253,42 @@ namespace InstanceManager.Services
                     try
                     {
                         int pid = process.Id;
-                        process.CloseMainWindow();
-                        
-                        if (!process.WaitForExit(3000))
+                        bool hasWindow = process.MainWindowHandle != IntPtr.Zero;
+
+                        if (hasWindow)
                         {
-                            try
+                            // Try graceful shutdown first
+                            process.CloseMainWindow();
+
+                            if (!process.WaitForExit(3000))
                             {
-                                process.Kill();
-                                SimpleLogger.Warn("StopApplication @ ProcessManager.cs", $"Force killed {app.AppName} (PID: {pid})");
+                                try
+                                {
+                                    process.Kill();
+                                    SimpleLogger.Warn("StopApplication @ ProcessManager.cs", $"Force killed {app.AppName} (PID: {pid}) - graceful shutdown timed out");
+                                }
+                                catch (System.ComponentModel.Win32Exception killEx)
+                                {
+                                    SimpleLogger.Error("StopApplication @ ProcessManager.cs", $"Access denied killing {app.AppName} (PID: {pid}): {killEx.Message}");
+                                }
                             }
-                            catch (System.ComponentModel.Win32Exception killEx)
+                            else
                             {
-                                SimpleLogger.Error("StopApplication @ ProcessManager.cs", $"Access denied killing {app.AppName} (PID: {pid}): {killEx.Message}");
+                                SimpleLogger.Info("StopApplication @ ProcessManager.cs", $"Gracefully stopped {app.AppName} (PID: {pid})");
                             }
                         }
                         else
                         {
-                            SimpleLogger.Info("StopApplication @ ProcessManager.cs", $"Gracefully stopped {app.AppName} (PID: {pid})");
+                            // No main window — background/zombie process, force kill immediately
+                            try
+                            {
+                                process.Kill();
+                                SimpleLogger.Warn("StopApplication @ ProcessManager.cs", $"Force killed background process {app.AppName} (PID: {pid}) - no main window");
+                            }
+                            catch (System.ComponentModel.Win32Exception killEx)
+                            {
+                                SimpleLogger.Error("StopApplication @ ProcessManager.cs", $"Access denied killing background {app.AppName} (PID: {pid}): {killEx.Message}");
+                            }
                         }
                     }
                     catch (InvalidOperationException)

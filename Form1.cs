@@ -453,6 +453,8 @@ namespace InstanceManager
                         bool stillRunning = _processManager.IsApplicationRunning(app);
                         if (!stillRunning)
                         {
+                            // Also clean up any lingering background processes
+                            _processManager.KillBackgroundProcesses(app);
                             _pendingStop.Remove(app.Index);
                             if (item != null && item.SubItems[3].Text == "Running")
                             {
@@ -465,6 +467,20 @@ namespace InstanceManager
 
                     bool wasRunning = app.IsRunning;
                     bool isRunning = _processManager.IsApplicationRunning(app);
+
+                    // Detect background zombie processes (no window but process still alive)
+                    // This handles apps like Excel that close their window but linger in the background
+                    if (!isRunning && wasRunning && _processManager.HasBackgroundProcess(app))
+                    {
+                        int killed = _processManager.KillBackgroundProcesses(app);
+                        SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                            $"'{app.AppName}' lost its window but had {killed} background process(es) - killed them");
+
+                        // Fall through to the "was running, now stopped" logic below
+                    }
+
+                    // Re-check after potential background kill
+                    isRunning = _processManager.IsApplicationRunning(app);
 
                     // Detect unauthorized external launch
                     if (isRunning && !wasRunning && !_authorizedApps.Contains(app.Index))
@@ -488,28 +504,55 @@ namespace InstanceManager
                             app.RetryCount++;
                             _storageService.UpdateApplication(app);
 
-                            int delay = Math.Max(app.StartDelaySeconds, 1);
-                            _pendingRestart[app.Index] = DateTime.Now.AddSeconds(delay);
-
-                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                $"'{app.AppName}' crashed (KeepOpen=Yes). Crash #{app.CrashCount}, scheduling restart in {delay}s");
-
-                            if (item != null)
+                            // Check if max retries exhausted
+                            if (app.RetryCount >= app.MaxRetries)
                             {
-                                item.SubItems[3].Text = $"Restarting ({delay}s)";
-                                item.SubItems[5].Text = app.CrashCount.ToString();
-                                item.SubItems[6].Text = app.RetryCount.ToString();
-                                item.SubItems[8].Text = app.GetLastStopDisplay();
-                                item.ForeColor = Color.DarkOrange;
+                                SimpleLogger.Error("UpdateApplicationStatuses @ Form1.cs",
+                                    $"'{app.AppName}' exceeded max retries ({app.RetryCount}/{app.MaxRetries}). Giving up.");
 
-                                // Sync tag
-                                var tagApp = item.Tag as ManagedApplication;
-                                if (tagApp != null)
+                                if (item != null)
                                 {
-                                    tagApp.CrashCount = app.CrashCount;
-                                    tagApp.RetryCount = app.RetryCount;
-                                    tagApp.LastStop = app.LastStop;
-                                    tagApp.IsRunning = false;
+                                    item.SubItems[3].Text = "Failed";
+                                    item.SubItems[5].Text = app.CrashCount.ToString();
+                                    item.SubItems[6].Text = app.RetryCount.ToString();
+                                    item.SubItems[8].Text = app.GetLastStopDisplay();
+                                    item.ForeColor = Color.Red;
+
+                                    var tagApp = item.Tag as ManagedApplication;
+                                    if (tagApp != null)
+                                    {
+                                        tagApp.CrashCount = app.CrashCount;
+                                        tagApp.RetryCount = app.RetryCount;
+                                        tagApp.LastStop = app.LastStop;
+                                        tagApp.IsRunning = false;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                int delay = Math.Max(app.StartDelaySeconds, 1);
+                                _pendingRestart[app.Index] = DateTime.Now.AddSeconds(delay);
+
+                                SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                    $"'{app.AppName}' crashed (KeepOpen=Yes). Crash #{app.CrashCount}, retry {app.RetryCount}/{app.MaxRetries}, scheduling restart in {delay}s");
+
+                                if (item != null)
+                                {
+                                    item.SubItems[3].Text = $"Restarting ({delay}s)";
+                                    item.SubItems[5].Text = app.CrashCount.ToString();
+                                    item.SubItems[6].Text = app.RetryCount.ToString();
+                                    item.SubItems[8].Text = app.GetLastStopDisplay();
+                                    item.ForeColor = Color.DarkOrange;
+
+                                    // Sync tag
+                                    var tagApp = item.Tag as ManagedApplication;
+                                    if (tagApp != null)
+                                    {
+                                        tagApp.CrashCount = app.CrashCount;
+                                        tagApp.RetryCount = app.RetryCount;
+                                        tagApp.LastStop = app.LastStop;
+                                        tagApp.IsRunning = false;
+                                    }
                                 }
                             }
                         }
@@ -567,14 +610,27 @@ namespace InstanceManager
         {
             try
             {
+                // Double-check max retries in case settings changed while waiting
+                if (app.RetryCount >= app.MaxRetries)
+                {
+                    SimpleLogger.Error("AttemptAutoRestart @ Form1.cs",
+                        $"'{app.AppName}' exceeded max retries ({app.RetryCount}/{app.MaxRetries}). Giving up.");
+                    if (item != null)
+                    {
+                        item.SubItems[3].Text = "Failed";
+                        item.ForeColor = Color.Red;
+                    }
+                    return;
+                }
+
                 if (string.IsNullOrEmpty(app.Directory) || !File.Exists(app.Directory))
                 {
                     SimpleLogger.Error("AttemptAutoRestart @ Form1.cs",
                         $"Cannot auto-restart '{app.AppName}': file not found at {app.Directory ?? "(empty)"}");
                     if (item != null)
                     {
-                        item.SubItems[3].Text = "Stopped";
-                        item.ForeColor = Color.Black;
+                        item.SubItems[3].Text = "Failed";
+                        item.ForeColor = Color.Red;
                     }
                     return;
                 }
@@ -605,17 +661,17 @@ namespace InstanceManager
                     }
 
                     SimpleLogger.Info("AttemptAutoRestart @ Form1.cs",
-                        $"Auto-restarted '{app.AppName}' successfully (Retry #{app.RetryCount})");
+                        $"Auto-restarted '{app.AppName}' successfully (Retry {app.RetryCount}/{app.MaxRetries})");
                 }
                 else
                 {
                     SimpleLogger.Error("AttemptAutoRestart @ Form1.cs",
-                        $"Failed to auto-restart '{app.AppName}'");
+                        $"Failed to auto-restart '{app.AppName}' (Retry {app.RetryCount}/{app.MaxRetries})");
 
                     if (item != null)
                     {
-                        item.SubItems[3].Text = "Stopped";
-                        item.ForeColor = Color.Black;
+                        item.SubItems[3].Text = "Failed";
+                        item.ForeColor = Color.Red;
                     }
                 }
             }
@@ -626,8 +682,8 @@ namespace InstanceManager
 
                 if (item != null)
                 {
-                    item.SubItems[3].Text = "Stopped";
-                    item.ForeColor = Color.Black;
+                    item.SubItems[3].Text = "Failed";
+                    item.ForeColor = Color.Red;
                 }
             }
         }
@@ -925,6 +981,8 @@ namespace InstanceManager
                 _notifiedUnauthorized.Remove(app.Index);
                 _pendingStop.Remove(app.Index);
 
+                // Reset retry count on manual start so the app gets a fresh set of retries
+                app.RetryCount = 0;
                 app.LastStart = DateTime.Now;
                 app.IsRunning = true;
                 _storageService.UpdateApplication(app);
@@ -932,6 +990,7 @@ namespace InstanceManager
                 if (item != null)
                 {
                     item.SubItems[3].Text = "Running";
+                    item.SubItems[6].Text = app.RetryCount.ToString();
                     item.SubItems[7].Text = app.GetLastStartDisplay();
                     item.ForeColor = Color.Green;
                 }
@@ -1217,7 +1276,7 @@ namespace InstanceManager
                         selectedItem.SubItems[6].Text = app.RetryCount.ToString();
 
                         SimpleLogger.Info("SettingsButton_Click @ Form1.cs",
-                            $"Updated settings for '{app.AppName}': KeepOpen={app.KeepOpen}, StartDelay={app.StartDelaySeconds}s");
+                            $"Updated settings for '{app.AppName}': KeepOpen={app.KeepOpen}, MaxRetries={app.MaxRetries}, StartDelay={app.StartDelaySeconds}s");
                         MessageBoxHelper.ShowSuccess(this, $"Settings for '{app.AppName}' updated successfully!");
                     }
                 }

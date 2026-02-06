@@ -16,6 +16,7 @@ namespace InstanceManager.Models
         public bool KeepOpen { get; set; }
         public int CrashCount { get; set; }
         public int RetryCount { get; set; }
+        public int MaxRetries { get; set; }
         public int StartDelaySeconds { get; set; }
 
         public ManagedApplication()
@@ -27,6 +28,7 @@ namespace InstanceManager.Models
             KeepOpen = false;
             CrashCount = 0;
             RetryCount = 0;
+            MaxRetries = 3;
             StartDelaySeconds = 5;
         }
 

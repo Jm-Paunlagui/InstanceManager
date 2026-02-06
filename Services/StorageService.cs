@@ -130,6 +130,7 @@ namespace InstanceManager.Services
                 existingApp.KeepOpen = app.KeepOpen;
                 existingApp.CrashCount = app.CrashCount;
                 existingApp.RetryCount = app.RetryCount;
+                existingApp.MaxRetries = app.MaxRetries;
                 existingApp.StartDelaySeconds = app.StartDelaySeconds;
                 SaveApplications();
                 SimpleLogger.Info("UpdateApplication @ StorageService.cs", $"Updated application: {app.AppName} (Index: {app.Index})");
@@ -382,6 +383,7 @@ namespace InstanceManager.Services
                 sb.AppendLine($"    \"KeepOpen\": {app.KeepOpen.ToString().ToLower()},");
                 sb.AppendLine($"    \"CrashCount\": {app.CrashCount},");
                 sb.AppendLine($"    \"RetryCount\": {app.RetryCount},");
+                sb.AppendLine($"    \"MaxRetries\": {app.MaxRetries},");
                 sb.AppendLine($"    \"StartDelaySeconds\": {app.StartDelaySeconds}");
                 sb.Append("  }");
                 if (i < apps.Count - 1) sb.AppendLine(",");
@@ -526,6 +528,11 @@ namespace InstanceManager.Services
                         int rc;
                         if (int.TryParse(value, out rc))
                             app.RetryCount = rc;
+                        break;
+                    case "MaxRetries":
+                        int mr;
+                        if (int.TryParse(value, out mr))
+                            app.MaxRetries = mr;
                         break;
                     case "StartDelaySeconds":
                         int sd;
