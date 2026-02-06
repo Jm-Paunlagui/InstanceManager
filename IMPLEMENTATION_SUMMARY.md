@@ -12,236 +12,301 @@
 ? Start applications with instance checking (MUTEX functionality)  
 ? Stop applications (graceful with fallback to force kill)  
 ? Real-time status monitoring (2-second interval)  
+? Duplicate application detection on Add and Edit  
+? Last Start / Last Stop timestamp tracking  
 
-#### 2. **Data Persistence**
+#### 2. **Authorized Process Watchdog (Core Algorithm)**
+? Polling-based whitelist process watchdog with debounced notification  
+? Authorization tracking via `_authorizedApps` HashSet  
+? Detects unauthorized external launches within 2 seconds  
+? Automatically kills processes not started through Instance Manager  
+? Warns user about unauthorized launches with debounced notifications  
+? Graceful onboarding — apps already running at startup are marked as authorized  
+? Detects external stops and records LastStop timestamp  
+? Cleans up tracking state on Stop, Delete, and external termination  
+
+#### 3. **Data Persistence**
 ? JSON-based storage (applications.json)  
-? Custom JSON serializer for .NET 4.0 compatibility  
-? Stores: Index, AppName, Directory, AddedDate, IsRunning  
-? No database dependency - fully file-based  
+? Custom JSON serializer/deserializer for .NET 4.0 compatibility  
+? Proper JSON escaping/unescaping for Windows file paths (`\\`, `"`, etc.)  
+? Stores: Index, AppName, Directory, AddedDate, IsRunning, LastStart, LastStop  
+? Nullable DateTime support (`null` in JSON for never-started/never-stopped)  
+? No database dependency — fully file-based  
 
-#### 3. **Process Management**
+#### 4. **Process Management**
 ? Instance checking before application launch  
 ? Process monitoring by executable name  
-? Graceful shutdown (3-second timeout)  
-? Force kill fallback  
+? Graceful shutdown via `CloseMainWindow()` (3-second timeout)  
+? Force kill fallback via `Process.Kill()`  
 ? Running instance count tracking  
 ? Real-time status updates  
+? Unauthorized external launch detection and termination  
 
-#### 4. **Logging System**
-? Custom SimpleLogger implementation  
+#### 5. **Logging System**
+? Custom `SimpleLogger` implementation (zero dependencies)  
 ? Thread-safe logging with lock mechanism  
-? Custom log format: `[MACHINE_IDENTIFIER][TIMESTAMP][LEVEL][PID][LOCATION] - MESSAGE`  
+? Custom log format matching specification:
+```
+[MACHINE_IDENTIFIER][TIMESTAMP][LEVEL][PID:processId][FUNCTION @ FILE:LINE] - MESSAGE
+```
 ? Daily log file rotation (YYYY-MM-DD.log)  
-? Auto-create logs directory  
-? Logs all application actions  
-? Silent failure - never crashes app  
+? Auto-create `logs/` directory  
+? Logs all application actions (start, stop, add, edit, delete, unauthorized launches)  
+? Silent failure — logging never crashes the application  
 
 **Log Levels Implemented:**
-- INFO - Normal operations
-- DEBUG - Detailed diagnostic information  
-- WARN - Warning conditions
-- ERROR - Error conditions
-- FATAL - Critical failures
+- `INFO`  — Normal operations (start, stop, add, delete, edit)
+- `DEBUG` — Detailed diagnostic information (process checks, JSON loading)
+- `WARN`  — Warning conditions (duplicates, unauthorized launches, force kills)
+- `ERROR` — Error conditions (file not found, process failures)
+- `FATAL` — Critical failures (application crash)
 
-#### 5. **User Interface**
-? Professional header with title and subtitle  
-? ListView with columns: Index, AppName, Directory, Status  
-? Color-coded status (Green=Running, Black=Stopped)  
+**Example Log Output:**
+```
+[JmPaunlagui/user 192.168.1.100][2025-12-03 14:30:00][INFO][PID:23632][StartApplication @ ProcessManager.cs] - Successfully started DryCabinet (PID: 9876)
+[JmPaunlagui/user 192.168.1.100][2025-12-03 14:30:05][WARN][PID:23632][HandleUnauthorizedLaunch @ Form1.cs] - Unauthorized launch detected for 'EXCEL' - killing process
+```
+
+#### 6. **User Interface**
+? Professional header with AUMOVIO logo, title, and subtitle  
+? ListView with 6 columns: Index, Application, Directory, Status, Last Start, Last Stop  
+? Color-coded status (Green = Running, Black = Stopped)  
 ? Action buttons: Add, Edit, Delete, Start, Stop, Refresh  
-? File browser dialogs for selecting executables  
-? Confirmation dialogs for destructive actions  
-? User-friendly success/error messages  
+? Custom MessageBox (`CustomMessageBox`) centered on form position  
+? Helper methods: `ShowSuccess`, `ShowError`, `ShowWarning`, `ShowInfo`, `ShowQuestion`  
+? File browser dialogs centered on form (`OpenFileDialog` with owner)  
+? Confirmation dialogs for destructive actions (Delete, Stop)  
+? Form positioned in bottom-right corner of screen  
+? Compact layout with adjusted column widths  
 
-#### 6. **Performance Optimizations**
-? Minimal CPU usage (<1%)  
-? Efficient 2-second timer-based updates  
-? No continuous polling  
-? Proper resource disposal  
+#### 7. **Performance Optimizations**
+? Minimal CPU usage (< 1%, typically 0%)  
+? Efficient 2-second timer-based polling  
+? Updates only changed ListView items (no full refresh on tick)  
+? Proper resource disposal (Process objects, Timer on close)  
 ? Thread-safe operations  
-? Lightweight memory footprint  
+? Lightweight memory footprint (< 50 MB)  
+? `BeginInvoke` for non-blocking unauthorized launch notifications  
 
-#### 7. **Error Handling**
+#### 8. **Error Handling & Foolproofing**
 ? Try-catch blocks on all operations  
-? Comprehensive error logging  
-? User-friendly error messages  
-? Graceful degradation  
-? File existence validation  
-? Process validation  
+? Comprehensive error logging with stack traces  
+? User-friendly error messages via `CustomMessageBox`  
+? Graceful degradation on failures  
+? File existence validation before launching applications  
+? Process validation before start/stop  
+? Duplicate application prevention on Add and Edit  
+? Path normalization for case-insensitive comparison  
+? Backward-compatible JSON loading (old files without LastStart/LastStop)  
+
+---
 
 ## ?? File Structure
 
 ```
 InstanceManager/
-??? Form1.cs                    ? Main UI logic with all event handlers
-??? Form1.Designer.cs           ? UI control definitions
-??? Form1.resx                  ? Form resources
-??? Program.cs                  ? Application entry point with logging
+??? Form1.cs                          Main UI logic, event handlers, Authorized Process Watchdog
+??? Form1.Designer.cs                 UI control definitions (6-column ListView, buttons)
+??? Form1.resx                        Form resources
+??? Program.cs                        Application entry point with startup/shutdown logging
 ??? Models/
-?   ??? ManagedApplication.cs   ? Data model for applications
+?   ??? ManagedApplication.cs         Data model (Index, AppName, Directory, LastStart, LastStop)
 ??? Services/
-?   ??? StorageService.cs       ? JSON storage with custom serialization + duplicate checking
-?   ??? ProcessManager.cs       ? Process management and control
+?   ??? StorageService.cs             JSON storage with custom serialization + duplicate checking
+?   ??? ProcessManager.cs             Process monitoring, start, stop, instance counting
 ??? Utilities/
-?   ??? SimpleLogger.cs         ? Custom logging implementation
-??? NLog.config                 ? Configuration file (kept for reference)
-??? packages.config             ? Empty (no external dependencies)
-??? README.md                   ? Complete documentation
-??? QUICK_START.md              ? Testing and usage guide
+?   ??? SimpleLogger.cs               Thread-safe custom logging (zero dependencies)
+?   ??? CustomMessageBox.cs           Custom dialog positioned relative to owner form
+?   ??? MessageBoxHelper.cs           Convenience wrappers (ShowSuccess, ShowError, etc.)
+??? Properties/
+?   ??? AssemblyInfo.cs               Assembly metadata
+?   ??? Resources.Designer.cs         Resource accessors (Logo)
+?   ??? Settings.Designer.cs          Application settings
+??? packages.config                   Package references (empty — no external dependencies)
+??? NLog.config                       Configuration reference (not actively used)
+??? README.md                         Complete technical documentation
+??? QUICK_START.md                     Step-by-step testing guide
+??? IMPLEMENTATION_SUMMARY.md          This file
+??? applications.json                  Auto-generated application data storage
+??? logs/                              Auto-generated daily log files
 ```
 
-## ?? Key Achievements
+---
 
-### 1. **Mutex Functionality** (Primary Objective)
-The application successfully prevents simultaneous launches:
-- Checks if app is already running before starting
-- Displays message if already running
-- Monitors all managed applications in real-time
-- Detects external starts/stops
-- **NEW:** Prevents duplicate applications from being added
+## ?? Core Algorithm: Authorized Process Watchdog
 
-### 2. **Zero External Dependencies**
-- No NuGet packages required
-- Custom JSON serializer
-- Custom logging system
-- Pure .NET Framework 4.0 compatible
+The heart of the application is a **Polling-Based Whitelist Process Watchdog with Debounced Notification**.
 
-### 3. **Foolproof Design**
-- Comprehensive validation
-- Graceful error recovery
-- Silent logging failures
-- Thread-safe operations
-- Proper resource cleanup
+### How It Works
 
-### 4. **Professional Logging**
-Special log format structure implemented:
 ```
-[MACHINE_IDENTIFIER][TIMESTAMP][LEVEL][PID:processId][FUNCTION @ FILE:LINE] - MESSAGE
+???????????????????????????????????????????????????????????????????
+?                    Timer Tick (every 2 seconds)                  ?
+???????????????????????????????????????????????????????????????????
+?                                                                 ?
+?  For each managed application:                                  ?
+?                                                                 ?
+?    Was Stopped ? Now Running?                                   ?
+?      ??? In _authorizedApps? ? ? Authorized, update status     ?
+?      ??? NOT in _authorizedApps? ? ? UNAUTHORIZED              ?
+?            ??? Kill process immediately                         ?
+?            ??? Log warning                                      ?
+?            ??? Notify user (once per attempt, debounced)        ?
+?                                                                 ?
+?    Was Running ? Now Stopped?                                   ?
+?      ??? Remove from _authorizedApps                            ?
+?      ??? Record LastStop timestamp                              ?
+?      ??? Update UI and storage                                  ?
+?                                                                 ?
+?    No Change?                                                   ?
+?      ??? Refresh display values                                 ?
+?                                                                 ?
+???????????????????????????????????????????????????????????????????
 ```
 
-Example:
-```
-[JmPaunlagui/user 192.168.1.100][2025-12-03 14:30:00][INFO][PID:23632][AddApplication @ StorageService.cs] - Added application: Calculator (Index: 1)
-```
+### Authorization Flow
+
+| Action | `_authorizedApps` | `_notifiedUnauthorized` |
+|--------|-------------------|-------------------------|
+| Instance Manager starts, app already running | **Added** | — |
+| User clicks Start | **Added** | **Removed** |
+| User clicks Stop | **Removed** | **Removed** |
+| User clicks Delete | **Removed** | **Removed** |
+| App stopped externally | **Removed** | **Removed** |
+| App launched externally (unauthorized) | — | **Added** (after notification) |
+
+### Design Patterns Used
+
+| Pattern | Implementation |
+|---------|---------------|
+| **Watchdog Timer** | 2-second polling via `System.Windows.Forms.Timer` |
+| **Whitelist / Allow-List** | `_authorizedApps` HashSet tracks permitted processes |
+| **Policy Enforcement** | Unauthorized processes are terminated immediately |
+| **Graceful Onboarding** | `DetectAlreadyRunningApps()` at startup |
+| **Debounce / Deduplication** | `_notifiedUnauthorized` prevents repeated warnings |
+| **Non-blocking Notification** | `BeginInvoke` ensures timer isn't blocked by dialogs |
+
+---
 
 ## ?? Technical Highlights
 
 ### Custom JSON Serialization
-- Built from scratch for .NET 4.0
-- Handles string escaping/unescaping
-- Robust object parsing
-- Array splitting logic
-- Error recovery
+- Built from scratch for .NET Framework 4.0 (no `System.Web.Script.Serialization` dependency)
+- Proper `\\` escaping/unescaping via placeholder technique for Windows file paths
+- Quote-aware property splitting (`SplitPropertyValues`) handles commas inside strings
+- Nullable DateTime serialization (`"LastStart": null` or `"LastStart": "2026-02-05T17:16:25"`)
+- Backward compatible — loads old JSON files missing new fields without errors
+
+### Custom MessageBox (`CustomMessageBox`)
+- Manually positioned relative to owner form's `Left`, `Top`, `Width`, `Height`
+- Screen boundary protection (won't render off-screen)
+- Supports OK and Yes/No button layouts
+- System icons (Information, Warning, Error, Question)
+- Keyboard support (Enter = OK/Yes, Escape = No/Cancel)
 
 ### Process Management
-- Efficient process name lookup
-- Multiple instance handling
-- Graceful vs. force shutdown logic
-- 3-second timeout for graceful shutdown
-- Automatic cleanup of disposed processes
+- Efficient process name lookup via `Process.GetProcessesByName()`
+- Multiple instance handling (kills all instances on stop)
+- Graceful shutdown via `CloseMainWindow()` with 3-second `WaitForExit` timeout
+- Force kill fallback via `Process.Kill()` when graceful shutdown fails
+- Proper `Process.Dispose()` in `finally` blocks
 
-### Real-time Monitoring
-- Timer-based with 2-second interval
-- Compares previous vs. current status
-- Updates only changed items
-- Saves status changes to storage
-- Visual feedback (color changes)
-
-### Thread-Safe Logging
-- Lock-based synchronization
-- Daily file rotation
+### Thread-Safe Logging (`SimpleLogger`)
+- `lock` based synchronization on all write operations
+- Daily file rotation: `logs/YYYY-MM-DD.log`
 - UTF-8 encoding
-- Automatic directory creation
-- Network information retrieval
+- Automatic `logs/` directory creation
+- Machine identifier: `hostname/username IP_ADDRESS`
+- Process ID included in every log entry
+- Silent failure — exceptions in logging are swallowed
+
+---
 
 ## ?? Performance Metrics
 
-- **CPU Usage**: < 1% (typically 0%)
-- **Memory**: < 50MB
-- **Startup Time**: < 1 second
-- **Status Update**: Every 2 seconds
-- **Shutdown Timeout**: 3 seconds graceful + immediate force
+| Metric | Value |
+|--------|-------|
+| CPU Usage | < 1% (typically 0%) |
+| Memory | < 50 MB |
+| Startup Time | < 1 second |
+| Unauthorized Detection | Within 2 seconds |
+| Status Update Interval | Every 2 seconds |
+| Graceful Shutdown Timeout | 3 seconds |
+| External Dependencies | **0** (zero) |
 
-## ? Special Features
+---
 
-1. **Machine Identifier in Logs**: Includes hostname, username, and IP address
-2. **Process ID Tracking**: Every log entry includes PID
-3. **Location Tracking**: Logs include function name and file
-4. **Color-Coded UI**: Visual status indicators
-5. **Persistent Storage**: Survives app restarts
-6. **Portable**: No installation needed
-7. **Self-Contained**: Creates own directories
+## ? Feature Summary
 
-## ?? Usage Examples
+| # | Feature | Description |
+|---|---------|-------------|
+| 1 | **Add Application** | Browse for .exe, save to JSON with auto-incremented index |
+| 2 | **Edit Application** | Change application path, duplicate checking on new path |
+| 3 | **Delete Application** | Remove from management (does not delete actual file) |
+| 4 | **Start Application** | Launch with mutex check, mark as authorized, record LastStart |
+| 5 | **Stop Application** | Graceful + force kill, record LastStop, clean up tracking |
+| 6 | **Refresh** | Reload all applications from JSON |
+| 7 | **Duplicate Detection** | Prevents adding same .exe path twice (case-insensitive) |
+| 8 | **Real-time Monitoring** | 2-second polling updates status, LastStart, LastStop |
+| 9 | **Unauthorized Launch Detection** | Kills externally-launched managed apps, warns user |
+| 10 | **Graceful Onboarding** | Apps running before Instance Manager starts are allowed |
+| 11 | **External Stop Detection** | Detects when apps are closed outside Instance Manager |
+| 12 | **Persistent Timestamps** | LastStart and LastStop survive application restarts |
+| 13 | **Custom MessageBox** | Dialogs centered on form (bottom-right corner alignment) |
+| 14 | **Comprehensive Logging** | Every action logged with machine ID, PID, timestamp, location |
 
-### Add an Application
-```
-1. Click Add
-2. Browse to: C:\Windows\System32\notepad.exe
-3. Application added with Index 1
-```
-
-### Start with Mutex Check
-```
-1. Select notepad
-2. Click Start ? Launches if not running
-3. Click Start again ? "Already running!" message
-```
-
-### Monitor Real-time
-```
-1. Start application via Instance Manager
-2. Close it manually (Task Manager/X button)
-3. Wait 2 seconds
-4. Status automatically updates to "Stopped"
-```
+---
 
 ## ?? Security & Reliability
 
 ? No SQL injection (no database)  
-? Safe file operations (path validation)  
+? Safe file operations (path validation, existence checks)  
 ? Process isolation  
-? Exception handling everywhere  
+? Exception handling on every operation  
 ? No credential storage  
 ? Local-only operation  
+? Unauthorized launch enforcement  
+? Silent logging failures  
+
+---
 
 ## ?? Documentation Provided
 
-1. **README.md**: Complete technical documentation
-2. **QUICK_START.md**: Step-by-step testing guide
-3. **NLog.config**: Log configuration reference
-4. **Code Comments**: Inline documentation
-5. **This Summary**: Implementation overview
+| Document | Purpose |
+|----------|---------|
+| `README.md` | Complete technical documentation, architecture, usage |
+| `QUICK_START.md` | Step-by-step testing guide with expected outcomes |
+| `IMPLEMENTATION_SUMMARY.md` | This file — full implementation overview |
+| `NLog.config` | Configuration reference (SimpleLogger used instead) |
+| Code Comments | Inline XML documentation on key methods |
 
-## ?? Ready for Production
+---
 
-The application is:
-- ? Fully functional
-- ? Well-tested build
-- ? Documented
-- ? Error-handled
-- ? Performance-optimized
-- ? User-friendly
-- ? Portable
-
-## ?? Objectives Met
+## ? Objectives Met
 
 | Requirement | Status | Implementation |
 |-------------|--------|----------------|
-| Prevent simultaneous launches | ? | Instance checking before start |
-| Add/Edit/Delete apps | ? | Full CRUD operations |
-| Duplicate prevention | ? | Path-based duplicate checking |
-| Start/Stop apps | ? | Process management |
-| JSON storage | ? | Custom serialization |
-| No database | ? | File-based only |
-| Logging with NLog | ? | Custom SimpleLogger |
-| Special log format | ? | Fully implemented |
-| Minimal performance impact | ? | <1% CPU usage |
-| Foolproof design | ? | Comprehensive error handling |
+| Prevent simultaneous launches | ? | Instance checking + Authorized Process Watchdog |
+| Prevent external launches of managed apps | ? | Unauthorized launch detection and termination |
+| Add/Edit/Delete apps | ? | Full CRUD operations with file browser |
+| Duplicate prevention | ? | Path-based duplicate checking (case-insensitive) |
+| Start/Stop apps | ? | Process management with graceful + force shutdown |
+| JSON storage | ? | Custom serialization with path escaping |
+| No database | ? | File-based only (applications.json) |
+| Logging | ? | Custom SimpleLogger with special format |
+| Special log format | ? | `[MACHINE][TIMESTAMP][LEVEL][PID][LOCATION] - MESSAGE` |
+| Minimal performance impact | ? | < 1% CPU, < 50 MB memory |
+| Foolproof design | ? | Comprehensive error handling + validation |
 | Monitor instances | ? | 2-second real-time updates |
+| Track Last Start / Last Stop | ? | Nullable DateTime with persistent storage |
+| MessageBox aligned to form | ? | CustomMessageBox positioned relative to owner |
+| Form in bottom-right corner | ? | Manual positioning via `Screen.PrimaryScreen.WorkingArea` |
+| Zero external dependencies | ? | No NuGet packages required |
+
+---
 
 ## ?? Future Enhancements (Optional)
 
-While not required, these could be added:
 - [ ] CSV export/import
 - [ ] System tray minimization
 - [ ] Auto-start with Windows
@@ -250,13 +315,17 @@ While not required, these could be added:
 - [ ] Remote monitoring
 - [ ] Crash detection & auto-restart
 - [ ] Performance graphs
+- [ ] Configurable watchdog interval
+- [ ] Whitelist/blacklist mode toggle
+
+---
 
 ## ?? Support
 
 For any issues:
 1. Check `logs/[date].log` for detailed information
-2. Review QUICK_START.md for testing procedures
-3. Consult README.md for technical details
+2. Review `QUICK_START.md` for testing procedures
+3. Consult `README.md` for technical details
 4. Verify .NET Framework 4.0 is installed
 
 ---
@@ -265,4 +334,5 @@ For any issues:
 **Build Status**: ? SUCCESS  
 **Documentation**: ? COMPLETE  
 **Testing Guide**: ? PROVIDED  
-**Ready for Deployment**: ? YES
+**Ready for Deployment**: ? YES  
+**Repository**: https://github.com/Jm-Paunlagui/InstanceManager

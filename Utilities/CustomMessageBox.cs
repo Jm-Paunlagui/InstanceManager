@@ -26,8 +26,11 @@ namespace InstanceManager.Utilities
             this.StartPosition = FormStartPosition.Manual;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
-            this.Size = new Size(400, 160);
             this.BackColor = Color.White;
+
+            int formWidth = 420;
+            int labelX = 65;
+            int labelWidth = formWidth - labelX - 25;
 
             iconPictureBox = new PictureBox
             {
@@ -38,19 +41,28 @@ namespace InstanceManager.Utilities
             SetIcon(icon);
             this.Controls.Add(iconPictureBox);
 
+            // Measure the text to determine required label height
+            Font labelFont = new Font("Segoe UI", 9F);
+            Size proposedSize = new Size(labelWidth, int.MaxValue);
+            Size measuredSize = TextRenderer.MeasureText(message, labelFont, proposedSize, TextFormatFlags.WordBreak);
+            int labelHeight = Math.Max(40, measuredSize.Height + 5);
+
             messageLabel = new Label
             {
                 Text = message,
-                Location = new Point(65, 20),
+                Location = new Point(labelX, 20),
                 AutoSize = false,
-                Size = new Size(310, 60),
-                Font = new Font("Segoe UI", 9F)
+                Size = new Size(labelWidth, labelHeight),
+                Font = labelFont
             };
             this.Controls.Add(messageLabel);
 
-            int buttonY = 90;
+            int buttonY = messageLabel.Bottom + 15;
             int buttonWidth = 80;
             int buttonHeight = 28;
+            int formHeight = buttonY + buttonHeight + 45;
+
+            this.Size = new Size(formWidth, formHeight);
 
             switch (buttons)
             {
@@ -58,7 +70,7 @@ namespace InstanceManager.Utilities
                     okButton = new Button
                     {
                         Text = "OK",
-                        Location = new Point(160, buttonY),
+                        Location = new Point((formWidth - buttonWidth) / 2, buttonY),
                         Size = new Size(buttonWidth, buttonHeight),
                         DialogResult = DialogResult.OK
                     };
@@ -68,10 +80,13 @@ namespace InstanceManager.Utilities
                     break;
 
                 case MessageBoxButtons.YesNo:
+                    int totalButtonsWidth = buttonWidth * 2 + 10;
+                    int startX = (formWidth - totalButtonsWidth) / 2;
+
                     yesButton = new Button
                     {
                         Text = "Yes",
-                        Location = new Point(120, buttonY),
+                        Location = new Point(startX, buttonY),
                         Size = new Size(buttonWidth, buttonHeight),
                         DialogResult = DialogResult.Yes
                     };
@@ -81,7 +96,7 @@ namespace InstanceManager.Utilities
                     noButton = new Button
                     {
                         Text = "No",
-                        Location = new Point(210, buttonY),
+                        Location = new Point(startX + buttonWidth + 10, buttonY),
                         Size = new Size(buttonWidth, buttonHeight),
                         DialogResult = DialogResult.No
                     };
