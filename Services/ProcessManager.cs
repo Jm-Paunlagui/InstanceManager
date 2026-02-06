@@ -16,7 +16,12 @@ namespace InstanceManager.Services
                 string appName = Path.GetFileNameWithoutExtension(app.Directory);
                 var processes = Process.GetProcessesByName(appName);
                 bool isRunning = processes.Length > 0;
-                
+
+                foreach (var p in processes)
+                {
+                    p.Dispose();
+                }
+
                 SimpleLogger.Debug("IsApplicationRunning @ ProcessManager.cs", $"Checked {app.AppName}: {(isRunning ? "Running" : "Not Running")}");
                 return isRunning;
             }
@@ -54,7 +59,19 @@ namespace InstanceManager.Services
                 
                 if (process != null)
                 {
-                    SimpleLogger.Info("StartApplication @ ProcessManager.cs", $"Successfully started {app.AppName} (PID: {process.Id})");
+                    try
+                    {
+                        int pid = process.Id;
+                        SimpleLogger.Info("StartApplication @ ProcessManager.cs", $"Successfully started {app.AppName} (PID: {pid})");
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        SimpleLogger.Info("StartApplication @ ProcessManager.cs", $"Successfully started {app.AppName} (PID unavailable - process may have exited quickly)");
+                    }
+                    finally
+                    {
+                        process.Dispose();
+                    }
                     return true;
                 }
 
@@ -98,6 +115,10 @@ namespace InstanceManager.Services
                             SimpleLogger.Info("StopApplication @ ProcessManager.cs", $"Gracefully stopped {app.AppName} (PID: {pid})");
                         }
                     }
+                    catch (InvalidOperationException)
+                    {
+                        SimpleLogger.Info("StopApplication @ ProcessManager.cs", $"Process for {app.AppName} already exited during stop");
+                    }
                     catch (Exception ex)
                     {
                         SimpleLogger.Error("StopApplication @ ProcessManager.cs", $"Error stopping process: {ex.Message}");
@@ -122,7 +143,15 @@ namespace InstanceManager.Services
             try
             {
                 string appName = Path.GetFileNameWithoutExtension(app.Directory);
-                return Process.GetProcessesByName(appName).Length;
+                var processes = Process.GetProcessesByName(appName);
+                int count = processes.Length;
+
+                foreach (var p in processes)
+                {
+                    p.Dispose();
+                }
+
+                return count;
             }
             catch
             {

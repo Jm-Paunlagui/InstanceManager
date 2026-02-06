@@ -26,6 +26,8 @@ namespace InstanceManager
         // Tracks apps that the user intentionally stopped via the Stop button
         // so the watchdog doesn't interfere during process shutdown
         private HashSet<int> _pendingStop = new HashSet<int>();
+        // Prevents re-entrant timer ticks while a tick is still executing
+        private bool _isUpdatingStatuses;
 
         public Main()
         {
@@ -39,10 +41,17 @@ namespace InstanceManager
 
         private void Main_Load(object sender, EventArgs e)
         {
-            int screenWidth = Screen.PrimaryScreen.WorkingArea.Width;
-            int screenHeight = Screen.PrimaryScreen.WorkingArea.Height;
-            this.Left = screenWidth - this.Width - 10;
-            this.Top = screenHeight - this.Height - 10;
+            try
+            {
+                int screenWidth = Screen.PrimaryScreen.WorkingArea.Width;
+                int screenHeight = Screen.PrimaryScreen.WorkingArea.Height;
+                this.Left = screenWidth - this.Width - 10;
+                this.Top = screenHeight - this.Height - 10;
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("Main_Load @ Form1.cs", $"Error positioning form: {ex.Message}");
+            }
         }
 
         private void InitializeServices()
@@ -57,36 +66,46 @@ namespace InstanceManager
         /// </summary>
         private void TerminateAlreadyRunningApps()
         {
-            var apps = _storageService.GetAllApplications();
-            List<string> terminatedApps = new List<string>();
-
-            foreach (var app in apps)
+            try
             {
-                if (_processManager.IsApplicationRunning(app))
+                var apps = _storageService.GetAllApplications();
+                List<string> terminatedApps = new List<string>();
+
+                foreach (var app in apps)
                 {
+                    if (string.IsNullOrEmpty(app.Directory))
+                        continue;
+
+                    if (_processManager.IsApplicationRunning(app))
+                    {
+                        SimpleLogger.Warn("TerminateAlreadyRunningApps @ Form1.cs",
+                            $"'{app.AppName}' was running before Instance Manager started - terminating");
+
+                        _processManager.StopApplication(app);
+
+                        app.LastStop = DateTime.Now;
+                        app.IsRunning = false;
+                        _storageService.UpdateApplication(app);
+
+                        terminatedApps.Add(app.AppName ?? "(unknown)");
+                    }
+                }
+
+                if (terminatedApps.Count > 0)
+                {
+                    string appList = string.Join("\n- ", terminatedApps.ToArray());
                     SimpleLogger.Warn("TerminateAlreadyRunningApps @ Form1.cs",
-                        $"'{app.AppName}' was running before Instance Manager started - terminating");
+                        $"Terminated {terminatedApps.Count} application(s) at startup: {appList}");
 
-                    _processManager.StopApplication(app);
-
-                    app.LastStop = DateTime.Now;
-                    app.IsRunning = false;
-                    _storageService.UpdateApplication(app);
-
-                    terminatedApps.Add(app.AppName);
+                    MessageBoxHelper.ShowWarning(null,
+                        $"The following application(s) were running before Instance Manager started and have been terminated:\n\n" +
+                        $"- {appList}\n\n" +
+                        "All managed applications must be started through Instance Manager.");
                 }
             }
-
-            if (terminatedApps.Count > 0)
+            catch (Exception ex)
             {
-                string appList = string.Join("\n- ", terminatedApps.ToArray());
-                SimpleLogger.Warn("TerminateAlreadyRunningApps @ Form1.cs",
-                    $"Terminated {terminatedApps.Count} application(s) at startup: {appList}");
-
-                MessageBoxHelper.ShowWarning(null,
-                    $"The following application(s) were running before Instance Manager started and have been terminated:\n\n" +
-                    $"- {appList}\n\n" +
-                    "All managed applications must be started through Instance Manager.");
+                SimpleLogger.Error("TerminateAlreadyRunningApps @ Form1.cs", $"Error during startup termination: {ex.Message}");
             }
         }
 
@@ -100,7 +119,16 @@ namespace InstanceManager
 
         private void StatusUpdateTimer_Tick(object sender, EventArgs e)
         {
-            UpdateApplicationStatuses();
+            if (_isUpdatingStatuses) return;
+            _isUpdatingStatuses = true;
+            try
+            {
+                UpdateApplicationStatuses();
+            }
+            finally
+            {
+                _isUpdatingStatuses = false;
+            }
         }
 
         private void LoadApplications()
@@ -126,12 +154,16 @@ namespace InstanceManager
 
         private void AddApplicationToListView(ManagedApplication app)
         {
-            bool isRunning = _processManager.IsApplicationRunning(app);
+            bool isRunning = false;
+            if (!string.IsNullOrEmpty(app.Directory))
+            {
+                isRunning = _processManager.IsApplicationRunning(app);
+            }
             app.IsRunning = isRunning;
 
             ListViewItem item = new ListViewItem(app.Index.ToString());
-            item.SubItems.Add(app.AppName);
-            item.SubItems.Add(app.Directory);
+            item.SubItems.Add(app.AppName ?? "");
+            item.SubItems.Add(app.Directory ?? "");
             item.SubItems.Add(isRunning ? "Running" : "Stopped");
             item.SubItems.Add(app.GetLastStartDisplay());
             item.SubItems.Add(app.GetLastStopDisplay());
@@ -147,63 +179,64 @@ namespace InstanceManager
             {
                 foreach (ListViewItem item in AppListView.Items)
                 {
-                    if (item.Tag is ManagedApplication app)
+                    var app = item.Tag as ManagedApplication;
+                    if (app == null || string.IsNullOrEmpty(app.Directory))
+                        continue;
+
+                    // Skip watchdog checks for apps the user intentionally stopped
+                    if (_pendingStop.Contains(app.Index))
                     {
-                        // Skip watchdog checks for apps the user intentionally stopped
-                        if (_pendingStop.Contains(app.Index))
+                        bool stillRunning = _processManager.IsApplicationRunning(app);
+                        if (!stillRunning)
                         {
-                            bool stillRunning = _processManager.IsApplicationRunning(app);
-                            if (!stillRunning)
+                            _pendingStop.Remove(app.Index);
+                            // Update UI if not already updated by StopButton_Click
+                            if (item.SubItems[3].Text == "Running")
                             {
-                                _pendingStop.Remove(app.Index);
-                                // Update UI if not already updated by StopButton_Click
-                                if (item.SubItems[3].Text == "Running")
-                                {
-                                    item.SubItems[3].Text = "Stopped";
-                                    item.ForeColor = Color.Black;
-                                }
+                                item.SubItems[3].Text = "Stopped";
+                                item.ForeColor = Color.Black;
                             }
-                            continue;
                         }
-
-                        bool wasRunning = item.SubItems[3].Text == "Running";
-                        bool isRunning = _processManager.IsApplicationRunning(app);
-
-                        // Detect unauthorized external launch
-                        if (isRunning && !wasRunning && !_authorizedApps.Contains(app.Index))
-                        {
-                            HandleUnauthorizedLaunch(app, item);
-                            continue;
-                        }
-
-                        // App was stopped externally (outside Instance Manager)
-                        if (!isRunning && wasRunning)
-                        {
-                            _authorizedApps.Remove(app.Index);
-                            _notifiedUnauthorized.Remove(app.Index);
-                            app.IsRunning = false;
-                            app.LastStop = DateTime.Now;
-                            item.SubItems[3].Text = "Stopped";
-                            item.SubItems[5].Text = app.GetLastStopDisplay();
-                            item.ForeColor = Color.Black;
-                            _storageService.UpdateApplication(app);
-
-                            SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
-                                $"'{app.AppName}' was stopped externally");
-                        }
-
-                        app.IsRunning = isRunning;
-
-                        if (item.SubItems[3].Text != (isRunning ? "Running" : "Stopped"))
-                        {
-                            item.SubItems[3].Text = isRunning ? "Running" : "Stopped";
-                            item.ForeColor = isRunning ? Color.Green : Color.Black;
-                            _storageService.UpdateApplication(app);
-                        }
-
-                        item.SubItems[4].Text = app.GetLastStartDisplay();
-                        item.SubItems[5].Text = app.GetLastStopDisplay();
+                        continue;
                     }
+
+                    bool wasRunning = item.SubItems[3].Text == "Running";
+                    bool isRunning = _processManager.IsApplicationRunning(app);
+
+                    // Detect unauthorized external launch
+                    if (isRunning && !wasRunning && !_authorizedApps.Contains(app.Index))
+                    {
+                        HandleUnauthorizedLaunch(app, item);
+                        continue;
+                    }
+
+                    // App was stopped externally (outside Instance Manager)
+                    if (!isRunning && wasRunning)
+                    {
+                        _authorizedApps.Remove(app.Index);
+                        _notifiedUnauthorized.Remove(app.Index);
+                        app.IsRunning = false;
+                        app.LastStop = DateTime.Now;
+                        item.SubItems[3].Text = "Stopped";
+                        item.SubItems[5].Text = app.GetLastStopDisplay();
+                        item.ForeColor = Color.Black;
+                        _storageService.UpdateApplication(app);
+
+                        SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
+                            $"'{app.AppName}' was stopped externally");
+                    }
+
+                    app.IsRunning = isRunning;
+
+                    if (item.SubItems[3].Text != (isRunning ? "Running" : "Stopped"))
+                    {
+                        item.SubItems[3].Text = isRunning ? "Running" : "Stopped";
+                        item.ForeColor = isRunning ? Color.Green : Color.Black;
+                        _storageService.UpdateApplication(app);
+                    }
+
+                    item.SubItems[4].Text = app.GetLastStartDisplay();
+                    item.SubItems[5].Text = app.GetLastStopDisplay();
                 }
             }
             catch (Exception ex)
@@ -240,20 +273,28 @@ namespace InstanceManager
                 // Use BeginInvoke so the timer isn't blocked while showing the dialog
                 this.BeginInvoke(new Action(() =>
                 {
-                    // Safety check: if user clicked Stop while this was queued, don't show warning
-                    if (_pendingStop.Contains(appIndex))
+                    try
                     {
-                        SimpleLogger.Debug("HandleUnauthorizedLaunch @ Form1.cs",
-                            $"Suppressed unauthorized warning for '{appName}' - user initiated stop");
-                        return;
+                        // Safety check: if user clicked Stop while this was queued, don't show warning
+                        if (_pendingStop.Contains(appIndex))
+                        {
+                            SimpleLogger.Debug("HandleUnauthorizedLaunch @ Form1.cs",
+                                $"Suppressed unauthorized warning for '{appName}' - user initiated stop");
+                            return;
+                        }
+
+                        MessageBoxHelper.ShowWarning(this,
+                            $"'{appName}' was launched outside of Instance Manager and has been terminated.\n\n" +
+                            "Please use Instance Manager to start managed applications.");
+
+                        SimpleLogger.Warn("HandleUnauthorizedLaunch @ Form1.cs",
+                            $"User notified about unauthorized launch of '{appName}'");
                     }
-
-                    MessageBoxHelper.ShowWarning(this,
-                        $"'{appName}' was launched outside of Instance Manager and has been terminated.\n\n" +
-                        "Please use Instance Manager to start managed applications.");
-
-                    SimpleLogger.Warn("HandleUnauthorizedLaunch @ Form1.cs",
-                        $"User notified about unauthorized launch of '{appName}'");
+                    catch (Exception ex)
+                    {
+                        SimpleLogger.Error("HandleUnauthorizedLaunch @ Form1.cs",
+                            $"Error showing unauthorized launch notification: {ex.Message}");
+                    }
                 }));
             }
         }
@@ -315,6 +356,12 @@ namespace InstanceManager
                 var selectedItem = AppListView.SelectedItems[0];
                 var app = selectedItem.Tag as ManagedApplication;
 
+                if (app == null)
+                {
+                    MessageBoxHelper.ShowError(this, "Selected item has no valid application data.");
+                    return;
+                }
+
                 using (OpenFileDialog dialog = new OpenFileDialog())
                 {
                     dialog.Filter = "Executable Files (*.exe)|*.exe|All Files (*.*)|*.*";
@@ -369,6 +416,12 @@ namespace InstanceManager
                 var selectedItem = AppListView.SelectedItems[0];
                 var app = selectedItem.Tag as ManagedApplication;
 
+                if (app == null)
+                {
+                    MessageBoxHelper.ShowError(this, "Selected item has no valid application data.");
+                    return;
+                }
+
                 var result = MessageBoxHelper.ShowQuestion(this,
                     $"Are you sure you want to remove '{app.AppName}' from management?\n\nNote: This will not delete the actual application file.",
                     "Confirm Delete");
@@ -404,6 +457,18 @@ namespace InstanceManager
 
                 var selectedItem = AppListView.SelectedItems[0];
                 var app = selectedItem.Tag as ManagedApplication;
+
+                if (app == null)
+                {
+                    MessageBoxHelper.ShowError(this, "Selected item has no valid application data.");
+                    return;
+                }
+
+                if (string.IsNullOrEmpty(app.Directory) || !File.Exists(app.Directory))
+                {
+                    MessageBoxHelper.ShowError(this, $"Application file not found: {app.Directory ?? "(empty)"}");
+                    return;
+                }
 
                 if (_processManager.IsApplicationRunning(app))
                 {
@@ -451,6 +516,12 @@ namespace InstanceManager
 
                 var selectedItem = AppListView.SelectedItems[0];
                 var app = selectedItem.Tag as ManagedApplication;
+
+                if (app == null)
+                {
+                    MessageBoxHelper.ShowError(this, "Selected item has no valid application data.");
+                    return;
+                }
 
                 if (!_processManager.IsApplicationRunning(app))
                 {
@@ -505,8 +576,17 @@ namespace InstanceManager
 
         private void RefreshButton_Click(object sender, EventArgs e)
         {
-            LoadApplications();
-            MessageBoxHelper.ShowSuccess(this, "Application list refreshed!");
+            // Stop the timer while refreshing to avoid concurrent access to the ListView
+            _statusUpdateTimer.Stop();
+            try
+            {
+                LoadApplications();
+                MessageBoxHelper.ShowSuccess(this, "Application list refreshed!");
+            }
+            finally
+            {
+                _statusUpdateTimer.Start();
+            }
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

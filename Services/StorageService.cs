@@ -53,6 +53,8 @@ namespace InstanceManager.Services
                 existingApp.AppName = app.AppName;
                 existingApp.Directory = app.Directory;
                 existingApp.IsRunning = app.IsRunning;
+                existingApp.LastStart = app.LastStart;
+                existingApp.LastStop = app.LastStop;
                 SaveApplications();
                 SimpleLogger.Info("UpdateApplication @ StorageService.cs", $"Updated application: {app.AppName} (Index: {app.Index})");
             }
