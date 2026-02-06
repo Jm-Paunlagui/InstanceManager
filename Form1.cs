@@ -32,6 +32,8 @@ namespace InstanceManager
         private int _selectedGroupId = -1;
         // Prevents timer ticks from running after form begins closing
         private bool _isClosing;
+        // Tracks when a KeepOpen app crashed and is pending restart (app Index -> restart-eligible time)
+        private Dictionary<int, DateTime> _pendingRestart = new Dictionary<int, DateTime>();
 
         public Main()
         {
@@ -206,6 +208,7 @@ namespace InstanceManager
             StopButton.Enabled = groupSelected;
             StartAllButton.Enabled = groupSelected;
             StopAllButton.Enabled = groupSelected;
+            SettingsButton.Enabled = groupSelected;
             RefreshButton.Enabled = groupSelected;
         }
 
@@ -328,6 +331,7 @@ namespace InstanceManager
                         _authorizedApps.Remove(app.Index);
                         _notifiedUnauthorized.Remove(app.Index);
                         _pendingStop.Remove(app.Index);
+                        _pendingRestart.Remove(app.Index);
                     }
 
                     string groupName = selectedGroup.GroupName;
@@ -383,11 +387,14 @@ namespace InstanceManager
             app.IsRunning = isRunning;
 
             ListViewItem item = new ListViewItem(app.Index.ToString());
-            item.SubItems.Add(app.AppName ?? "");
-            item.SubItems.Add(app.Directory ?? "");
-            item.SubItems.Add(isRunning ? "Running" : "Stopped");
-            item.SubItems.Add(app.GetLastStartDisplay());
-            item.SubItems.Add(app.GetLastStopDisplay());
+            item.SubItems.Add(app.AppName ?? "");                    // [1] Application
+            item.SubItems.Add(app.Directory ?? "");                  // [2] Directory
+            item.SubItems.Add(isRunning ? "Running" : "Stopped");    // [3] Status
+            item.SubItems.Add(app.GetKeepOpenDisplay());             // [4] Keep Open
+            item.SubItems.Add(app.CrashCount.ToString());            // [5] Crashes
+            item.SubItems.Add(app.RetryCount.ToString());            // [6] Retries
+            item.SubItems.Add(app.GetLastStartDisplay());            // [7] Last Start
+            item.SubItems.Add(app.GetLastStopDisplay());             // [8] Last Stop
             item.Tag = app;
             item.ForeColor = isRunning ? Color.Green : Color.Black;
 
@@ -422,6 +429,24 @@ namespace InstanceManager
                         }
                     }
 
+                    // Handle pending restart for KeepOpen apps
+                    if (_pendingRestart.ContainsKey(app.Index))
+                    {
+                        DateTime restartTime = _pendingRestart[app.Index];
+                        if (DateTime.Now >= restartTime)
+                        {
+                            _pendingRestart.Remove(app.Index);
+                            AttemptAutoRestart(app, item);
+                        }
+                        else if (item != null)
+                        {
+                            int secondsLeft = (int)Math.Ceiling((restartTime - DateTime.Now).TotalSeconds);
+                            item.SubItems[3].Text = $"Restarting ({secondsLeft}s)";
+                            item.ForeColor = Color.DarkOrange;
+                        }
+                        continue;
+                    }
+
                     // Skip watchdog checks for apps the user intentionally stopped
                     if (_pendingStop.Contains(app.Index))
                     {
@@ -448,24 +473,62 @@ namespace InstanceManager
                         continue;
                     }
 
-                    // App was stopped externally (outside Instance Manager)
+                    // App was stopped externally (outside Instance Manager) — possible crash
                     if (!isRunning && wasRunning)
                     {
                         _authorizedApps.Remove(app.Index);
                         _notifiedUnauthorized.Remove(app.Index);
                         app.IsRunning = false;
                         app.LastStop = DateTime.Now;
-                        _storageService.UpdateApplication(app);
 
-                        if (item != null)
+                        // If KeepOpen is enabled, treat this as a crash and schedule restart
+                        if (app.KeepOpen)
                         {
-                            item.SubItems[3].Text = "Stopped";
-                            item.SubItems[5].Text = app.GetLastStopDisplay();
-                            item.ForeColor = Color.Black;
+                            app.CrashCount++;
+                            app.RetryCount++;
+                            _storageService.UpdateApplication(app);
+
+                            int delay = Math.Max(app.StartDelaySeconds, 1);
+                            _pendingRestart[app.Index] = DateTime.Now.AddSeconds(delay);
+
+                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                $"'{app.AppName}' crashed (KeepOpen=Yes). Crash #{app.CrashCount}, scheduling restart in {delay}s");
+
+                            if (item != null)
+                            {
+                                item.SubItems[3].Text = $"Restarting ({delay}s)";
+                                item.SubItems[5].Text = app.CrashCount.ToString();
+                                item.SubItems[6].Text = app.RetryCount.ToString();
+                                item.SubItems[8].Text = app.GetLastStopDisplay();
+                                item.ForeColor = Color.DarkOrange;
+
+                                // Sync tag
+                                var tagApp = item.Tag as ManagedApplication;
+                                if (tagApp != null)
+                                {
+                                    tagApp.CrashCount = app.CrashCount;
+                                    tagApp.RetryCount = app.RetryCount;
+                                    tagApp.LastStop = app.LastStop;
+                                    tagApp.IsRunning = false;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            _storageService.UpdateApplication(app);
+
+                            if (item != null)
+                            {
+                                item.SubItems[3].Text = "Stopped";
+                                item.SubItems[8].Text = app.GetLastStopDisplay();
+                                item.ForeColor = Color.Black;
+                            }
+
+                            SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
+                                $"'{app.AppName}' was stopped externally");
                         }
 
-                        SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
-                            $"'{app.AppName}' was stopped externally");
+                        continue;
                     }
 
                     if (app.IsRunning != isRunning)
@@ -483,14 +546,89 @@ namespace InstanceManager
                             item.ForeColor = isRunning ? Color.Green : Color.Black;
                         }
 
-                        item.SubItems[4].Text = app.GetLastStartDisplay();
-                        item.SubItems[5].Text = app.GetLastStopDisplay();
+                        item.SubItems[4].Text = app.GetKeepOpenDisplay();
+                        item.SubItems[5].Text = app.CrashCount.ToString();
+                        item.SubItems[6].Text = app.RetryCount.ToString();
+                        item.SubItems[7].Text = app.GetLastStartDisplay();
+                        item.SubItems[8].Text = app.GetLastStopDisplay();
                     }
                 }
             }
             catch (Exception ex)
             {
                 SimpleLogger.Error("UpdateApplicationStatuses @ Form1.cs", $"Error updating statuses: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Attempts to auto-restart a KeepOpen app after a crash.
+        /// </summary>
+        private void AttemptAutoRestart(ManagedApplication app, ListViewItem item)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(app.Directory) || !File.Exists(app.Directory))
+                {
+                    SimpleLogger.Error("AttemptAutoRestart @ Form1.cs",
+                        $"Cannot auto-restart '{app.AppName}': file not found at {app.Directory ?? "(empty)"}");
+                    if (item != null)
+                    {
+                        item.SubItems[3].Text = "Stopped";
+                        item.ForeColor = Color.Black;
+                    }
+                    return;
+                }
+
+                if (_processManager.StartApplication(app))
+                {
+                    _authorizedApps.Add(app.Index);
+                    _notifiedUnauthorized.Remove(app.Index);
+
+                    app.LastStart = DateTime.Now;
+                    app.IsRunning = true;
+                    _storageService.UpdateApplication(app);
+
+                    if (item != null)
+                    {
+                        item.SubItems[3].Text = "Running";
+                        item.SubItems[6].Text = app.RetryCount.ToString();
+                        item.SubItems[7].Text = app.GetLastStartDisplay();
+                        item.ForeColor = Color.Green;
+
+                        var tagApp = item.Tag as ManagedApplication;
+                        if (tagApp != null)
+                        {
+                            tagApp.LastStart = app.LastStart;
+                            tagApp.IsRunning = true;
+                            tagApp.RetryCount = app.RetryCount;
+                        }
+                    }
+
+                    SimpleLogger.Info("AttemptAutoRestart @ Form1.cs",
+                        $"Auto-restarted '{app.AppName}' successfully (Retry #{app.RetryCount})");
+                }
+                else
+                {
+                    SimpleLogger.Error("AttemptAutoRestart @ Form1.cs",
+                        $"Failed to auto-restart '{app.AppName}'");
+
+                    if (item != null)
+                    {
+                        item.SubItems[3].Text = "Stopped";
+                        item.ForeColor = Color.Black;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("AttemptAutoRestart @ Form1.cs",
+                    $"Error auto-restarting '{app.AppName}': {ex.Message}");
+
+                if (item != null)
+                {
+                    item.SubItems[3].Text = "Stopped";
+                    item.ForeColor = Color.Black;
+                }
             }
         }
 
@@ -639,36 +777,49 @@ namespace InstanceManager
                     return;
                 }
 
-                using (OpenFileDialog dialog = new OpenFileDialog())
+                using (var editForm = new EditAppDialog(app))
                 {
-                    dialog.Filter = "Executable Files (*.exe)|*.exe|All Files (*.*)|*.*";
-                    dialog.Title = "Select New Application Path";
-                    dialog.FileName = app.Directory;
-
-                    if (dialog.ShowDialog(this) == DialogResult.OK)
+                    if (editForm.ShowDialog(this) == DialogResult.OK)
                     {
-                        string newPath = dialog.FileName;
+                        string newPath = editForm.NewDirectory;
 
-                        // Check if the new path is different and if it already exists in this group
-                        if (newPath != app.Directory && _storageService.ApplicationExistsInGroup(newPath, _selectedGroupId))
+                        // Check if directory changed and if the new path already exists in this group
+                        if (newPath != app.Directory)
                         {
-                            string newAppName = Path.GetFileNameWithoutExtension(newPath);
-                            SimpleLogger.Warn("EditButton_Click @ Form1.cs", $"Duplicate application detected: {newAppName} at {newPath}");
-                            MessageBoxHelper.ShowWarning(this,
-                                $"Application '{newAppName}' already exists in this group.\n\nPath: {newPath}");
-                            return;
-                        }
+                            if (_storageService.ApplicationExistsInGroup(newPath, _selectedGroupId))
+                            {
+                                string newAppName = Path.GetFileNameWithoutExtension(newPath);
+                                SimpleLogger.Warn("EditButton_Click @ Form1.cs", $"Duplicate application detected: {newAppName} at {newPath}");
+                                MessageBoxHelper.ShowWarning(this,
+                                    $"Application '{newAppName}' already exists in this group.\n\nPath: {newPath}");
+                                return;
+                            }
 
-                        string oldName = app.AppName;
-                        app.AppName = Path.GetFileNameWithoutExtension(newPath);
-                        app.Directory = newPath;
+                            string oldName = app.AppName;
+                            app.AppName = Path.GetFileNameWithoutExtension(newPath);
+                            app.Directory = newPath;
+
+                            selectedItem.SubItems[1].Text = app.AppName;
+                            selectedItem.SubItems[2].Text = app.Directory;
+
+                            SimpleLogger.Info("EditButton_Click @ Form1.cs", $"Edited application path: {oldName} -> {app.AppName}");
+                        }
 
                         _storageService.UpdateApplication(app);
 
-                        selectedItem.SubItems[1].Text = app.AppName;
-                        selectedItem.SubItems[2].Text = app.Directory;
+                        // If KeepOpen was turned off, cancel any pending restart
+                        if (!app.KeepOpen)
+                        {
+                            _pendingRestart.Remove(app.Index);
+                        }
 
-                        SimpleLogger.Info("EditButton_Click @ Form1.cs", $"Edited application: {oldName} -> {app.AppName}");
+                        // Update ListView display for settings columns
+                        selectedItem.SubItems[4].Text = app.GetKeepOpenDisplay();
+                        selectedItem.SubItems[5].Text = app.CrashCount.ToString();
+                        selectedItem.SubItems[6].Text = app.RetryCount.ToString();
+
+                        SimpleLogger.Info("EditButton_Click @ Form1.cs",
+                            $"Updated '{app.AppName}': KeepOpen={app.KeepOpen}, StartDelay={app.StartDelaySeconds}s");
                         MessageBoxHelper.ShowSuccess(this, "Application updated successfully!");
                     }
                 }
@@ -708,6 +859,7 @@ namespace InstanceManager
                     _authorizedApps.Remove(app.Index);
                     _notifiedUnauthorized.Remove(app.Index);
                     _pendingStop.Remove(app.Index);
+                    _pendingRestart.Remove(app.Index);
                     _storageService.RemoveApplication(app.Index);
                     AppListView.Items.Remove(selectedItem);
 
@@ -740,6 +892,9 @@ namespace InstanceManager
                     MessageBoxHelper.ShowError(this, "Selected item has no valid application data.");
                     return;
                 }
+
+                // Cancel any pending restart since user is manually starting
+                _pendingRestart.Remove(app.Index);
 
                 StartSingleApplication(app, selectedItem);
             }
@@ -777,7 +932,7 @@ namespace InstanceManager
                 if (item != null)
                 {
                     item.SubItems[3].Text = "Running";
-                    item.SubItems[4].Text = app.GetLastStartDisplay();
+                    item.SubItems[7].Text = app.GetLastStartDisplay();
                     item.ForeColor = Color.Green;
                 }
 
@@ -822,6 +977,8 @@ namespace InstanceManager
 
                 if (result == DialogResult.Yes)
                 {
+                    // Cancel any pending restart since user is intentionally stopping
+                    _pendingRestart.Remove(app.Index);
                     StopSingleApplication(app, selectedItem);
                 }
                 else
@@ -852,7 +1009,7 @@ namespace InstanceManager
                 if (item != null)
                 {
                     item.SubItems[3].Text = "Stopped";
-                    item.SubItems[5].Text = app.GetLastStopDisplay();
+                    item.SubItems[8].Text = app.GetLastStopDisplay();
                     item.ForeColor = Color.Black;
                 }
 
@@ -893,6 +1050,9 @@ namespace InstanceManager
                 {
                     var app = item.Tag as ManagedApplication;
                     if (app == null) continue;
+
+                    // Cancel any pending restart
+                    _pendingRestart.Remove(app.Index);
 
                     if (_processManager.IsApplicationRunning(app))
                     {
@@ -957,6 +1117,9 @@ namespace InstanceManager
                     var app = item.Tag as ManagedApplication;
                     if (app == null) continue;
 
+                    // Cancel any pending restart
+                    _pendingRestart.Remove(app.Index);
+
                     if (!_processManager.IsApplicationRunning(app))
                     {
                         notRunning++;
@@ -990,6 +1153,79 @@ namespace InstanceManager
             {
                 SimpleLogger.Error("StopAllButton_Click @ Form1.cs", $"Error stopping all: {ex.Message}");
                 MessageBoxHelper.ShowError(this, $"Error stopping all applications: {ex.Message}");
+            }
+        }
+
+        private void SettingsButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (AppListView.SelectedItems.Count == 0)
+                {
+                    MessageBoxHelper.ShowInfo(this, "Please select an application to configure.");
+                    return;
+                }
+
+                var selectedItem = AppListView.SelectedItems[0];
+                var app = selectedItem.Tag as ManagedApplication;
+
+                if (app == null)
+                {
+                    MessageBoxHelper.ShowError(this, "Selected item has no valid application data.");
+                    return;
+                }
+
+                using (var editForm = new EditAppDialog(app))
+                {
+                    if (editForm.ShowDialog(this) == DialogResult.OK)
+                    {
+                        string newPath = editForm.NewDirectory;
+
+                        // Check if directory changed and if the new path already exists in this group
+                        if (newPath != app.Directory)
+                        {
+                            if (_storageService.ApplicationExistsInGroup(newPath, _selectedGroupId))
+                            {
+                                string newAppName = Path.GetFileNameWithoutExtension(newPath);
+                                SimpleLogger.Warn("SettingsButton_Click @ Form1.cs", $"Duplicate application detected: {newAppName} at {newPath}");
+                                MessageBoxHelper.ShowWarning(this,
+                                    $"Application '{newAppName}' already exists in this group.\n\nPath: {newPath}");
+                                return;
+                            }
+
+                            string oldName = app.AppName;
+                            app.AppName = Path.GetFileNameWithoutExtension(newPath);
+                            app.Directory = newPath;
+
+                            selectedItem.SubItems[1].Text = app.AppName;
+                            selectedItem.SubItems[2].Text = app.Directory;
+
+                            SimpleLogger.Info("SettingsButton_Click @ Form1.cs", $"Edited application path: {oldName} -> {app.AppName}");
+                        }
+
+                        _storageService.UpdateApplication(app);
+
+                        // If KeepOpen was turned off, cancel any pending restart
+                        if (!app.KeepOpen)
+                        {
+                            _pendingRestart.Remove(app.Index);
+                        }
+
+                        // Update ListView display for settings columns
+                        selectedItem.SubItems[4].Text = app.GetKeepOpenDisplay();
+                        selectedItem.SubItems[5].Text = app.CrashCount.ToString();
+                        selectedItem.SubItems[6].Text = app.RetryCount.ToString();
+
+                        SimpleLogger.Info("SettingsButton_Click @ Form1.cs",
+                            $"Updated settings for '{app.AppName}': KeepOpen={app.KeepOpen}, StartDelay={app.StartDelaySeconds}s");
+                        MessageBoxHelper.ShowSuccess(this, $"Settings for '{app.AppName}' updated successfully!");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("SettingsButton_Click @ Form1.cs", $"Error configuring application: {ex.Message}");
+                MessageBoxHelper.ShowError(this, $"Error configuring application: {ex.Message}");
             }
         }
 

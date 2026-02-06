@@ -47,6 +47,9 @@
             this.AppNameColumn = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.DirectoryColumn = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.StatusColumn = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
+            this.KeepOpenColumn = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
+            this.CrashCountColumn = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
+            this.RetryCountColumn = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.LastStartColumn = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.LastStopColumn = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.ButtonPanel = new System.Windows.Forms.Panel();
@@ -58,6 +61,7 @@
             this.DeleteButton = new System.Windows.Forms.Button();
             this.EditButton = new System.Windows.Forms.Button();
             this.AddButton = new System.Windows.Forms.Button();
+            this.SettingsButton = new System.Windows.Forms.Button();
             this.HeaderPanel.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.LogoPictureBox)).BeginInit();
             this.MainSplitContainer.Panel1.SuspendLayout();
@@ -78,7 +82,7 @@
             this.HeaderPanel.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             this.HeaderPanel.Name = "HeaderPanel";
             this.HeaderPanel.Padding = new System.Windows.Forms.Padding(10, 8, 10, 8);
-            this.HeaderPanel.Size = new System.Drawing.Size(984, 60);
+            this.HeaderPanel.Size = new System.Drawing.Size(1084, 60);
             this.HeaderPanel.TabIndex = 52;
             // 
             // SubtitleLabel
@@ -136,7 +140,7 @@
             this.MainSplitContainer.Panel2.Controls.Add(this.AppListView);
             this.MainSplitContainer.Panel2.Controls.Add(this.ButtonPanel);
             this.MainSplitContainer.Panel2.Controls.Add(this.SelectedGroupLabel);
-            this.MainSplitContainer.Size = new System.Drawing.Size(984, 290);
+            this.MainSplitContainer.Size = new System.Drawing.Size(1084, 310);
             this.MainSplitContainer.SplitterDistance = 200;
             this.MainSplitContainer.TabIndex = 53;
             // 
@@ -162,7 +166,7 @@
             this.GroupListBox.ItemHeight = 15;
             this.GroupListBox.Location = new System.Drawing.Point(0, 28);
             this.GroupListBox.Name = "GroupListBox";
-            this.GroupListBox.Size = new System.Drawing.Size(200, 222);
+            this.GroupListBox.Size = new System.Drawing.Size(200, 242);
             this.GroupListBox.TabIndex = 1;
             this.GroupListBox.SelectedIndexChanged += new System.EventHandler(this.GroupListBox_SelectedIndexChanged);
             // 
@@ -173,7 +177,7 @@
             this.GroupButtonPanel.Controls.Add(this.EditGroupButton);
             this.GroupButtonPanel.Controls.Add(this.DeleteGroupButton);
             this.GroupButtonPanel.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.GroupButtonPanel.Location = new System.Drawing.Point(0, 250);
+            this.GroupButtonPanel.Location = new System.Drawing.Point(0, 270);
             this.GroupButtonPanel.Name = "GroupButtonPanel";
             this.GroupButtonPanel.Padding = new System.Windows.Forms.Padding(4);
             this.GroupButtonPanel.Size = new System.Drawing.Size(200, 40);
@@ -230,7 +234,7 @@
             this.SelectedGroupLabel.Location = new System.Drawing.Point(0, 0);
             this.SelectedGroupLabel.Name = "SelectedGroupLabel";
             this.SelectedGroupLabel.Padding = new System.Windows.Forms.Padding(8, 0, 0, 0);
-            this.SelectedGroupLabel.Size = new System.Drawing.Size(780, 28);
+            this.SelectedGroupLabel.Size = new System.Drawing.Size(880, 28);
             this.SelectedGroupLabel.TabIndex = 0;
             this.SelectedGroupLabel.Text = "Select a group to manage applications";
             this.SelectedGroupLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
@@ -242,6 +246,9 @@
             this.AppNameColumn,
             this.DirectoryColumn,
             this.StatusColumn,
+            this.KeepOpenColumn,
+            this.CrashCountColumn,
+            this.RetryCountColumn,
             this.LastStartColumn,
             this.LastStopColumn});
             this.AppListView.Dock = System.Windows.Forms.DockStyle.Fill;
@@ -252,7 +259,7 @@
             this.AppListView.Location = new System.Drawing.Point(0, 28);
             this.AppListView.MultiSelect = false;
             this.AppListView.Name = "AppListView";
-            this.AppListView.Size = new System.Drawing.Size(780, 212);
+            this.AppListView.Size = new System.Drawing.Size(880, 232);
             this.AppListView.TabIndex = 1;
             this.AppListView.UseCompatibleStateImageBehavior = false;
             this.AppListView.View = System.Windows.Forms.View.Details;
@@ -270,12 +277,27 @@
             // DirectoryColumn
             // 
             this.DirectoryColumn.Text = "Directory";
-            this.DirectoryColumn.Width = 260;
+            this.DirectoryColumn.Width = 220;
             // 
             // StatusColumn
             // 
             this.StatusColumn.Text = "Status";
             this.StatusColumn.Width = 65;
+            // 
+            // KeepOpenColumn
+            // 
+            this.KeepOpenColumn.Text = "Keep Open";
+            this.KeepOpenColumn.Width = 70;
+            // 
+            // CrashCountColumn
+            // 
+            this.CrashCountColumn.Text = "Crashes";
+            this.CrashCountColumn.Width = 55;
+            // 
+            // RetryCountColumn
+            // 
+            this.RetryCountColumn.Text = "Retries";
+            this.RetryCountColumn.Width = 50;
             // 
             // LastStartColumn
             // 
@@ -290,6 +312,7 @@
             // ButtonPanel
             // 
             this.ButtonPanel.BackColor = System.Drawing.Color.WhiteSmoke;
+            this.ButtonPanel.Controls.Add(this.SettingsButton);
             this.ButtonPanel.Controls.Add(this.RefreshButton);
             this.ButtonPanel.Controls.Add(this.StopAllButton);
             this.ButtonPanel.Controls.Add(this.StartAllButton);
@@ -299,10 +322,10 @@
             this.ButtonPanel.Controls.Add(this.EditButton);
             this.ButtonPanel.Controls.Add(this.AddButton);
             this.ButtonPanel.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.ButtonPanel.Location = new System.Drawing.Point(0, 240);
+            this.ButtonPanel.Location = new System.Drawing.Point(0, 260);
             this.ButtonPanel.Name = "ButtonPanel";
             this.ButtonPanel.Padding = new System.Windows.Forms.Padding(5);
-            this.ButtonPanel.Size = new System.Drawing.Size(780, 50);
+            this.ButtonPanel.Size = new System.Drawing.Size(880, 50);
             this.ButtonPanel.TabIndex = 2;
             // 
             // AddButton
@@ -403,16 +426,30 @@
             this.StopAllButton.UseVisualStyleBackColor = false;
             this.StopAllButton.Click += new System.EventHandler(this.StopAllButton_Click);
             // 
+            // SettingsButton
+            // 
+            this.SettingsButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(127)))), ((int)(((byte)(140)))), ((int)(((byte)(141)))));
+            this.SettingsButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.SettingsButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.SettingsButton.ForeColor = System.Drawing.Color.White;
+            this.SettingsButton.Location = new System.Drawing.Point(676, 8);
+            this.SettingsButton.Name = "SettingsButton";
+            this.SettingsButton.Size = new System.Drawing.Size(88, 32);
+            this.SettingsButton.TabIndex = 7;
+            this.SettingsButton.Text = "Settings";
+            this.SettingsButton.UseVisualStyleBackColor = false;
+            this.SettingsButton.Click += new System.EventHandler(this.SettingsButton_Click);
+            // 
             // RefreshButton
             // 
             this.RefreshButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(52)))), ((int)(((byte)(152)))), ((int)(((byte)(219)))));
             this.RefreshButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.RefreshButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.RefreshButton.ForeColor = System.Drawing.Color.White;
-            this.RefreshButton.Location = new System.Drawing.Point(676, 8);
+            this.RefreshButton.Location = new System.Drawing.Point(768, 8);
             this.RefreshButton.Name = "RefreshButton";
             this.RefreshButton.Size = new System.Drawing.Size(88, 32);
-            this.RefreshButton.TabIndex = 7;
+            this.RefreshButton.TabIndex = 8;
             this.RefreshButton.Text = "Refresh";
             this.RefreshButton.UseVisualStyleBackColor = false;
             this.RefreshButton.Click += new System.EventHandler(this.RefreshButton_Click);
@@ -421,7 +458,7 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(984, 350);
+            this.ClientSize = new System.Drawing.Size(1084, 370);
             this.Controls.Add(this.MainSplitContainer);
             this.Controls.Add(this.HeaderPanel);
             this.Name = "Main";
@@ -459,6 +496,9 @@
         private System.Windows.Forms.ColumnHeader AppNameColumn;
         private System.Windows.Forms.ColumnHeader DirectoryColumn;
         private System.Windows.Forms.ColumnHeader StatusColumn;
+        private System.Windows.Forms.ColumnHeader KeepOpenColumn;
+        private System.Windows.Forms.ColumnHeader CrashCountColumn;
+        private System.Windows.Forms.ColumnHeader RetryCountColumn;
         private System.Windows.Forms.ColumnHeader LastStartColumn;
         private System.Windows.Forms.ColumnHeader LastStopColumn;
         private System.Windows.Forms.Panel ButtonPanel;
@@ -469,6 +509,7 @@
         private System.Windows.Forms.Button StopButton;
         private System.Windows.Forms.Button StartAllButton;
         private System.Windows.Forms.Button StopAllButton;
+        private System.Windows.Forms.Button SettingsButton;
         private System.Windows.Forms.Button RefreshButton;
     }
 }

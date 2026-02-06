@@ -127,6 +127,10 @@ namespace InstanceManager.Services
                 existingApp.LastStart = app.LastStart;
                 existingApp.LastStop = app.LastStop;
                 existingApp.GroupId = app.GroupId;
+                existingApp.KeepOpen = app.KeepOpen;
+                existingApp.CrashCount = app.CrashCount;
+                existingApp.RetryCount = app.RetryCount;
+                existingApp.StartDelaySeconds = app.StartDelaySeconds;
                 SaveApplications();
                 SimpleLogger.Info("UpdateApplication @ StorageService.cs", $"Updated application: {app.AppName} (Index: {app.Index})");
             }
@@ -374,7 +378,11 @@ namespace InstanceManager.Services
                 sb.AppendLine($"    \"AddedDate\": \"{app.AddedDate:yyyy-MM-ddTHH:mm:ss}\",");
                 sb.AppendLine($"    \"IsRunning\": {app.IsRunning.ToString().ToLower()},");
                 sb.AppendLine($"    \"LastStart\": {(app.LastStart.HasValue ? $"\"{app.LastStart.Value:yyyy-MM-ddTHH:mm:ss}\"" : "null")},");
-                sb.AppendLine($"    \"LastStop\": {(app.LastStop.HasValue ? $"\"{app.LastStop.Value:yyyy-MM-ddTHH:mm:ss}\"" : "null")}");
+                sb.AppendLine($"    \"LastStop\": {(app.LastStop.HasValue ? $"\"{app.LastStop.Value:yyyy-MM-ddTHH:mm:ss}\"" : "null")},");
+                sb.AppendLine($"    \"KeepOpen\": {app.KeepOpen.ToString().ToLower()},");
+                sb.AppendLine($"    \"CrashCount\": {app.CrashCount},");
+                sb.AppendLine($"    \"RetryCount\": {app.RetryCount},");
+                sb.AppendLine($"    \"StartDelaySeconds\": {app.StartDelaySeconds}");
                 sb.Append("  }");
                 if (i < apps.Count - 1) sb.AppendLine(",");
                 else sb.AppendLine();
@@ -505,6 +513,24 @@ namespace InstanceManager.Services
                         DateTime lastStop;
                         if (DateTime.TryParse(value, out lastStop))
                             app.LastStop = lastStop;
+                        break;
+                    case "KeepOpen":
+                        app.KeepOpen = value.ToLower() == "true";
+                        break;
+                    case "CrashCount":
+                        int cc;
+                        if (int.TryParse(value, out cc))
+                            app.CrashCount = cc;
+                        break;
+                    case "RetryCount":
+                        int rc;
+                        if (int.TryParse(value, out rc))
+                            app.RetryCount = rc;
+                        break;
+                    case "StartDelaySeconds":
+                        int sd;
+                        if (int.TryParse(value, out sd))
+                            app.StartDelaySeconds = sd;
                         break;
                 }
             }

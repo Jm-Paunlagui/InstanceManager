@@ -14,6 +14,7 @@ The core algorithm — an **Authorized Process Watchdog** — not only prevents dupl
 - **Delete Applications**: Remove applications from management (doesn't delete the actual file)
 - **Start Applications**: Launch applications with instance checking, records Last Start timestamp
 - **Stop Applications**: Gracefully or forcefully terminate running applications, records Last Stop timestamp
+- **Settings**: Configure per-application Keep Open, restart delay, and reset crash/retry counters
 - **Refresh**: Reload all applications from JSON storage
 - **Real-time Monitoring**: Automatic status updates every 2 seconds
 
@@ -24,10 +25,18 @@ The core algorithm — an **Authorized Process Watchdog** — not only prevents dupl
 - **External Stop Detection**: When a running application is closed externally, the status updates automatically and Last Stop is recorded
 - **Debounced Notifications**: User is warned only once per unauthorized launch attempt
 
+### Crash Recovery (Keep Open)
+- **Auto-Restart on Crash**: When Keep Open is enabled, crashed applications are automatically restarted
+- **Configurable Restart Delay**: Per-application delay (1-300 seconds) before auto-restart to prevent spamming
+- **Crash Tracking**: Counts how many times an application has crashed unexpectedly
+- **Retry Tracking**: Counts how many auto-restart attempts have been made
+- **Resettable Counters**: Crash and retry counts can be reset via the Settings dialog
+- **Visual Feedback**: Applications pending restart show countdown timer with orange color in the status column
+
 ### Data Storage
 - Applications are stored in JSON format (`applications.json`)
 - No database required — lightweight file-based storage
-- Stores: Index, AppName, Directory, AddedDate, IsRunning, LastStart, LastStop
+- Stores: Index, AppName, Directory, AddedDate, IsRunning, LastStart, LastStop, KeepOpen, CrashCount, RetryCount, StartDelaySeconds
 - Nullable DateTime support (`null` for never-started/never-stopped)
 - Custom JSON serializer with proper Windows path escaping (`\\`)
 - Backward compatible — loads old JSON files missing new fields
@@ -72,12 +81,13 @@ All actions are logged with a special format:
 ### Files Structure
 ```
 InstanceManager/
-??? Form1.cs                          Main UI logic, Authorized Process Watchdog
-??? Form1.Designer.cs                 UI control definitions (6-column ListView)
+??? Form1.cs                          Main UI logic, Authorized Process Watchdog, Crash Recovery
+??? Form1.Designer.cs                 UI control definitions (9-column ListView)
 ??? Form1.resx                        Form resources
 ??? Program.cs                        Application entry point with logging
 ??? Models/
-?   ??? ManagedApplication.cs         Data model (Index, AppName, Directory, LastStart, LastStop)
+?   ??? ManagedApplication.cs         Data model (Index, AppName, Directory, KeepOpen, CrashCount, RetryCount, StartDelaySeconds, LastStart, LastStop)
+?   ??? ApplicationGroup.cs          Group model (GroupId, GroupName, CreatedDate)
 ??? Services/
 ?   ??? StorageService.cs             JSON storage with custom serialization + duplicate checking
 ?   ??? ProcessManager.cs             Process monitoring, start, stop, instance counting
@@ -85,6 +95,8 @@ InstanceManager/
 ?   ??? SimpleLogger.cs               Thread-safe custom logging (zero dependencies)
 ?   ??? CustomMessageBox.cs           Custom dialog positioned relative to owner form
 ?   ??? MessageBoxHelper.cs           Convenience wrappers (ShowSuccess, ShowError, etc.)
+?   ??? InputDialog.cs                Input dialog for group names
+?   ??? AppSettingsDialog.cs          Per-application settings (Keep Open, restart delay, counter reset)
 ??? Properties/
 ?   ??? AssemblyInfo.cs               Assembly metadata
 ?   ??? Resources.Designer.cs         Resource accessors (Logo)
@@ -92,14 +104,15 @@ InstanceManager/
 ??? packages.config                   Package references (empty — no external dependencies)
 ??? NLog.config                       Configuration reference (not actively used)
 ??? applications.json                 Auto-generated application data storage
+??? groups.json                       Auto-generated group data storage
 ??? logs/                             Auto-generated daily log files
 ```
 
 ### Key Classes
 
 **ManagedApplication**
-- Properties: Index, AppName, Directory, AddedDate, IsRunning, LastStart, LastStop
-- Helper methods: `GetLastStartDisplay()`, `GetLastStopDisplay()` (returns "Never" or formatted timestamp)
+- Properties: Index, AppName, Directory, AddedDate, IsRunning, LastStart, LastStop, KeepOpen, CrashCount, RetryCount, StartDelaySeconds
+- Helper methods: `GetLastStartDisplay()`, `GetLastStopDisplay()`, `GetKeepOpenDisplay()` (returns "Never"/"Yes"/"No" or formatted timestamp)
 
 **StorageService**
 - Custom JSON serialization/deserialization (.NET 4.0 compatible)
@@ -126,9 +139,12 @@ InstanceManager/
 - Supports OK and Yes/No buttons with system icons
 - Keyboard support (Enter/Escape)
 
-**MessageBoxHelper**
-- Static convenience methods: `ShowSuccess`, `ShowError`, `ShowWarning`, `ShowInfo`, `ShowQuestion`
-- Routes to `CustomMessageBox` when owner form is available
+**AppSettingsDialog**
+- Per-application settings configuration dialog
+- Toggle Keep Open (auto-restart on crash)
+- Configure restart delay in seconds (1-300)
+- View and reset crash count
+- View and reset retry count
 
 ## Authorized Process Watchdog — Algorithm
 
@@ -139,16 +155,23 @@ Every 2 seconds (timer tick):
   For each managed application:
 
     Was Stopped ? Now Running?
-      ??? In _authorizedApps? ? ? Authorized, update status
-      ??? NOT in _authorizedApps? ? ? UNAUTHORIZED
-            ??? Kill process immediately
-            ??? Log warning
-            ??? Notify user (once per attempt)
+      ? In _authorizedApps? ? ? Authorized, update status
+      ? NOT in _authorizedApps? ? ? UNAUTHORIZED
+            ? Kill process immediately
+            ? Log warning
+            ? Notify user (once per attempt)
 
     Was Running ? Now Stopped?
-      ??? Remove from _authorizedApps
-      ??? Record LastStop timestamp
-      ??? Update UI and storage
+      ? KeepOpen enabled?
+            ? YES: Increment crash/retry count, schedule restart after delay
+            ? NO: Remove from _authorizedApps, record LastStop, update UI
+      ? Remove from _authorizedApps
+      ? Record LastStop timestamp
+      ? Update UI and storage
+
+    Pending Restart?
+      ? Delay elapsed? ? Restart application, mark as authorized
+      ? Delay not elapsed? ? Show countdown in status column
 
     No change? ? Refresh display
 ```
@@ -156,11 +179,12 @@ Every 2 seconds (timer tick):
 ### Authorization Rules
 | Action | Effect |
 |--------|--------|
-| Instance Manager starts, app already running | Marked as authorized |
+| Instance Manager starts, app already running | Terminated at startup |
 | User clicks Start | Marked as authorized |
-| User clicks Stop | Authorization removed |
-| User clicks Delete | Authorization removed |
-| App stopped externally | Authorization removed |
+| User clicks Stop | Authorization removed, pending restart cancelled |
+| User clicks Delete | Authorization removed, pending restart cancelled |
+| App stopped externally (KeepOpen=No) | Authorization removed |
+| App crashed (KeepOpen=Yes) | Crash counted, auto-restart scheduled after delay |
 | App launched externally | **Killed + user warned** |
 
 ## Performance Considerations
@@ -291,7 +315,6 @@ Every 2 seconds (timer tick):
 - Remote monitoring capabilities
 - Application crash detection and auto-restart
 - Performance metrics and reporting
-- Configurable watchdog interval
 - Whitelist/blacklist mode toggle
 
 ## License
