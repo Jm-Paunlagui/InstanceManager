@@ -16,6 +16,7 @@ namespace InstanceManager
         private CheckBox _keepOpenCheckBox;
         private NumericUpDown _startDelayNumeric;
         private NumericUpDown _maxRetriesNumeric;
+        private NumericUpDown _startupDelayNumeric;
         private Button _resetCrashButton;
         private Button _resetRetryButton;
         private Label _crashCountLabel;
@@ -47,7 +48,7 @@ namespace InstanceManager
         private void InitializeControls()
         {
             this.Text = $"Edit - {_app.AppName}";
-            this.Size = new Size(500, 430);
+            this.Size = new Size(500, 500);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
@@ -103,6 +104,47 @@ namespace InstanceManager
             this.Controls.Add(_directoryTextBox);
             this.Controls.Add(_browseButton);
             this.Controls.Add(_openPathButton);
+
+            y += rowHeight + 10;
+
+            // --- Startup Settings Section ---
+            var startupSectionLabel = new Label
+            {
+                Text = "Startup Settings",
+                Location = new Point(labelX, y),
+                AutoSize = true,
+                Font = _boldFont
+            };
+            this.Controls.Add(startupSectionLabel);
+
+            y += 22;
+
+            // Startup Delay
+            var startupDelayLabel = new Label
+            {
+                Text = "Startup Delay (seconds):",
+                Location = new Point(labelX, y + 2),
+                AutoSize = true
+            };
+            _startupDelayNumeric = new NumericUpDown
+            {
+                Minimum = 0,
+                Maximum = 300,
+                Value = Math.Max(0, _app.StartupDelaySeconds),
+                Location = new Point(controlX, y),
+                Size = new Size(80, 23)
+            };
+            var startupDelayHint = new Label
+            {
+                Text = "Wait time before launching in Start All",
+                Location = new Point(controlX + 85, y + 2),
+                AutoSize = true,
+                ForeColor = Color.Gray,
+                Font = _normalFont
+            };
+            this.Controls.Add(startupDelayLabel);
+            this.Controls.Add(_startupDelayNumeric);
+            this.Controls.Add(startupDelayHint);
 
             y += rowHeight + 10;
 
@@ -374,6 +416,7 @@ namespace InstanceManager
             _app.KeepOpen = _keepOpenCheckBox.Checked;
             _app.MaxRetries = (int)_maxRetriesNumeric.Value;
             _app.StartDelaySeconds = (int)_startDelayNumeric.Value;
+            _app.StartupDelaySeconds = (int)_startupDelayNumeric.Value;
             this.DialogResult = DialogResult.OK;
             this.Close();
         }

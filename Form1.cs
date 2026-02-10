@@ -900,7 +900,7 @@ namespace InstanceManager
                         _storageService.UpdateApplication(app);
 
                         SimpleLogger.Info("EditButton_Click @ Form1.cs",
-                            $"Updated '{app.AppName}': KeepOpen={app.KeepOpen}, StartDelay={app.StartDelaySeconds}s");
+                            $"Updated '{app.AppName}': KeepOpen={app.KeepOpen}, StartDelay={app.StartDelaySeconds}s, StartupDelay={app.StartupDelaySeconds}s");
                         MessageBoxHelper.ShowSuccess(this, "Application updated successfully!");
                     }
                 }
@@ -1128,8 +1128,8 @@ namespace InstanceManager
                 if (confirm != DialogResult.Yes)
                     return;
 
-                int started = 0;
-                int failed = 0;
+                // Collect apps to start (skip already running)
+                var appsToStart = new List<KeyValuePair<ManagedApplication, ListViewItem>>();
                 int alreadyRunning = 0;
 
                 foreach (ListViewItem item in AppListView.Items)
@@ -1146,7 +1146,44 @@ namespace InstanceManager
                         continue;
                     }
 
-                    if (StartSingleApplication(app, item))
+                    appsToStart.Add(new KeyValuePair<ManagedApplication, ListViewItem>(app, item));
+                }
+
+                if (appsToStart.Count == 0)
+                {
+                    string noStartMsg = alreadyRunning > 0
+                        ? $"All {alreadyRunning} application(s) are already running."
+                        : "No applications to start.";
+                    MessageBoxHelper.ShowInfo(this, noStartMsg);
+                    return;
+                }
+
+                // Check if any app has a startup delay configured
+                bool hasDelays = false;
+                foreach (var kvp in appsToStart)
+                {
+                    if (kvp.Key.StartupDelaySeconds > 0)
+                    {
+                        hasDelays = true;
+                        break;
+                    }
+                }
+
+                int started = 0;
+                int failed = 0;
+
+                if (hasDelays)
+                {
+                    // Sequential launch with startup delays — use a timer-based approach
+                    // to avoid blocking the UI thread
+                    StartAllSequential(appsToStart, alreadyRunning);
+                    return;
+                }
+
+                // No delays configured — launch all immediately (existing behavior)
+                foreach (var kvp in appsToStart)
+                {
+                    if (StartSingleApplication(kvp.Key, kvp.Value))
                     {
                         started++;
                     }
@@ -1172,6 +1209,128 @@ namespace InstanceManager
                 SimpleLogger.Error("StartAllButton_Click @ Form1.cs", $"Error starting all: {ex.Message}");
                 MessageBoxHelper.ShowError(this, $"Error starting all applications: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Launches applications sequentially, respecting each app's StartupDelaySeconds.
+        /// Uses a Timer to avoid blocking the UI thread between launches.
+        /// </summary>
+        private void StartAllSequential(List<KeyValuePair<ManagedApplication, ListViewItem>> appsToStart, int alreadyRunning)
+        {
+            int currentIndex = 0;
+            int started = 0;
+            int failed = 0;
+            Timer sequentialTimer = null;
+
+            // Disable Start All / Stop All buttons while sequential launch is in progress
+            StartAllButton.Enabled = false;
+            StopAllButton.Enabled = false;
+
+            Action launchNext = null;
+            launchNext = () =>
+            {
+                if (_isClosing || currentIndex >= appsToStart.Count)
+                {
+                    // All done — clean up and show results
+                    if (sequentialTimer != null)
+                    {
+                        sequentialTimer.Stop();
+                        sequentialTimer.Dispose();
+                        sequentialTimer = null;
+                    }
+
+                    StartAllButton.Enabled = true;
+                    StopAllButton.Enabled = true;
+
+                    string msg = $"Started: {started}";
+                    if (alreadyRunning > 0) msg += $", Already running: {alreadyRunning}";
+                    if (failed > 0) msg += $", Failed: {failed}";
+
+                    SimpleLogger.Info("StartAllSequential @ Form1.cs", $"Start All (sequential) for group {_selectedGroupId}: {msg}");
+
+                    if (!_isClosing)
+                    {
+                        if (failed > 0)
+                            MessageBoxHelper.ShowWarning(this, msg);
+                        else
+                            MessageBoxHelper.ShowSuccess(this, msg);
+                    }
+                    return;
+                }
+
+                var kvp = appsToStart[currentIndex];
+                var app = kvp.Key;
+                var item = kvp.Value;
+
+                // Launch the current app
+                if (StartSingleApplication(app, item))
+                {
+                    started++;
+                    SimpleLogger.Info("StartAllSequential @ Form1.cs",
+                        $"Started '{app.AppName}' ({currentIndex + 1}/{appsToStart.Count})");
+                }
+                else
+                {
+                    failed++;
+                    SimpleLogger.Error("StartAllSequential @ Form1.cs",
+                        $"Failed to start '{app.AppName}' ({currentIndex + 1}/{appsToStart.Count})");
+                }
+
+                currentIndex++;
+
+                // If there are more apps, check if the next one has a startup delay
+                if (currentIndex < appsToStart.Count)
+                {
+                    int nextDelay = appsToStart[currentIndex].Key.StartupDelaySeconds;
+                    if (nextDelay > 0)
+                    {
+                        // Show countdown on the next app's status
+                        var nextItem = appsToStart[currentIndex].Value;
+                        if (nextItem != null)
+                        {
+                            nextItem.SubItems[3].Text = $"Waiting ({nextDelay}s)";
+                            nextItem.ForeColor = Color.DarkOrange;
+                        }
+
+                        // Set up a countdown timer
+                        int secondsLeft = nextDelay;
+                        if (sequentialTimer != null)
+                        {
+                            sequentialTimer.Stop();
+                            sequentialTimer.Dispose();
+                        }
+                        sequentialTimer = new Timer();
+                        sequentialTimer.Interval = 1000;
+                        sequentialTimer.Tick += (s, ev) =>
+                        {
+                            secondsLeft--;
+                            if (secondsLeft <= 0 || _isClosing)
+                            {
+                                sequentialTimer.Stop();
+                                launchNext();
+                            }
+                            else if (nextItem != null)
+                            {
+                                nextItem.SubItems[3].Text = $"Waiting ({secondsLeft}s)";
+                            }
+                        };
+                        sequentialTimer.Start();
+                    }
+                    else
+                    {
+                        // No delay — launch immediately
+                        launchNext();
+                    }
+                }
+                else
+                {
+                    // No more apps — finalize
+                    launchNext();
+                }
+            };
+
+            // Start the first app (the first app launches immediately, delays apply to subsequent apps)
+            launchNext();
         }
 
         private void StopAllButton_Click(object sender, EventArgs e)

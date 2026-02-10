@@ -160,6 +160,7 @@ namespace InstanceManager.Services
                     existingApp.RetryCount != app.RetryCount ||
                     existingApp.MaxRetries != app.MaxRetries ||
                     existingApp.StartDelaySeconds != app.StartDelaySeconds ||
+                    existingApp.StartupDelaySeconds != app.StartupDelaySeconds ||
                     existingApp.LastStart != app.LastStart ||
                     existingApp.LastStop != app.LastStop;
 
@@ -174,6 +175,7 @@ namespace InstanceManager.Services
                 existingApp.RetryCount = app.RetryCount;
                 existingApp.MaxRetries = app.MaxRetries;
                 existingApp.StartDelaySeconds = app.StartDelaySeconds;
+                existingApp.StartupDelaySeconds = app.StartupDelaySeconds;
 
                 if (persistentChanged)
                 {
@@ -500,7 +502,8 @@ namespace InstanceManager.Services
                 sb.AppendLine($"    \"CrashCount\": {app.CrashCount},");
                 sb.AppendLine($"    \"RetryCount\": {app.RetryCount},");
                 sb.AppendLine($"    \"MaxRetries\": {app.MaxRetries},");
-                sb.AppendLine($"    \"StartDelaySeconds\": {app.StartDelaySeconds}");
+                sb.AppendLine($"    \"StartDelaySeconds\": {app.StartDelaySeconds},");
+                sb.AppendLine($"    \"StartupDelaySeconds\": {app.StartupDelaySeconds}");
                 sb.Append("  }");
                 if (i < apps.Count - 1) sb.AppendLine(",");
                 else sb.AppendLine();
@@ -654,6 +657,11 @@ namespace InstanceManager.Services
                         int sd;
                         if (int.TryParse(value, out sd))
                             app.StartDelaySeconds = sd;
+                        break;
+                    case "StartupDelaySeconds":
+                        int sud;
+                        if (int.TryParse(value, out sud))
+                            app.StartupDelaySeconds = sud;
                         break;
                 }
             }

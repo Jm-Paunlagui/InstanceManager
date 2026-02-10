@@ -18,6 +18,7 @@ namespace InstanceManager.Models
         public int RetryCount { get; set; }
         public int MaxRetries { get; set; }
         public int StartDelaySeconds { get; set; }
+        public int StartupDelaySeconds { get; set; }
 
         public ManagedApplication()
         {
@@ -30,6 +31,7 @@ namespace InstanceManager.Models
             RetryCount = 0;
             MaxRetries = 3;
             StartDelaySeconds = 5;
+            StartupDelaySeconds = 0;
         }
 
         public string GetLastStartDisplay()
