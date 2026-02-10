@@ -52,15 +52,19 @@
             this.LastStartColumn = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.LastStopColumn = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.ButtonPanel = new System.Windows.Forms.Panel();
+            this.ManageAppsGroupBox = new System.Windows.Forms.GroupBox();
+            this.AddButton = new System.Windows.Forms.Button();
+            this.EditButton = new System.Windows.Forms.Button();
+            this.DeleteButton = new System.Windows.Forms.Button();
+            this.SelectedAppGroupBox = new System.Windows.Forms.GroupBox();
+            this.StartButton = new System.Windows.Forms.Button();
+            this.StopButton = new System.Windows.Forms.Button();
+            this.GroupActionsGroupBox = new System.Windows.Forms.GroupBox();
+            this.StartAllButton = new System.Windows.Forms.Button();
+            this.StopAllButton = new System.Windows.Forms.Button();
+            this.ToolsGroupBox = new System.Windows.Forms.GroupBox();
             this.LogsButton = new System.Windows.Forms.Button();
             this.RefreshButton = new System.Windows.Forms.Button();
-            this.StopAllButton = new System.Windows.Forms.Button();
-            this.StartAllButton = new System.Windows.Forms.Button();
-            this.StopButton = new System.Windows.Forms.Button();
-            this.StartButton = new System.Windows.Forms.Button();
-            this.DeleteButton = new System.Windows.Forms.Button();
-            this.EditButton = new System.Windows.Forms.Button();
-            this.AddButton = new System.Windows.Forms.Button();
             this.SelectedGroupLabel = new System.Windows.Forms.Label();
             this.HeaderPanel.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.LogoPictureBox)).BeginInit();
@@ -70,6 +74,10 @@
             this.MainSplitContainer.SuspendLayout();
             this.GroupButtonPanel.SuspendLayout();
             this.ButtonPanel.SuspendLayout();
+            this.ManageAppsGroupBox.SuspendLayout();
+            this.SelectedAppGroupBox.SuspendLayout();
+            this.GroupActionsGroupBox.SuspendLayout();
+            this.ToolsGroupBox.SuspendLayout();
             this.SuspendLayout();
             // 
             // HeaderPanel
@@ -170,7 +178,7 @@
             this.MainSplitContainer.Panel2.Controls.Add(this.AppListView);
             this.MainSplitContainer.Panel2.Controls.Add(this.ButtonPanel);
             this.MainSplitContainer.Panel2.Controls.Add(this.SelectedGroupLabel);
-            this.MainSplitContainer.Size = new System.Drawing.Size(1084, 310);
+            this.MainSplitContainer.Size = new System.Drawing.Size(1084, 330);
             this.MainSplitContainer.SplitterDistance = 200;
             this.MainSplitContainer.TabIndex = 53;
             // 
@@ -182,7 +190,7 @@
             this.GroupListBox.ItemHeight = 16;
             this.GroupListBox.Location = new System.Drawing.Point(0, 28);
             this.GroupListBox.Name = "GroupListBox";
-            this.GroupListBox.Size = new System.Drawing.Size(200, 242);
+            this.GroupListBox.Size = new System.Drawing.Size(200, 262);
             this.GroupListBox.TabIndex = 1;
             this.GroupListBox.SelectedIndexChanged += new System.EventHandler(this.GroupListBox_SelectedIndexChanged);
             // 
@@ -193,7 +201,7 @@
             this.GroupButtonPanel.Controls.Add(this.EditGroupButton);
             this.GroupButtonPanel.Controls.Add(this.DeleteGroupButton);
             this.GroupButtonPanel.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.GroupButtonPanel.Location = new System.Drawing.Point(0, 270);
+            this.GroupButtonPanel.Location = new System.Drawing.Point(0, 290);
             this.GroupButtonPanel.Name = "GroupButtonPanel";
             this.GroupButtonPanel.Padding = new System.Windows.Forms.Padding(4);
             this.GroupButtonPanel.Size = new System.Drawing.Size(200, 40);
@@ -328,21 +336,171 @@
             // ButtonPanel
             // 
             this.ButtonPanel.BackColor = System.Drawing.Color.WhiteSmoke;
-            this.ButtonPanel.Controls.Add(this.LogsButton);
-            this.ButtonPanel.Controls.Add(this.RefreshButton);
-            this.ButtonPanel.Controls.Add(this.StopAllButton);
-            this.ButtonPanel.Controls.Add(this.StartAllButton);
-            this.ButtonPanel.Controls.Add(this.StopButton);
-            this.ButtonPanel.Controls.Add(this.StartButton);
-            this.ButtonPanel.Controls.Add(this.DeleteButton);
-            this.ButtonPanel.Controls.Add(this.EditButton);
-            this.ButtonPanel.Controls.Add(this.AddButton);
+            this.ButtonPanel.Controls.Add(this.ManageAppsGroupBox);
+            this.ButtonPanel.Controls.Add(this.SelectedAppGroupBox);
+            this.ButtonPanel.Controls.Add(this.GroupActionsGroupBox);
+            this.ButtonPanel.Controls.Add(this.ToolsGroupBox);
             this.ButtonPanel.Dock = System.Windows.Forms.DockStyle.Bottom;
             this.ButtonPanel.Location = new System.Drawing.Point(0, 260);
             this.ButtonPanel.Name = "ButtonPanel";
             this.ButtonPanel.Padding = new System.Windows.Forms.Padding(5);
-            this.ButtonPanel.Size = new System.Drawing.Size(880, 50);
+            this.ButtonPanel.Size = new System.Drawing.Size(880, 70);
             this.ButtonPanel.TabIndex = 2;
+            // 
+            // ManageAppsGroupBox
+            // 
+            this.ManageAppsGroupBox.Controls.Add(this.AddButton);
+            this.ManageAppsGroupBox.Controls.Add(this.EditButton);
+            this.ManageAppsGroupBox.Controls.Add(this.DeleteButton);
+            this.ManageAppsGroupBox.Font = new System.Drawing.Font("AUMOVIO Screen", 7.5F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.ManageAppsGroupBox.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(80)))), ((int)(((byte)(80)))), ((int)(((byte)(80)))));
+            this.ManageAppsGroupBox.Location = new System.Drawing.Point(8, 4);
+            this.ManageAppsGroupBox.Name = "ManageAppsGroupBox";
+            this.ManageAppsGroupBox.Padding = new System.Windows.Forms.Padding(4, 2, 4, 4);
+            this.ManageAppsGroupBox.Size = new System.Drawing.Size(252, 60);
+            this.ManageAppsGroupBox.TabIndex = 0;
+            this.ManageAppsGroupBox.TabStop = false;
+            this.ManageAppsGroupBox.Text = "Manage Apps";
+            // 
+            // AddButton
+            // 
+            this.AddButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(224)))), ((int)(((byte)(192)))));
+            this.AddButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.AddButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.AddButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
+            this.AddButton.Location = new System.Drawing.Point(8, 22);
+            this.AddButton.Name = "AddButton";
+            this.AddButton.Size = new System.Drawing.Size(75, 30);
+            this.AddButton.TabIndex = 0;
+            this.AddButton.Text = "Add";
+            this.AddButton.UseVisualStyleBackColor = false;
+            this.AddButton.Click += new System.EventHandler(this.AddButton_Click);
+            // 
+            // EditButton
+            // 
+            this.EditButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(224)))), ((int)(((byte)(192)))));
+            this.EditButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.EditButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.EditButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
+            this.EditButton.Location = new System.Drawing.Point(88, 22);
+            this.EditButton.Name = "EditButton";
+            this.EditButton.Size = new System.Drawing.Size(75, 30);
+            this.EditButton.TabIndex = 1;
+            this.EditButton.Text = "Edit";
+            this.EditButton.UseVisualStyleBackColor = false;
+            this.EditButton.Click += new System.EventHandler(this.EditButton_Click);
+            // 
+            // DeleteButton
+            // 
+            this.DeleteButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(192)))), ((int)(((byte)(192)))));
+            this.DeleteButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.DeleteButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.DeleteButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(231)))), ((int)(((byte)(76)))), ((int)(((byte)(60)))));
+            this.DeleteButton.Location = new System.Drawing.Point(168, 22);
+            this.DeleteButton.Name = "DeleteButton";
+            this.DeleteButton.Size = new System.Drawing.Size(75, 30);
+            this.DeleteButton.TabIndex = 2;
+            this.DeleteButton.Text = "Delete";
+            this.DeleteButton.UseVisualStyleBackColor = false;
+            this.DeleteButton.Click += new System.EventHandler(this.DeleteButton_Click);
+            // 
+            // SelectedAppGroupBox
+            // 
+            this.SelectedAppGroupBox.Controls.Add(this.StartButton);
+            this.SelectedAppGroupBox.Controls.Add(this.StopButton);
+            this.SelectedAppGroupBox.Font = new System.Drawing.Font("AUMOVIO Screen", 7.5F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.SelectedAppGroupBox.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(80)))), ((int)(((byte)(80)))), ((int)(((byte)(80)))));
+            this.SelectedAppGroupBox.Location = new System.Drawing.Point(268, 4);
+            this.SelectedAppGroupBox.Name = "SelectedAppGroupBox";
+            this.SelectedAppGroupBox.Padding = new System.Windows.Forms.Padding(4, 2, 4, 4);
+            this.SelectedAppGroupBox.Size = new System.Drawing.Size(172, 60);
+            this.SelectedAppGroupBox.TabIndex = 1;
+            this.SelectedAppGroupBox.TabStop = false;
+            this.SelectedAppGroupBox.Text = "Selected App";
+            // 
+            // StartButton
+            // 
+            this.StartButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(255)))), ((int)(((byte)(192)))));
+            this.StartButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.StartButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.StartButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(39)))), ((int)(((byte)(174)))), ((int)(((byte)(96)))));
+            this.StartButton.Location = new System.Drawing.Point(8, 22);
+            this.StartButton.Name = "StartButton";
+            this.StartButton.Size = new System.Drawing.Size(75, 30);
+            this.StartButton.TabIndex = 0;
+            this.StartButton.Text = "Start";
+            this.StartButton.UseVisualStyleBackColor = false;
+            this.StartButton.Click += new System.EventHandler(this.StartButton_Click);
+            // 
+            // StopButton
+            // 
+            this.StopButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(192)))), ((int)(((byte)(192)))));
+            this.StopButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.StopButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.StopButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(231)))), ((int)(((byte)(76)))), ((int)(((byte)(60)))));
+            this.StopButton.Location = new System.Drawing.Point(88, 22);
+            this.StopButton.Name = "StopButton";
+            this.StopButton.Size = new System.Drawing.Size(75, 30);
+            this.StopButton.TabIndex = 1;
+            this.StopButton.Text = "Stop";
+            this.StopButton.UseVisualStyleBackColor = false;
+            this.StopButton.Click += new System.EventHandler(this.StopButton_Click);
+            // 
+            // GroupActionsGroupBox
+            // 
+            this.GroupActionsGroupBox.Controls.Add(this.StartAllButton);
+            this.GroupActionsGroupBox.Controls.Add(this.StopAllButton);
+            this.GroupActionsGroupBox.Font = new System.Drawing.Font("AUMOVIO Screen", 7.5F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.GroupActionsGroupBox.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(80)))), ((int)(((byte)(80)))), ((int)(((byte)(80)))));
+            this.GroupActionsGroupBox.Location = new System.Drawing.Point(448, 4);
+            this.GroupActionsGroupBox.Name = "GroupActionsGroupBox";
+            this.GroupActionsGroupBox.Padding = new System.Windows.Forms.Padding(4, 2, 4, 4);
+            this.GroupActionsGroupBox.Size = new System.Drawing.Size(192, 60);
+            this.GroupActionsGroupBox.TabIndex = 2;
+            this.GroupActionsGroupBox.TabStop = false;
+            this.GroupActionsGroupBox.Text = "Group Actions";
+            // 
+            // StartAllButton
+            // 
+            this.StartAllButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(255)))), ((int)(((byte)(192)))));
+            this.StartAllButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.StartAllButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.StartAllButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(39)))), ((int)(((byte)(174)))), ((int)(((byte)(96)))));
+            this.StartAllButton.Location = new System.Drawing.Point(8, 22);
+            this.StartAllButton.Name = "StartAllButton";
+            this.StartAllButton.Size = new System.Drawing.Size(85, 30);
+            this.StartAllButton.TabIndex = 0;
+            this.StartAllButton.Text = "Start All";
+            this.StartAllButton.UseVisualStyleBackColor = false;
+            this.StartAllButton.Click += new System.EventHandler(this.StartAllButton_Click);
+            // 
+            // StopAllButton
+            // 
+            this.StopAllButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(192)))), ((int)(((byte)(192)))));
+            this.StopAllButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.StopAllButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.StopAllButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(231)))), ((int)(((byte)(76)))), ((int)(((byte)(60)))));
+            this.StopAllButton.Location = new System.Drawing.Point(98, 22);
+            this.StopAllButton.Name = "StopAllButton";
+            this.StopAllButton.Size = new System.Drawing.Size(85, 30);
+            this.StopAllButton.TabIndex = 1;
+            this.StopAllButton.Text = "Stop All";
+            this.StopAllButton.UseVisualStyleBackColor = false;
+            this.StopAllButton.Click += new System.EventHandler(this.StopAllButton_Click);
+            // 
+            // ToolsGroupBox
+            // 
+            this.ToolsGroupBox.Controls.Add(this.LogsButton);
+            this.ToolsGroupBox.Controls.Add(this.RefreshButton);
+            this.ToolsGroupBox.Font = new System.Drawing.Font("AUMOVIO Screen", 7.5F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.ToolsGroupBox.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(80)))), ((int)(((byte)(80)))), ((int)(((byte)(80)))));
+            this.ToolsGroupBox.Location = new System.Drawing.Point(648, 4);
+            this.ToolsGroupBox.Name = "ToolsGroupBox";
+            this.ToolsGroupBox.Padding = new System.Windows.Forms.Padding(4, 2, 4, 4);
+            this.ToolsGroupBox.Size = new System.Drawing.Size(172, 60);
+            this.ToolsGroupBox.TabIndex = 3;
+            this.ToolsGroupBox.TabStop = false;
+            this.ToolsGroupBox.Text = "Tools";
             // 
             // LogsButton
             // 
@@ -350,10 +508,10 @@
             this.LogsButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.LogsButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.LogsButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
-            this.LogsButton.Location = new System.Drawing.Point(676, 8);
+            this.LogsButton.Location = new System.Drawing.Point(8, 22);
             this.LogsButton.Name = "LogsButton";
-            this.LogsButton.Size = new System.Drawing.Size(88, 32);
-            this.LogsButton.TabIndex = 7;
+            this.LogsButton.Size = new System.Drawing.Size(75, 30);
+            this.LogsButton.TabIndex = 0;
             this.LogsButton.Text = "Logs";
             this.LogsButton.UseVisualStyleBackColor = false;
             this.LogsButton.Click += new System.EventHandler(this.LogsButton_Click);
@@ -364,111 +522,13 @@
             this.RefreshButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.RefreshButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.RefreshButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
-            this.RefreshButton.Location = new System.Drawing.Point(768, 8);
+            this.RefreshButton.Location = new System.Drawing.Point(88, 22);
             this.RefreshButton.Name = "RefreshButton";
-            this.RefreshButton.Size = new System.Drawing.Size(88, 32);
-            this.RefreshButton.TabIndex = 8;
+            this.RefreshButton.Size = new System.Drawing.Size(75, 30);
+            this.RefreshButton.TabIndex = 1;
             this.RefreshButton.Text = "Refresh";
             this.RefreshButton.UseVisualStyleBackColor = false;
             this.RefreshButton.Click += new System.EventHandler(this.RefreshButton_Click);
-            // 
-            // StopAllButton
-            // 
-            this.StopAllButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(192)))), ((int)(((byte)(192)))));
-            this.StopAllButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.StopAllButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.StopAllButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(231)))), ((int)(((byte)(76)))), ((int)(((byte)(60)))));
-            this.StopAllButton.Location = new System.Drawing.Point(584, 8);
-            this.StopAllButton.Name = "StopAllButton";
-            this.StopAllButton.Size = new System.Drawing.Size(88, 32);
-            this.StopAllButton.TabIndex = 6;
-            this.StopAllButton.Text = "Stop All";
-            this.StopAllButton.UseVisualStyleBackColor = false;
-            this.StopAllButton.Click += new System.EventHandler(this.StopAllButton_Click);
-            // 
-            // StartAllButton
-            // 
-            this.StartAllButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(255)))), ((int)(((byte)(192)))));
-            this.StartAllButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.StartAllButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.StartAllButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(39)))), ((int)(((byte)(174)))), ((int)(((byte)(96)))));
-            this.StartAllButton.Location = new System.Drawing.Point(492, 8);
-            this.StartAllButton.Name = "StartAllButton";
-            this.StartAllButton.Size = new System.Drawing.Size(88, 32);
-            this.StartAllButton.TabIndex = 5;
-            this.StartAllButton.Text = "Start All";
-            this.StartAllButton.UseVisualStyleBackColor = false;
-            this.StartAllButton.Click += new System.EventHandler(this.StartAllButton_Click);
-            // 
-            // StopButton
-            // 
-            this.StopButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(192)))), ((int)(((byte)(192)))));
-            this.StopButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.StopButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.StopButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(231)))), ((int)(((byte)(76)))), ((int)(((byte)(60)))));
-            this.StopButton.Location = new System.Drawing.Point(388, 8);
-            this.StopButton.Name = "StopButton";
-            this.StopButton.Size = new System.Drawing.Size(88, 32);
-            this.StopButton.TabIndex = 4;
-            this.StopButton.Text = "Stop";
-            this.StopButton.UseVisualStyleBackColor = false;
-            this.StopButton.Click += new System.EventHandler(this.StopButton_Click);
-            // 
-            // StartButton
-            // 
-            this.StartButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(255)))), ((int)(((byte)(192)))));
-            this.StartButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.StartButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.StartButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(39)))), ((int)(((byte)(174)))), ((int)(((byte)(96)))));
-            this.StartButton.Location = new System.Drawing.Point(296, 8);
-            this.StartButton.Name = "StartButton";
-            this.StartButton.Size = new System.Drawing.Size(88, 32);
-            this.StartButton.TabIndex = 3;
-            this.StartButton.Text = "Start";
-            this.StartButton.UseVisualStyleBackColor = false;
-            this.StartButton.Click += new System.EventHandler(this.StartButton_Click);
-            // 
-            // DeleteButton
-            // 
-            this.DeleteButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(192)))), ((int)(((byte)(192)))));
-            this.DeleteButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.DeleteButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.DeleteButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(231)))), ((int)(((byte)(76)))), ((int)(((byte)(60)))));
-            this.DeleteButton.Location = new System.Drawing.Point(192, 8);
-            this.DeleteButton.Name = "DeleteButton";
-            this.DeleteButton.Size = new System.Drawing.Size(88, 32);
-            this.DeleteButton.TabIndex = 2;
-            this.DeleteButton.Text = "Delete App";
-            this.DeleteButton.UseVisualStyleBackColor = false;
-            this.DeleteButton.Click += new System.EventHandler(this.DeleteButton_Click);
-            // 
-            // EditButton
-            // 
-            this.EditButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(224)))), ((int)(((byte)(192)))));
-            this.EditButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.EditButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.EditButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
-            this.EditButton.Location = new System.Drawing.Point(100, 8);
-            this.EditButton.Name = "EditButton";
-            this.EditButton.Size = new System.Drawing.Size(88, 32);
-            this.EditButton.TabIndex = 1;
-            this.EditButton.Text = "Edit App";
-            this.EditButton.UseVisualStyleBackColor = false;
-            this.EditButton.Click += new System.EventHandler(this.EditButton_Click);
-            // 
-            // AddButton
-            // 
-            this.AddButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(224)))), ((int)(((byte)(192)))));
-            this.AddButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.AddButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.AddButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
-            this.AddButton.Location = new System.Drawing.Point(8, 8);
-            this.AddButton.Name = "AddButton";
-            this.AddButton.Size = new System.Drawing.Size(88, 32);
-            this.AddButton.TabIndex = 0;
-            this.AddButton.Text = "Add App";
-            this.AddButton.UseVisualStyleBackColor = false;
-            this.AddButton.Click += new System.EventHandler(this.AddButton_Click);
             // 
             // SelectedGroupLabel
             // 
@@ -488,7 +548,7 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(1084, 370);
+            this.ClientSize = new System.Drawing.Size(1084, 390);
             this.Controls.Add(this.MainSplitContainer);
             this.Controls.Add(this.HeaderPanel);
             this.Name = "Main";
@@ -504,6 +564,10 @@
             this.MainSplitContainer.ResumeLayout(false);
             this.GroupButtonPanel.ResumeLayout(false);
             this.ButtonPanel.ResumeLayout(false);
+            this.ManageAppsGroupBox.ResumeLayout(false);
+            this.SelectedAppGroupBox.ResumeLayout(false);
+            this.GroupActionsGroupBox.ResumeLayout(false);
+            this.ToolsGroupBox.ResumeLayout(false);
             this.ResumeLayout(false);
 
         }
@@ -534,13 +598,17 @@
         private System.Windows.Forms.ColumnHeader LastStartColumn;
         private System.Windows.Forms.ColumnHeader LastStopColumn;
         private System.Windows.Forms.Panel ButtonPanel;
+        private System.Windows.Forms.GroupBox ManageAppsGroupBox;
         private System.Windows.Forms.Button AddButton;
         private System.Windows.Forms.Button EditButton;
         private System.Windows.Forms.Button DeleteButton;
+        private System.Windows.Forms.GroupBox SelectedAppGroupBox;
         private System.Windows.Forms.Button StartButton;
         private System.Windows.Forms.Button StopButton;
+        private System.Windows.Forms.GroupBox GroupActionsGroupBox;
         private System.Windows.Forms.Button StartAllButton;
         private System.Windows.Forms.Button StopAllButton;
+        private System.Windows.Forms.GroupBox ToolsGroupBox;
         private System.Windows.Forms.Button LogsButton;
         private System.Windows.Forms.Button RefreshButton;
         private System.Windows.Forms.Label AppSubtitle;
