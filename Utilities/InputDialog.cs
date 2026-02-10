@@ -12,6 +12,7 @@ namespace InstanceManager.Utilities
         private Button cancelButton;
         private Font _normalFont;
         private Font _buttonFont;
+        private Font _cancelFont;
 
         public string InputValue { get { return inputTextBox.Text.Trim(); } }
 
@@ -19,6 +20,7 @@ namespace InstanceManager.Utilities
         {
             _normalFont = new Font("AUMOVIO Screen", 9F);
             _buttonFont = new Font("AUMOVIO Screen", 8F, FontStyle.Bold);
+            _cancelFont = new Font("AUMOVIO Screen", 8F);
 
             this.Text = title;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -66,7 +68,7 @@ namespace InstanceManager.Utilities
                 Size = new Size(75, 28),
                 DialogResult = DialogResult.Cancel,
                 FlatStyle = FlatStyle.Flat,
-                Font = new Font("AUMOVIO Screen", 8F)
+                Font = _cancelFont
             };
             this.Controls.Add(cancelButton);
 
@@ -80,6 +82,7 @@ namespace InstanceManager.Utilities
             {
                 if (_normalFont != null) { _normalFont.Dispose(); _normalFont = null; }
                 if (_buttonFont != null) { _buttonFont.Dispose(); _buttonFont = null; }
+                if (_cancelFont != null) { _cancelFont.Dispose(); _cancelFont = null; }
             }
             base.Dispose(disposing);
         }

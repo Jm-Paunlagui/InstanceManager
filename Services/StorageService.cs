@@ -36,7 +36,6 @@ namespace InstanceManager.Services
 
         public List<ApplicationGroup> GetAllGroups()
         {
-            SimpleLogger.Debug("GetAllGroups @ StorageService.cs", "Retrieving all groups");
             return _groups.ToList();
         }
 
@@ -95,8 +94,17 @@ namespace InstanceManager.Services
 
         public List<ManagedApplication> GetAllApplications()
         {
-            SimpleLogger.Debug("GetAllApplications @ StorageService.cs", "Retrieving all applications");
             return _applications.ToList();
+        }
+
+        /// <summary>
+        /// Returns a read-only reference to the internal applications list.
+        /// Callers must NOT modify the returned list or its elements directly.
+        /// Use this for read-heavy paths (like the timer tick) to avoid allocations.
+        /// </summary>
+        public IList<ManagedApplication> GetAllApplicationsReadOnly()
+        {
+            return _applications.AsReadOnly();
         }
 
         public List<ManagedApplication> GetApplicationsByGroup(int groupId)
@@ -183,7 +191,61 @@ namespace InstanceManager.Services
                     SaveApplications();
                 }
 
-                SimpleLogger.Debug("UpdateApplication @ StorageService.cs", $"Updated application: {app.AppName} (Index: {app.Index}, forceSave: {forceSave})");
+                if (forceSave)
+                {
+                    SimpleLogger.Debug("UpdateApplication @ StorageService.cs", $"Updated application: {app.AppName} (Index: {app.Index})");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Updates specific fields on an application by index without requiring the caller to
+        /// hold a reference to the internal object. This avoids the bug where callers mutate
+        /// the internal object and then UpdateApplicationTransient sees no changes.
+        /// Only non-null parameters are applied.
+        /// </summary>
+        public void UpdateApplicationFields(int appIndex, bool? isRunning = null, DateTime? lastStart = null,
+            DateTime? lastStop = null, int? crashCount = null, int? retryCount = null)
+        {
+            var existingApp = _applications.FirstOrDefault(a => a.Index == appIndex);
+            if (existingApp == null) return;
+
+            bool persistentChanged = false;
+
+            if (isRunning.HasValue)
+            {
+                existingApp.IsRunning = isRunning.Value;
+            }
+            if (lastStart.HasValue)
+            {
+                if (existingApp.LastStart != lastStart.Value) persistentChanged = true;
+                existingApp.LastStart = lastStart.Value;
+            }
+            if (lastStop.HasValue)
+            {
+                if (existingApp.LastStop != lastStop.Value) persistentChanged = true;
+                existingApp.LastStop = lastStop.Value;
+            }
+            if (crashCount.HasValue)
+            {
+                if (existingApp.CrashCount != crashCount.Value) persistentChanged = true;
+                existingApp.CrashCount = crashCount.Value;
+            }
+            if (retryCount.HasValue)
+            {
+                if (existingApp.RetryCount != retryCount.Value) persistentChanged = true;
+                existingApp.RetryCount = retryCount.Value;
+            }
+
+            if (persistentChanged)
+            {
+                _appsDirty = true;
+            }
+
+            // Throttled save for timer-tick updates
+            if (_appsDirty && (DateTime.Now - _lastAppSave).TotalSeconds >= MinSaveIntervalSeconds)
+            {
+                SaveApplications();
             }
         }
 
@@ -242,25 +304,17 @@ namespace InstanceManager.Services
         {
             try
             {
-                if (File.Exists(_groupStoragePath))
+                string json = ReadFileWithFallback(_groupStoragePath);
+                if (!string.IsNullOrEmpty(json))
                 {
-                    string json = File.ReadAllText(_groupStoragePath);
-                    if (!string.IsNullOrEmpty(json))
-                    {
-                        SimpleLogger.Debug("LoadGroups @ StorageService.cs", $"Loading groups JSON: {json.Substring(0, Math.Min(100, json.Length))}...");
-                        _groups = DeserializeGroups(json);
-                    }
-                    else
-                    {
-                        _groups = new List<ApplicationGroup>();
-                    }
-                    SimpleLogger.Info("LoadGroups @ StorageService.cs", $"Loaded {_groups.Count} groups from storage");
+                    SimpleLogger.Debug("LoadGroups @ StorageService.cs", $"Loading groups JSON: {json.Substring(0, Math.Min(100, json.Length))}...");
+                    _groups = DeserializeGroups(json);
                 }
                 else
                 {
                     _groups = new List<ApplicationGroup>();
-                    SimpleLogger.Info("LoadGroups @ StorageService.cs", "No existing group storage found, initialized empty list");
                 }
+                SimpleLogger.Info("LoadGroups @ StorageService.cs", $"Loaded {_groups.Count} groups from storage");
             }
             catch (Exception ex)
             {
@@ -274,7 +328,7 @@ namespace InstanceManager.Services
             try
             {
                 string json = SerializeGroups(_groups);
-                File.WriteAllText(_groupStoragePath, json);
+                WriteFileAtomically(_groupStoragePath, json);
                 _groupsDirty = false;
                 _lastGroupSave = DateTime.Now;
                 SimpleLogger.Debug("SaveGroups @ StorageService.cs", $"Saved {_groups.Count} groups to storage");
@@ -379,36 +433,28 @@ namespace InstanceManager.Services
         {
             try
             {
-                if (File.Exists(_storagePath))
+                string json = ReadFileWithFallback(_storagePath);
+                if (!string.IsNullOrEmpty(json))
                 {
-                    string json = File.ReadAllText(_storagePath);
-                    if (!string.IsNullOrEmpty(json))
-                    {
-                        SimpleLogger.Debug("LoadApplications @ StorageService.cs", $"Loading JSON: {json.Substring(0, Math.Min(100, json.Length))}...");
-                        _applications = DeserializeApplications(json);
-                    }
-                    else
-                    {
-                        _applications = new List<ManagedApplication>();
-                    }
-                    SimpleLogger.Info("LoadApplications @ StorageService.cs", $"Loaded {_applications.Count} applications from storage");
-
-                    foreach (var app in _applications)
-                    {
-                        if (string.IsNullOrEmpty(app.Directory))
-                        {
-                            SimpleLogger.Warn("LoadApplications @ StorageService.cs", $"Application {app.AppName} has empty directory");
-                        }
-                        else
-                        {
-                            SimpleLogger.Debug("LoadApplications @ StorageService.cs", $"Loaded: {app.AppName} -> {app.Directory}");
-                        }
-                    }
+                    SimpleLogger.Debug("LoadApplications @ StorageService.cs", $"Loading JSON: {json.Substring(0, Math.Min(100, json.Length))}...");
+                    _applications = DeserializeApplications(json);
                 }
                 else
                 {
                     _applications = new List<ManagedApplication>();
-                    SimpleLogger.Info("LoadApplications @ StorageService.cs", "No existing storage found, initialized empty list");
+                }
+                SimpleLogger.Info("LoadApplications @ StorageService.cs", $"Loaded {_applications.Count} applications from storage");
+
+                foreach (var app in _applications)
+                {
+                    if (string.IsNullOrEmpty(app.Directory))
+                    {
+                        SimpleLogger.Warn("LoadApplications @ StorageService.cs", $"Application {app.AppName} has empty directory");
+                    }
+                    else
+                    {
+                        SimpleLogger.Debug("LoadApplications @ StorageService.cs", $"Loaded: {app.AppName} -> {app.Directory}");
+                    }
                 }
             }
             catch (Exception ex)
@@ -423,7 +469,7 @@ namespace InstanceManager.Services
             try
             {
                 string json = SerializeApplications(_applications);
-                File.WriteAllText(_storagePath, json);
+                WriteFileAtomically(_storagePath, json);
                 _appsDirty = false;
                 _lastAppSave = DateTime.Now;
                 SimpleLogger.Debug("SaveApplications @ StorageService.cs", $"Saved {_applications.Count} applications to storage");
@@ -666,6 +712,84 @@ namespace InstanceManager.Services
                         .Replace("\\n", "\n")
                         .Replace("\\r", "\r")
                         .Replace("\x00", "\\");
+        }
+
+        /// <summary>
+        /// Writes content to a file atomically by writing to a temp file first,
+        /// then replacing the target. This prevents data loss on power failure or crash.
+        /// </summary>
+        private void WriteFileAtomically(string targetPath, string content)
+        {
+            string tempPath = targetPath + ".tmp";
+            File.WriteAllText(tempPath, content);
+            // File.Replace is not available on all .NET 4.0 configurations without the target existing,
+            // so use a delete-then-move approach with backup
+            string backupPath = targetPath + ".bak";
+            if (File.Exists(targetPath))
+            {
+                // Keep a backup in case move fails
+                if (File.Exists(backupPath))
+                    File.Delete(backupPath);
+                File.Move(targetPath, backupPath);
+            }
+            File.Move(tempPath, targetPath);
+            // Clean up backup on success
+            if (File.Exists(backupPath))
+            {
+                try { File.Delete(backupPath); }
+                catch { /* non-critical */ }
+            }
+        }
+
+        /// <summary>
+        /// Reads a file, falling back to .bak if the primary file is missing or corrupted (empty/invalid).
+        /// </summary>
+        private string ReadFileWithFallback(string path)
+        {
+            // Try primary file first
+            if (File.Exists(path))
+            {
+                string content = File.ReadAllText(path);
+                if (!string.IsNullOrEmpty(content) && content.Trim().Length > 2)
+                {
+                    return content;
+                }
+                SimpleLogger.Warn("ReadFileWithFallback @ StorageService.cs",
+                    $"Primary file is empty or corrupted: {path}");
+            }
+
+            // Try backup file
+            string backupPath = path + ".bak";
+            if (File.Exists(backupPath))
+            {
+                string content = File.ReadAllText(backupPath);
+                if (!string.IsNullOrEmpty(content) && content.Trim().Length > 2)
+                {
+                    SimpleLogger.Warn("ReadFileWithFallback @ StorageService.cs",
+                        $"Recovered from backup file: {backupPath}");
+                    // Restore backup as primary
+                    try { File.Copy(backupPath, path, true); }
+                    catch { /* non-critical */ }
+                    return content;
+                }
+            }
+
+            // Try temp file (write was interrupted before move)
+            string tempPath = path + ".tmp";
+            if (File.Exists(tempPath))
+            {
+                string content = File.ReadAllText(tempPath);
+                if (!string.IsNullOrEmpty(content) && content.Trim().Length > 2)
+                {
+                    SimpleLogger.Warn("ReadFileWithFallback @ StorageService.cs",
+                        $"Recovered from temp file: {tempPath}");
+                    try { File.Copy(tempPath, path, true); }
+                    catch { /* non-critical */ }
+                    return content;
+                }
+            }
+
+            return null;
         }
     }
 }

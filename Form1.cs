@@ -88,7 +88,7 @@ namespace InstanceManager
         {
             try
             {
-                var apps = _storageService.GetAllApplications();
+                var apps = _storageService.GetAllApplicationsReadOnly();
                 List<string> terminatedApps = new List<string>();
 
                 foreach (var app in apps)
@@ -132,7 +132,7 @@ namespace InstanceManager
         private void SetupTimer()
         {
             _statusUpdateTimer = new Timer();
-            _statusUpdateTimer.Interval = 2000;
+            _statusUpdateTimer.Interval = 3000;
             _statusUpdateTimer.Tick += StatusUpdateTimer_Tick;
             _statusUpdateTimer.Start();
         }
@@ -413,7 +413,7 @@ namespace InstanceManager
             {
                 // Update statuses for ALL managed apps (not just the visible group)
                 // to enforce watchdog across all groups
-                var allApps = _storageService.GetAllApplications();
+                var allApps = _storageService.GetAllApplicationsReadOnly();
 
                 foreach (var app in allApps)
                 {
@@ -515,38 +515,38 @@ namespace InstanceManager
                     {
                         _authorizedApps.Remove(app.Index);
                         _notifiedUnauthorized.Remove(app.Index);
-                        app.IsRunning = false;
-                        app.LastStop = DateTime.Now;
 
                         // If KeepOpen is enabled, treat this as a crash and schedule restart
                         if (app.KeepOpen)
                         {
-                            app.CrashCount++;
-                            app.RetryCount++;
-                            _storageService.UpdateApplicationTransient(app);
+                            int newCrashCount = app.CrashCount + 1;
+                            int newRetryCount = app.RetryCount + 1;
 
                             // Check if max retries exhausted
-                            if (app.RetryCount >= app.MaxRetries)
+                            if (newRetryCount >= app.MaxRetries)
                             {
                                 SimpleLogger.Error("UpdateApplicationStatuses @ Form1.cs",
-                                    $"'{app.AppName}' exceeded max retries ({app.RetryCount}/{app.MaxRetries}). Giving up.");
+                                    $"'{app.AppName}' exceeded max retries ({newRetryCount}/{app.MaxRetries}). Giving up.");
 
                                 _failedApps.Add(app.Index); // Mark as failed permanently
+
+                                _storageService.UpdateApplicationFields(app.Index, isRunning: false,
+                                    lastStop: DateTime.Now, crashCount: newCrashCount, retryCount: newRetryCount);
 
                                 if (item != null)
                                 {
                                     item.SubItems[3].Text = "Failed";
-                                    item.SubItems[5].Text = app.CrashCount.ToString();
-                                    item.SubItems[6].Text = app.RetryCount.ToString();
-                                    item.SubItems[8].Text = app.GetLastStopDisplay();
+                                    item.SubItems[5].Text = newCrashCount.ToString();
+                                    item.SubItems[6].Text = newRetryCount.ToString();
+                                    item.SubItems[8].Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                                     item.ForeColor = Color.Red;
 
                                     var tagApp = item.Tag as ManagedApplication;
                                     if (tagApp != null)
                                     {
-                                        tagApp.CrashCount = app.CrashCount;
-                                        tagApp.RetryCount = app.RetryCount;
-                                        tagApp.LastStop = app.LastStop;
+                                        tagApp.CrashCount = newCrashCount;
+                                        tagApp.RetryCount = newRetryCount;
+                                        tagApp.LastStop = DateTime.Now;
                                         tagApp.IsRunning = false;
                                     }
                                 }
@@ -557,23 +557,26 @@ namespace InstanceManager
                                 _pendingRestart[app.Index] = DateTime.Now.AddSeconds(delay);
 
                                 SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                    $"'{app.AppName}' crashed (KeepOpen=Yes). Crash #{app.CrashCount}, retry {app.RetryCount}/{app.MaxRetries}, scheduling restart in {delay}s");
+                                    $"'{app.AppName}' crashed (KeepOpen=Yes). Crash #{newCrashCount}, retry {newRetryCount}/{app.MaxRetries}, scheduling restart in {delay}s");
+
+                                _storageService.UpdateApplicationFields(app.Index, isRunning: false,
+                                    lastStop: DateTime.Now, crashCount: newCrashCount, retryCount: newRetryCount);
 
                                 if (item != null)
                                 {
                                     item.SubItems[3].Text = $"Restarting ({delay}s)";
-                                    item.SubItems[5].Text = app.CrashCount.ToString();
-                                    item.SubItems[6].Text = app.RetryCount.ToString();
-                                    item.SubItems[8].Text = app.GetLastStopDisplay();
+                                    item.SubItems[5].Text = newCrashCount.ToString();
+                                    item.SubItems[6].Text = newRetryCount.ToString();
+                                    item.SubItems[8].Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                                     item.ForeColor = Color.DarkOrange;
 
                                     // Sync tag
                                     var tagApp = item.Tag as ManagedApplication;
                                     if (tagApp != null)
                                     {
-                                        tagApp.CrashCount = app.CrashCount;
-                                        tagApp.RetryCount = app.RetryCount;
-                                        tagApp.LastStop = app.LastStop;
+                                        tagApp.CrashCount = newCrashCount;
+                                        tagApp.RetryCount = newRetryCount;
+                                        tagApp.LastStop = DateTime.Now;
                                         tagApp.IsRunning = false;
                                     }
                                 }
@@ -581,12 +584,12 @@ namespace InstanceManager
                         }
                         else
                         {
-                            _storageService.UpdateApplicationTransient(app);
+                            _storageService.UpdateApplicationFields(app.Index, isRunning: false, lastStop: DateTime.Now);
 
                             if (item != null)
                             {
                                 item.SubItems[3].Text = "Stopped";
-                                item.SubItems[8].Text = app.GetLastStopDisplay();
+                                item.SubItems[8].Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                                 item.ForeColor = Color.Black;
                             }
 
@@ -599,8 +602,7 @@ namespace InstanceManager
 
                     if (app.IsRunning != isRunning)
                     {
-                        app.IsRunning = isRunning;
-                        _storageService.UpdateApplicationTransient(app);
+                        _storageService.UpdateApplicationFields(app.Index, isRunning: isRunning);
                     }
 
                 }
@@ -653,28 +655,27 @@ namespace InstanceManager
                     _authorizedApps.Add(app.Index);
                     _notifiedUnauthorized.Remove(app.Index);
 
-                    app.LastStart = DateTime.Now;
-                    app.IsRunning = true;
-                    _storageService.UpdateApplicationTransient(app);
+                    DateTime now = DateTime.Now;
+                    _storageService.UpdateApplicationFields(app.Index, isRunning: true, lastStart: now, retryCount: 0);
 
                     if (item != null)
                     {
                         item.SubItems[3].Text = "Running";
-                        item.SubItems[6].Text = app.RetryCount.ToString();
-                        item.SubItems[7].Text = app.GetLastStartDisplay();
+                        item.SubItems[6].Text = "0";
+                        item.SubItems[7].Text = now.ToString("yyyy-MM-dd HH:mm:ss");
                         item.ForeColor = Color.Green;
 
                         var tagApp = item.Tag as ManagedApplication;
                         if (tagApp != null)
                         {
-                            tagApp.LastStart = app.LastStart;
+                            tagApp.LastStart = now;
                             tagApp.IsRunning = true;
-                            tagApp.RetryCount = app.RetryCount;
+                            tagApp.RetryCount = 0;
                         }
                     }
 
                     SimpleLogger.Info("AttemptAutoRestart @ Form1.cs",
-                        $"Auto-restarted '{app.AppName}' successfully (Retry {app.RetryCount}/{app.MaxRetries})");
+                        $"Auto-restarted '{app.AppName}' successfully (Retry {app.RetryCount}/{app.MaxRetries}), retry count reset to 0");
                 }
                 else
                 {
@@ -878,8 +879,6 @@ namespace InstanceManager
                             SimpleLogger.Info("EditButton_Click @ Form1.cs", $"Edited application path: {oldName} -> {app.AppName}");
                         }
 
-                        _storageService.UpdateApplication(app);
-
                         // If KeepOpen was turned off, cancel any pending restart
                         if (!app.KeepOpen)
                         {
@@ -896,6 +895,9 @@ namespace InstanceManager
                         selectedItem.SubItems[4].Text = app.GetKeepOpenDisplay();
                         selectedItem.SubItems[5].Text = app.CrashCount.ToString();
                         selectedItem.SubItems[6].Text = app.RetryCount.ToString();
+
+                        // Persist changes to storage
+                        _storageService.UpdateApplication(app);
 
                         SimpleLogger.Info("EditButton_Click @ Form1.cs",
                             $"Updated '{app.AppName}': KeepOpen={app.KeepOpen}, StartDelay={app.StartDelaySeconds}s");
@@ -1200,6 +1202,10 @@ namespace InstanceManager
                 {
                     var app = item.Tag as ManagedApplication;
                     if (app == null) continue;
+
+                    // Cancel any pending restart since user is intentionally stopping all
+                    _pendingRestart.Remove(app.Index);
+                    _failedApps.Remove(app.Index);
 
                     if (_processManager.IsApplicationRunning(app))
                     {

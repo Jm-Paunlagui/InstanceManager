@@ -133,7 +133,7 @@ namespace InstanceManager.Utilities
             catch
             {
                 // If we can't write, discard buffer to prevent unbounded memory growth
-                if (_logBuffer.Count > MaxBufferSize * 4)
+                if (_logBuffer.Count > MaxBufferSize * 2)
                 {
                     _logBuffer.Clear();
                 }

@@ -11,6 +11,7 @@ namespace InstanceManager.Utilities
         private Button yesButton;
         private Button noButton;
         private PictureBox iconPictureBox;
+        private Font _labelFont;
 
         public DialogResult Result { get; private set; }
 
@@ -42,9 +43,9 @@ namespace InstanceManager.Utilities
             this.Controls.Add(iconPictureBox);
 
             // Measure the text to determine required label height
-            Font labelFont = new Font("AUMOVIO Screen", 9F);
+            _labelFont = new Font("AUMOVIO Screen", 9F);
             Size proposedSize = new Size(labelWidth, int.MaxValue);
-            Size measuredSize = TextRenderer.MeasureText(message, labelFont, proposedSize, TextFormatFlags.WordBreak);
+            Size measuredSize = TextRenderer.MeasureText(message, _labelFont, proposedSize, TextFormatFlags.WordBreak);
             int labelHeight = Math.Max(40, measuredSize.Height + 5);
 
             messageLabel = new Label
@@ -53,7 +54,7 @@ namespace InstanceManager.Utilities
                 Location = new Point(labelX, 20),
                 AutoSize = false,
                 Size = new Size(labelWidth, labelHeight),
-                Font = labelFont
+                Font = _labelFont
             };
             this.Controls.Add(messageLabel);
 
@@ -140,6 +141,11 @@ namespace InstanceManager.Utilities
                 {
                     iconPictureBox.Image.Dispose();
                     iconPictureBox.Image = null;
+                }
+                if (_labelFont != null)
+                {
+                    _labelFont.Dispose();
+                    _labelFont = null;
                 }
             }
             base.Dispose(disposing);

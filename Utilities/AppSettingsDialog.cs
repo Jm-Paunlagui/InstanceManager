@@ -128,7 +128,7 @@ namespace InstanceManager
             _keepOpenCheckBox = new CheckBox
             {
                 Checked = _app.KeepOpen,
-                Location = new Point(controlX, y),
+                Location = new Point(controlX + 8, y),
                 AutoSize = true,
                 Text = _app.KeepOpen ? "Yes" : "No"
             };
