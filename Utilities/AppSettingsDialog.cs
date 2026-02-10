@@ -39,7 +39,7 @@ namespace InstanceManager
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.StartPosition = FormStartPosition.CenterParent;
-            this.Font = new Font("Segoe UI", 9F);
+            this.Font = new Font("AUMOVIO Screen", 9F);
 
             int labelX = 20;
             int controlX = 170;
@@ -52,7 +52,7 @@ namespace InstanceManager
                 Text = "Application Path",
                 Location = new Point(labelX, y),
                 AutoSize = true,
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold)
+                Font = new Font("AUMOVIO Screen", 9F, FontStyle.Bold)
             };
             this.Controls.Add(dirSectionLabel);
 
@@ -63,7 +63,7 @@ namespace InstanceManager
                 Text = _app.Directory ?? "",
                 Location = new Point(labelX, y),
                 Size = new Size(280, 23),
-                Font = new Font("Segoe UI", 9F)
+                Font = new Font("AUMOVIO Screen", 9F)
             };
             _browseButton = new Button
             {
@@ -73,7 +73,7 @@ namespace InstanceManager
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(52, 152, 219),
                 ForeColor = Color.White,
-                Font = new Font("Segoe UI", 7F, FontStyle.Bold)
+                Font = new Font("AUMOVIO Screen", 7F, FontStyle.Bold)
             };
             _browseButton.Click += BrowseButton_Click;
             _openPathButton = new Button
@@ -84,7 +84,7 @@ namespace InstanceManager
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(155, 89, 182),
                 ForeColor = Color.White,
-                Font = new Font("Segoe UI", 7F, FontStyle.Bold)
+                Font = new Font("AUMOVIO Screen", 7F, FontStyle.Bold)
             };
             _openPathButton.Click += OpenPathButton_Click;
             this.Controls.Add(_directoryTextBox);
@@ -99,7 +99,7 @@ namespace InstanceManager
                 Text = "Crash Recovery Settings",
                 Location = new Point(labelX, y),
                 AutoSize = true,
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold)
+                Font = new Font("AUMOVIO Screen", 9F, FontStyle.Bold)
             };
             this.Controls.Add(settingsSectionLabel);
 
@@ -174,7 +174,7 @@ namespace InstanceManager
                 Text = "Statistics",
                 Location = new Point(labelX, y),
                 AutoSize = true,
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold)
+                Font = new Font("AUMOVIO Screen", 9F, FontStyle.Bold)
             };
             this.Controls.Add(statsSectionLabel);
 
@@ -192,7 +192,7 @@ namespace InstanceManager
                 Text = _app.CrashCount.ToString(),
                 Location = new Point(controlX, y + 2),
                 AutoSize = true,
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold)
+                Font = new Font("AUMOVIO Screen", 9F, FontStyle.Bold)
             };
             _resetCrashButton = new Button
             {
@@ -202,7 +202,7 @@ namespace InstanceManager
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(243, 156, 18),
                 ForeColor = Color.White,
-                Font = new Font("Segoe UI", 7F, FontStyle.Bold)
+                Font = new Font("AUMOVIO Screen", 7F, FontStyle.Bold)
             };
             _resetCrashButton.Click += (s, e) =>
             {
@@ -227,7 +227,7 @@ namespace InstanceManager
                 Text = $"{_app.RetryCount} / {_app.MaxRetries}",
                 Location = new Point(controlX, y + 2),
                 AutoSize = true,
-                Font = new Font("Segoe UI", 9F, FontStyle.Bold)
+                Font = new Font("AUMOVIO Screen", 9F, FontStyle.Bold)
             };
             _resetRetryButton = new Button
             {
@@ -237,7 +237,7 @@ namespace InstanceManager
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(243, 156, 18),
                 ForeColor = Color.White,
-                Font = new Font("Segoe UI", 7F, FontStyle.Bold)
+                Font = new Font("AUMOVIO Screen", 7F, FontStyle.Bold)
             };
             _resetRetryButton.Click += (s, e) =>
             {
@@ -259,7 +259,7 @@ namespace InstanceManager
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(46, 204, 113),
                 ForeColor = Color.White,
-                Font = new Font("Segoe UI", 8F, FontStyle.Bold)
+                Font = new Font("AUMOVIO Screen", 8F, FontStyle.Bold)
             };
             _okButton.Click += OkButton_Click;
 
@@ -272,7 +272,7 @@ namespace InstanceManager
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(192, 57, 43),
                 ForeColor = Color.White,
-                Font = new Font("Segoe UI", 8F, FontStyle.Bold)
+                Font = new Font("AUMOVIO Screen", 8F, FontStyle.Bold)
             };
 
             this.Controls.Add(_okButton);

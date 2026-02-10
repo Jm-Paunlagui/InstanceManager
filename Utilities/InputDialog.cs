@@ -28,7 +28,7 @@ namespace InstanceManager.Utilities
                 Text = prompt,
                 Location = new Point(15, 15),
                 AutoSize = true,
-                Font = new Font("Segoe UI", 9F)
+                Font = new Font("AUMOVIO Screen", 9F)
             };
             this.Controls.Add(promptLabel);
 
@@ -36,7 +36,7 @@ namespace InstanceManager.Utilities
             {
                 Location = new Point(15, 40),
                 Size = new Size(335, 23),
-                Font = new Font("Segoe UI", 9F),
+                Font = new Font("AUMOVIO Screen", 9F),
                 Text = defaultValue ?? ""
             };
             this.Controls.Add(inputTextBox);
@@ -50,7 +50,7 @@ namespace InstanceManager.Utilities
                 BackColor = Color.FromArgb(41, 128, 185),
                 FlatStyle = FlatStyle.Flat,
                 ForeColor = Color.White,
-                Font = new Font("Segoe UI", 8F, FontStyle.Bold)
+                Font = new Font("AUMOVIO Screen", 8F, FontStyle.Bold)
             };
             this.Controls.Add(okButton);
 
@@ -61,7 +61,7 @@ namespace InstanceManager.Utilities
                 Size = new Size(75, 28),
                 DialogResult = DialogResult.Cancel,
                 FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 8F)
+                Font = new Font("AUMOVIO Screen", 8F)
             };
             this.Controls.Add(cancelButton);
 

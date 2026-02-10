@@ -29,10 +29,11 @@
         private void InitializeComponent()
         {
             this.HeaderPanel = new System.Windows.Forms.Panel();
+            this.SettingsButton = new System.Windows.Forms.Button();
+            this.AppSubtitle = new System.Windows.Forms.Label();
             this.SubtitleLabel = new System.Windows.Forms.Label();
             this.TitleLabel = new System.Windows.Forms.Label();
             this.LogoPictureBox = new System.Windows.Forms.PictureBox();
-            this.SettingsButton = new System.Windows.Forms.Button();
             this.MainSplitContainer = new System.Windows.Forms.SplitContainer();
             this.GroupListBox = new System.Windows.Forms.ListBox();
             this.GroupButtonPanel = new System.Windows.Forms.Panel();
@@ -61,7 +62,6 @@
             this.EditButton = new System.Windows.Forms.Button();
             this.AddButton = new System.Windows.Forms.Button();
             this.SelectedGroupLabel = new System.Windows.Forms.Label();
-            this.AppSubtitle = new System.Windows.Forms.Label();
             this.HeaderPanel.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.LogoPictureBox)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.MainSplitContainer)).BeginInit();
@@ -88,27 +88,54 @@
             this.HeaderPanel.Size = new System.Drawing.Size(1084, 60);
             this.HeaderPanel.TabIndex = 52;
             // 
+            // SettingsButton
+            // 
+            this.SettingsButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.SettingsButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(224)))), ((int)(((byte)(192)))));
+            this.SettingsButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.SettingsButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.SettingsButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
+            this.SettingsButton.Location = new System.Drawing.Point(994, 16);
+            this.SettingsButton.Name = "SettingsButton";
+            this.SettingsButton.Size = new System.Drawing.Size(75, 28);
+            this.SettingsButton.TabIndex = 4;
+            this.SettingsButton.Text = "Settings";
+            this.SettingsButton.UseVisualStyleBackColor = false;
+            this.SettingsButton.Click += new System.EventHandler(this.SettingsButton_Click);
+            // 
+            // AppSubtitle
+            // 
+            this.AppSubtitle.AutoSize = true;
+            this.AppSubtitle.Font = new System.Drawing.Font("AUMOVIO Screen", 6.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.AppSubtitle.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(100)))), ((int)(((byte)(100)))), ((int)(((byte)(100)))));
+            this.AppSubtitle.Location = new System.Drawing.Point(366, 38);
+            this.AppSubtitle.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
+            this.AppSubtitle.Name = "AppSubtitle";
+            this.AppSubtitle.Size = new System.Drawing.Size(53, 12);
+            this.AppSubtitle.TabIndex = 3;
+            this.AppSubtitle.Text = "- ForStation";
+            // 
             // SubtitleLabel
             // 
             this.SubtitleLabel.AutoSize = true;
-            this.SubtitleLabel.Font = new System.Drawing.Font("Segoe UI", 7F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.SubtitleLabel.Font = new System.Drawing.Font("AUMOVIO Screen", 6.75F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.SubtitleLabel.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(100)))), ((int)(((byte)(100)))), ((int)(((byte)(100)))));
             this.SubtitleLabel.Location = new System.Drawing.Point(182, 38);
             this.SubtitleLabel.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.SubtitleLabel.Name = "SubtitleLabel";
-            this.SubtitleLabel.Size = new System.Drawing.Size(196, 12);
+            this.SubtitleLabel.Size = new System.Drawing.Size(185, 12);
             this.SubtitleLabel.TabIndex = 2;
             this.SubtitleLabel.Text = "Prevents simultaneous application launches";
             // 
             // TitleLabel
             // 
             this.TitleLabel.AutoSize = true;
-            this.TitleLabel.Font = new System.Drawing.Font("Segoe UI", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.TitleLabel.Font = new System.Drawing.Font("AUMOVIO Screen", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.TitleLabel.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(231)))), ((int)(((byte)(76)))), ((int)(((byte)(60)))));
             this.TitleLabel.Location = new System.Drawing.Point(182, 12);
             this.TitleLabel.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.TitleLabel.Name = "TitleLabel";
-            this.TitleLabel.Size = new System.Drawing.Size(326, 21);
+            this.TitleLabel.Size = new System.Drawing.Size(333, 21);
             this.TitleLabel.TabIndex = 1;
             this.TitleLabel.Text = "Intelligent Mutex Execution Environment";
             // 
@@ -123,21 +150,6 @@
             this.LogoPictureBox.SizeMode = System.Windows.Forms.PictureBoxSizeMode.StretchImage;
             this.LogoPictureBox.TabIndex = 0;
             this.LogoPictureBox.TabStop = false;
-            // 
-            // SettingsButton
-            // 
-            this.SettingsButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.SettingsButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(52)))), ((int)(((byte)(73)))), ((int)(((byte)(94)))));
-            this.SettingsButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.SettingsButton.Font = new System.Drawing.Font("Segoe UI", 7F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.SettingsButton.ForeColor = System.Drawing.Color.White;
-            this.SettingsButton.Location = new System.Drawing.Point(994, 16);
-            this.SettingsButton.Name = "SettingsButton";
-            this.SettingsButton.Size = new System.Drawing.Size(75, 28);
-            this.SettingsButton.TabIndex = 4;
-            this.SettingsButton.Text = "Settings";
-            this.SettingsButton.UseVisualStyleBackColor = false;
-            this.SettingsButton.Click += new System.EventHandler(this.SettingsButton_Click);
             // 
             // MainSplitContainer
             // 
@@ -165,9 +177,9 @@
             // GroupListBox
             // 
             this.GroupListBox.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.GroupListBox.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.GroupListBox.Font = new System.Drawing.Font("AUMOVIO Screen", 8.999999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.GroupListBox.FormattingEnabled = true;
-            this.GroupListBox.ItemHeight = 15;
+            this.GroupListBox.ItemHeight = 16;
             this.GroupListBox.Location = new System.Drawing.Point(0, 28);
             this.GroupListBox.Name = "GroupListBox";
             this.GroupListBox.Size = new System.Drawing.Size(200, 242);
@@ -189,10 +201,10 @@
             // 
             // AddGroupButton
             // 
-            this.AddGroupButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(41)))), ((int)(((byte)(128)))), ((int)(((byte)(185)))));
+            this.AddGroupButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(224)))), ((int)(((byte)(192)))));
             this.AddGroupButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.AddGroupButton.Font = new System.Drawing.Font("Segoe UI", 7F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.AddGroupButton.ForeColor = System.Drawing.Color.White;
+            this.AddGroupButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.AddGroupButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
             this.AddGroupButton.Location = new System.Drawing.Point(4, 6);
             this.AddGroupButton.Name = "AddGroupButton";
             this.AddGroupButton.Size = new System.Drawing.Size(60, 28);
@@ -203,10 +215,10 @@
             // 
             // EditGroupButton
             // 
-            this.EditGroupButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
+            this.EditGroupButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(224)))), ((int)(((byte)(192)))));
             this.EditGroupButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.EditGroupButton.Font = new System.Drawing.Font("Segoe UI", 7F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.EditGroupButton.ForeColor = System.Drawing.Color.White;
+            this.EditGroupButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.EditGroupButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
             this.EditGroupButton.Location = new System.Drawing.Point(68, 6);
             this.EditGroupButton.Name = "EditGroupButton";
             this.EditGroupButton.Size = new System.Drawing.Size(60, 28);
@@ -217,10 +229,10 @@
             // 
             // DeleteGroupButton
             // 
-            this.DeleteGroupButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(57)))), ((int)(((byte)(43)))));
+            this.DeleteGroupButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(192)))), ((int)(((byte)(192)))));
             this.DeleteGroupButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.DeleteGroupButton.Font = new System.Drawing.Font("Segoe UI", 7F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.DeleteGroupButton.ForeColor = System.Drawing.Color.White;
+            this.DeleteGroupButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.DeleteGroupButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(231)))), ((int)(((byte)(76)))), ((int)(((byte)(60)))));
             this.DeleteGroupButton.Location = new System.Drawing.Point(132, 6);
             this.DeleteGroupButton.Name = "DeleteGroupButton";
             this.DeleteGroupButton.Size = new System.Drawing.Size(60, 28);
@@ -233,7 +245,7 @@
             // 
             this.GroupLabel.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(52)))), ((int)(((byte)(73)))), ((int)(((byte)(94)))));
             this.GroupLabel.Dock = System.Windows.Forms.DockStyle.Top;
-            this.GroupLabel.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.GroupLabel.Font = new System.Drawing.Font("AUMOVIO Screen", 8.999999F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.GroupLabel.ForeColor = System.Drawing.Color.White;
             this.GroupLabel.Location = new System.Drawing.Point(0, 0);
             this.GroupLabel.Name = "GroupLabel";
@@ -256,7 +268,7 @@
             this.LastStartColumn,
             this.LastStopColumn});
             this.AppListView.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.AppListView.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.AppListView.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.AppListView.FullRowSelect = true;
             this.AppListView.GridLines = true;
             this.AppListView.HideSelection = false;
@@ -334,10 +346,10 @@
             // 
             // LogsButton
             // 
-            this.LogsButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(155)))), ((int)(((byte)(89)))), ((int)(((byte)(182)))));
+            this.LogsButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(224)))), ((int)(((byte)(192)))));
             this.LogsButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.LogsButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.LogsButton.ForeColor = System.Drawing.Color.White;
+            this.LogsButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.LogsButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
             this.LogsButton.Location = new System.Drawing.Point(676, 8);
             this.LogsButton.Name = "LogsButton";
             this.LogsButton.Size = new System.Drawing.Size(88, 32);
@@ -348,10 +360,10 @@
             // 
             // RefreshButton
             // 
-            this.RefreshButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(52)))), ((int)(((byte)(152)))), ((int)(((byte)(219)))));
+            this.RefreshButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(224)))), ((int)(((byte)(192)))));
             this.RefreshButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.RefreshButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.RefreshButton.ForeColor = System.Drawing.Color.White;
+            this.RefreshButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.RefreshButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
             this.RefreshButton.Location = new System.Drawing.Point(768, 8);
             this.RefreshButton.Name = "RefreshButton";
             this.RefreshButton.Size = new System.Drawing.Size(88, 32);
@@ -362,10 +374,10 @@
             // 
             // StopAllButton
             // 
-            this.StopAllButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(57)))), ((int)(((byte)(43)))));
+            this.StopAllButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(192)))), ((int)(((byte)(192)))));
             this.StopAllButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.StopAllButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.StopAllButton.ForeColor = System.Drawing.Color.White;
+            this.StopAllButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.StopAllButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(231)))), ((int)(((byte)(76)))), ((int)(((byte)(60)))));
             this.StopAllButton.Location = new System.Drawing.Point(584, 8);
             this.StopAllButton.Name = "StopAllButton";
             this.StopAllButton.Size = new System.Drawing.Size(88, 32);
@@ -376,10 +388,10 @@
             // 
             // StartAllButton
             // 
-            this.StartAllButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(39)))), ((int)(((byte)(174)))), ((int)(((byte)(96)))));
+            this.StartAllButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(255)))), ((int)(((byte)(192)))));
             this.StartAllButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.StartAllButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.StartAllButton.ForeColor = System.Drawing.Color.White;
+            this.StartAllButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.StartAllButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(39)))), ((int)(((byte)(174)))), ((int)(((byte)(96)))));
             this.StartAllButton.Location = new System.Drawing.Point(492, 8);
             this.StartAllButton.Name = "StartAllButton";
             this.StartAllButton.Size = new System.Drawing.Size(88, 32);
@@ -390,10 +402,10 @@
             // 
             // StopButton
             // 
-            this.StopButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(231)))), ((int)(((byte)(76)))), ((int)(((byte)(60)))));
+            this.StopButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(192)))), ((int)(((byte)(192)))));
             this.StopButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.StopButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.StopButton.ForeColor = System.Drawing.Color.White;
+            this.StopButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.StopButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(231)))), ((int)(((byte)(76)))), ((int)(((byte)(60)))));
             this.StopButton.Location = new System.Drawing.Point(388, 8);
             this.StopButton.Name = "StopButton";
             this.StopButton.Size = new System.Drawing.Size(88, 32);
@@ -404,10 +416,10 @@
             // 
             // StartButton
             // 
-            this.StartButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(46)))), ((int)(((byte)(204)))), ((int)(((byte)(113)))));
+            this.StartButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(255)))), ((int)(((byte)(192)))));
             this.StartButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.StartButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.StartButton.ForeColor = System.Drawing.Color.White;
+            this.StartButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.StartButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(39)))), ((int)(((byte)(174)))), ((int)(((byte)(96)))));
             this.StartButton.Location = new System.Drawing.Point(296, 8);
             this.StartButton.Name = "StartButton";
             this.StartButton.Size = new System.Drawing.Size(88, 32);
@@ -418,10 +430,10 @@
             // 
             // DeleteButton
             // 
-            this.DeleteButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(57)))), ((int)(((byte)(43)))));
+            this.DeleteButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(192)))), ((int)(((byte)(192)))));
             this.DeleteButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.DeleteButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.DeleteButton.ForeColor = System.Drawing.Color.White;
+            this.DeleteButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.DeleteButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(231)))), ((int)(((byte)(76)))), ((int)(((byte)(60)))));
             this.DeleteButton.Location = new System.Drawing.Point(192, 8);
             this.DeleteButton.Name = "DeleteButton";
             this.DeleteButton.Size = new System.Drawing.Size(88, 32);
@@ -432,10 +444,10 @@
             // 
             // EditButton
             // 
-            this.EditButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
+            this.EditButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(224)))), ((int)(((byte)(192)))));
             this.EditButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.EditButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.EditButton.ForeColor = System.Drawing.Color.White;
+            this.EditButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.EditButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
             this.EditButton.Location = new System.Drawing.Point(100, 8);
             this.EditButton.Name = "EditButton";
             this.EditButton.Size = new System.Drawing.Size(88, 32);
@@ -446,10 +458,10 @@
             // 
             // AddButton
             // 
-            this.AddButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(41)))), ((int)(((byte)(128)))), ((int)(((byte)(185)))));
+            this.AddButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(224)))), ((int)(((byte)(192)))));
             this.AddButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.AddButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.AddButton.ForeColor = System.Drawing.Color.White;
+            this.AddButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.AddButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
             this.AddButton.Location = new System.Drawing.Point(8, 8);
             this.AddButton.Name = "AddButton";
             this.AddButton.Size = new System.Drawing.Size(88, 32);
@@ -462,7 +474,7 @@
             // 
             this.SelectedGroupLabel.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(44)))), ((int)(((byte)(62)))), ((int)(((byte)(80)))));
             this.SelectedGroupLabel.Dock = System.Windows.Forms.DockStyle.Top;
-            this.SelectedGroupLabel.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.SelectedGroupLabel.Font = new System.Drawing.Font("AUMOVIO Screen", 8.999999F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.SelectedGroupLabel.ForeColor = System.Drawing.Color.White;
             this.SelectedGroupLabel.Location = new System.Drawing.Point(0, 0);
             this.SelectedGroupLabel.Name = "SelectedGroupLabel";
@@ -471,18 +483,6 @@
             this.SelectedGroupLabel.TabIndex = 0;
             this.SelectedGroupLabel.Text = "Select a group to manage applications";
             this.SelectedGroupLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            // 
-            // AppSubtitle
-            // 
-            this.AppSubtitle.AutoSize = true;
-            this.AppSubtitle.Font = new System.Drawing.Font("Segoe UI", 7F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.AppSubtitle.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(100)))), ((int)(((byte)(100)))), ((int)(((byte)(100)))));
-            this.AppSubtitle.Location = new System.Drawing.Point(377, 38);
-            this.AppSubtitle.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
-            this.AppSubtitle.Name = "AppSubtitle";
-            this.AppSubtitle.Size = new System.Drawing.Size(56, 12);
-            this.AppSubtitle.TabIndex = 3;
-            this.AppSubtitle.Text = "- ForStation";
             // 
             // Main
             // 

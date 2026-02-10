@@ -42,7 +42,7 @@ namespace InstanceManager.Utilities
             this.Controls.Add(iconPictureBox);
 
             // Measure the text to determine required label height
-            Font labelFont = new Font("Segoe UI", 9F);
+            Font labelFont = new Font("AUMOVIO Screen", 9F);
             Size proposedSize = new Size(labelWidth, int.MaxValue);
             Size measuredSize = TextRenderer.MeasureText(message, labelFont, proposedSize, TextFormatFlags.WordBreak);
             int labelHeight = Math.Max(40, measuredSize.Height + 5);
@@ -143,7 +143,7 @@ namespace InstanceManager.Utilities
                     // Ensure it stays within screen bounds
                     Screen screen = Screen.FromControl(owner);
                     if (x < screen.WorkingArea.Left) x = screen.WorkingArea.Left + 10;
-                    if (y < screen.WorkingArea.Top) y = screen.WorkingArea.Top + 10;
+                    if (y < screen.WorkingArea.Top) x = screen.WorkingArea.Top + 10;
                     if (x + msgBox.Width > screen.WorkingArea.Right) 
                         x = screen.WorkingArea.Right - msgBox.Width - 10;
                     if (y + msgBox.Height > screen.WorkingArea.Bottom) 
