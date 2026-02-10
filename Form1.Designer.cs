@@ -32,16 +32,14 @@
             this.SubtitleLabel = new System.Windows.Forms.Label();
             this.TitleLabel = new System.Windows.Forms.Label();
             this.LogoPictureBox = new System.Windows.Forms.PictureBox();
+            this.SettingsButton = new System.Windows.Forms.Button();
             this.MainSplitContainer = new System.Windows.Forms.SplitContainer();
-            // Left panel controls
-            this.GroupLabel = new System.Windows.Forms.Label();
             this.GroupListBox = new System.Windows.Forms.ListBox();
             this.GroupButtonPanel = new System.Windows.Forms.Panel();
             this.AddGroupButton = new System.Windows.Forms.Button();
             this.EditGroupButton = new System.Windows.Forms.Button();
             this.DeleteGroupButton = new System.Windows.Forms.Button();
-            // Right panel controls
-            this.SelectedGroupLabel = new System.Windows.Forms.Label();
+            this.GroupLabel = new System.Windows.Forms.Label();
             this.AppListView = new System.Windows.Forms.ListView();
             this.IndexColumn = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.AppNameColumn = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
@@ -53,6 +51,7 @@
             this.LastStartColumn = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.LastStopColumn = ((System.Windows.Forms.ColumnHeader)(new System.Windows.Forms.ColumnHeader()));
             this.ButtonPanel = new System.Windows.Forms.Panel();
+            this.LogsButton = new System.Windows.Forms.Button();
             this.RefreshButton = new System.Windows.Forms.Button();
             this.StopAllButton = new System.Windows.Forms.Button();
             this.StartAllButton = new System.Windows.Forms.Button();
@@ -61,9 +60,11 @@
             this.DeleteButton = new System.Windows.Forms.Button();
             this.EditButton = new System.Windows.Forms.Button();
             this.AddButton = new System.Windows.Forms.Button();
-            this.LogsButton = new System.Windows.Forms.Button();
+            this.SelectedGroupLabel = new System.Windows.Forms.Label();
+            this.AppSubtitle = new System.Windows.Forms.Label();
             this.HeaderPanel.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.LogoPictureBox)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.MainSplitContainer)).BeginInit();
             this.MainSplitContainer.Panel1.SuspendLayout();
             this.MainSplitContainer.Panel2.SuspendLayout();
             this.MainSplitContainer.SuspendLayout();
@@ -74,6 +75,8 @@
             // HeaderPanel
             // 
             this.HeaderPanel.BackColor = System.Drawing.SystemColors.Control;
+            this.HeaderPanel.Controls.Add(this.SettingsButton);
+            this.HeaderPanel.Controls.Add(this.AppSubtitle);
             this.HeaderPanel.Controls.Add(this.SubtitleLabel);
             this.HeaderPanel.Controls.Add(this.TitleLabel);
             this.HeaderPanel.Controls.Add(this.LogoPictureBox);
@@ -93,9 +96,9 @@
             this.SubtitleLabel.Location = new System.Drawing.Point(182, 38);
             this.SubtitleLabel.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
             this.SubtitleLabel.Name = "SubtitleLabel";
-            this.SubtitleLabel.Size = new System.Drawing.Size(283, 12);
+            this.SubtitleLabel.Size = new System.Drawing.Size(196, 12);
             this.SubtitleLabel.TabIndex = 2;
-            this.SubtitleLabel.Text = "Prevents simultaneous application launches - LRA Reflow Sorter";
+            this.SubtitleLabel.Text = "Prevents simultaneous application launches";
             // 
             // TitleLabel
             // 
@@ -121,6 +124,21 @@
             this.LogoPictureBox.TabIndex = 0;
             this.LogoPictureBox.TabStop = false;
             // 
+            // SettingsButton
+            // 
+            this.SettingsButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.SettingsButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(52)))), ((int)(((byte)(73)))), ((int)(((byte)(94)))));
+            this.SettingsButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.SettingsButton.Font = new System.Drawing.Font("Segoe UI", 7F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.SettingsButton.ForeColor = System.Drawing.Color.White;
+            this.SettingsButton.Location = new System.Drawing.Point(994, 16);
+            this.SettingsButton.Name = "SettingsButton";
+            this.SettingsButton.Size = new System.Drawing.Size(75, 28);
+            this.SettingsButton.TabIndex = 4;
+            this.SettingsButton.Text = "Settings";
+            this.SettingsButton.UseVisualStyleBackColor = false;
+            this.SettingsButton.Click += new System.EventHandler(this.SettingsButton_Click);
+            // 
             // MainSplitContainer
             // 
             this.MainSplitContainer.Dock = System.Windows.Forms.DockStyle.Fill;
@@ -128,14 +146,14 @@
             this.MainSplitContainer.Location = new System.Drawing.Point(0, 60);
             this.MainSplitContainer.Name = "MainSplitContainer";
             // 
-            // MainSplitContainer.Panel1 - Group List
+            // MainSplitContainer.Panel1
             // 
             this.MainSplitContainer.Panel1.Controls.Add(this.GroupListBox);
             this.MainSplitContainer.Panel1.Controls.Add(this.GroupButtonPanel);
             this.MainSplitContainer.Panel1.Controls.Add(this.GroupLabel);
             this.MainSplitContainer.Panel1MinSize = 180;
             // 
-            // MainSplitContainer.Panel2 - App List
+            // MainSplitContainer.Panel2
             // 
             this.MainSplitContainer.Panel2.Controls.Add(this.AppListView);
             this.MainSplitContainer.Panel2.Controls.Add(this.ButtonPanel);
@@ -143,20 +161,6 @@
             this.MainSplitContainer.Size = new System.Drawing.Size(1084, 310);
             this.MainSplitContainer.SplitterDistance = 200;
             this.MainSplitContainer.TabIndex = 53;
-            // 
-            // GroupLabel
-            // 
-            this.GroupLabel.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(52)))), ((int)(((byte)(73)))), ((int)(((byte)(94)))));
-            this.GroupLabel.Dock = System.Windows.Forms.DockStyle.Top;
-            this.GroupLabel.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.GroupLabel.ForeColor = System.Drawing.Color.White;
-            this.GroupLabel.Location = new System.Drawing.Point(0, 0);
-            this.GroupLabel.Name = "GroupLabel";
-            this.GroupLabel.Padding = new System.Windows.Forms.Padding(8, 0, 0, 0);
-            this.GroupLabel.Size = new System.Drawing.Size(200, 28);
-            this.GroupLabel.TabIndex = 0;
-            this.GroupLabel.Text = "Groups";
-            this.GroupLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
             // GroupListBox
             // 
@@ -225,19 +229,19 @@
             this.DeleteGroupButton.UseVisualStyleBackColor = false;
             this.DeleteGroupButton.Click += new System.EventHandler(this.DeleteGroupButton_Click);
             // 
-            // SelectedGroupLabel
+            // GroupLabel
             // 
-            this.SelectedGroupLabel.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(44)))), ((int)(((byte)(62)))), ((int)(((byte)(80)))));
-            this.SelectedGroupLabel.Dock = System.Windows.Forms.DockStyle.Top;
-            this.SelectedGroupLabel.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.SelectedGroupLabel.ForeColor = System.Drawing.Color.White;
-            this.SelectedGroupLabel.Location = new System.Drawing.Point(0, 0);
-            this.SelectedGroupLabel.Name = "SelectedGroupLabel";
-            this.SelectedGroupLabel.Padding = new System.Windows.Forms.Padding(8, 0, 0, 0);
-            this.SelectedGroupLabel.Size = new System.Drawing.Size(880, 28);
-            this.SelectedGroupLabel.TabIndex = 0;
-            this.SelectedGroupLabel.Text = "Select a group to manage applications";
-            this.SelectedGroupLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            this.GroupLabel.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(52)))), ((int)(((byte)(73)))), ((int)(((byte)(94)))));
+            this.GroupLabel.Dock = System.Windows.Forms.DockStyle.Top;
+            this.GroupLabel.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.GroupLabel.ForeColor = System.Drawing.Color.White;
+            this.GroupLabel.Location = new System.Drawing.Point(0, 0);
+            this.GroupLabel.Name = "GroupLabel";
+            this.GroupLabel.Padding = new System.Windows.Forms.Padding(8, 0, 0, 0);
+            this.GroupLabel.Size = new System.Drawing.Size(200, 28);
+            this.GroupLabel.TabIndex = 0;
+            this.GroupLabel.Text = "Groups";
+            this.GroupLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
             // 
             // AppListView
             // 
@@ -328,104 +332,6 @@
             this.ButtonPanel.Size = new System.Drawing.Size(880, 50);
             this.ButtonPanel.TabIndex = 2;
             // 
-            // AddButton
-            // 
-            this.AddButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(41)))), ((int)(((byte)(128)))), ((int)(((byte)(185)))));
-            this.AddButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.AddButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.AddButton.ForeColor = System.Drawing.Color.White;
-            this.AddButton.Location = new System.Drawing.Point(8, 8);
-            this.AddButton.Name = "AddButton";
-            this.AddButton.Size = new System.Drawing.Size(88, 32);
-            this.AddButton.TabIndex = 0;
-            this.AddButton.Text = "Add App";
-            this.AddButton.UseVisualStyleBackColor = false;
-            this.AddButton.Click += new System.EventHandler(this.AddButton_Click);
-            // 
-            // EditButton
-            // 
-            this.EditButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
-            this.EditButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.EditButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.EditButton.ForeColor = System.Drawing.Color.White;
-            this.EditButton.Location = new System.Drawing.Point(100, 8);
-            this.EditButton.Name = "EditButton";
-            this.EditButton.Size = new System.Drawing.Size(88, 32);
-            this.EditButton.TabIndex = 1;
-            this.EditButton.Text = "Edit App";
-            this.EditButton.UseVisualStyleBackColor = false;
-            this.EditButton.Click += new System.EventHandler(this.EditButton_Click);
-            // 
-            // DeleteButton
-            // 
-            this.DeleteButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(57)))), ((int)(((byte)(43)))));
-            this.DeleteButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.DeleteButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.DeleteButton.ForeColor = System.Drawing.Color.White;
-            this.DeleteButton.Location = new System.Drawing.Point(192, 8);
-            this.DeleteButton.Name = "DeleteButton";
-            this.DeleteButton.Size = new System.Drawing.Size(88, 32);
-            this.DeleteButton.TabIndex = 2;
-            this.DeleteButton.Text = "Delete App";
-            this.DeleteButton.UseVisualStyleBackColor = false;
-            this.DeleteButton.Click += new System.EventHandler(this.DeleteButton_Click);
-            // 
-            // StartButton
-            // 
-            this.StartButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(46)))), ((int)(((byte)(204)))), ((int)(((byte)(113)))));
-            this.StartButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.StartButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.StartButton.ForeColor = System.Drawing.Color.White;
-            this.StartButton.Location = new System.Drawing.Point(296, 8);
-            this.StartButton.Name = "StartButton";
-            this.StartButton.Size = new System.Drawing.Size(88, 32);
-            this.StartButton.TabIndex = 3;
-            this.StartButton.Text = "Start";
-            this.StartButton.UseVisualStyleBackColor = false;
-            this.StartButton.Click += new System.EventHandler(this.StartButton_Click);
-            // 
-            // StopButton
-            // 
-            this.StopButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(231)))), ((int)(((byte)(76)))), ((int)(((byte)(60)))));
-            this.StopButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.StopButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.StopButton.ForeColor = System.Drawing.Color.White;
-            this.StopButton.Location = new System.Drawing.Point(388, 8);
-            this.StopButton.Name = "StopButton";
-            this.StopButton.Size = new System.Drawing.Size(88, 32);
-            this.StopButton.TabIndex = 4;
-            this.StopButton.Text = "Stop";
-            this.StopButton.UseVisualStyleBackColor = false;
-            this.StopButton.Click += new System.EventHandler(this.StopButton_Click);
-            // 
-            // StartAllButton
-            // 
-            this.StartAllButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(39)))), ((int)(((byte)(174)))), ((int)(((byte)(96)))));
-            this.StartAllButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.StartAllButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.StartAllButton.ForeColor = System.Drawing.Color.White;
-            this.StartAllButton.Location = new System.Drawing.Point(492, 8);
-            this.StartAllButton.Name = "StartAllButton";
-            this.StartAllButton.Size = new System.Drawing.Size(88, 32);
-            this.StartAllButton.TabIndex = 5;
-            this.StartAllButton.Text = "Start All";
-            this.StartAllButton.UseVisualStyleBackColor = false;
-            this.StartAllButton.Click += new System.EventHandler(this.StartAllButton_Click);
-            // 
-            // StopAllButton
-            // 
-            this.StopAllButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(57)))), ((int)(((byte)(43)))));
-            this.StopAllButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.StopAllButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.StopAllButton.ForeColor = System.Drawing.Color.White;
-            this.StopAllButton.Location = new System.Drawing.Point(584, 8);
-            this.StopAllButton.Name = "StopAllButton";
-            this.StopAllButton.Size = new System.Drawing.Size(88, 32);
-            this.StopAllButton.TabIndex = 6;
-            this.StopAllButton.Text = "Stop All";
-            this.StopAllButton.UseVisualStyleBackColor = false;
-            this.StopAllButton.Click += new System.EventHandler(this.StopAllButton_Click);
-            // 
             // LogsButton
             // 
             this.LogsButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(155)))), ((int)(((byte)(89)))), ((int)(((byte)(182)))));
@@ -454,6 +360,130 @@
             this.RefreshButton.UseVisualStyleBackColor = false;
             this.RefreshButton.Click += new System.EventHandler(this.RefreshButton_Click);
             // 
+            // StopAllButton
+            // 
+            this.StopAllButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(57)))), ((int)(((byte)(43)))));
+            this.StopAllButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.StopAllButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.StopAllButton.ForeColor = System.Drawing.Color.White;
+            this.StopAllButton.Location = new System.Drawing.Point(584, 8);
+            this.StopAllButton.Name = "StopAllButton";
+            this.StopAllButton.Size = new System.Drawing.Size(88, 32);
+            this.StopAllButton.TabIndex = 6;
+            this.StopAllButton.Text = "Stop All";
+            this.StopAllButton.UseVisualStyleBackColor = false;
+            this.StopAllButton.Click += new System.EventHandler(this.StopAllButton_Click);
+            // 
+            // StartAllButton
+            // 
+            this.StartAllButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(39)))), ((int)(((byte)(174)))), ((int)(((byte)(96)))));
+            this.StartAllButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.StartAllButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.StartAllButton.ForeColor = System.Drawing.Color.White;
+            this.StartAllButton.Location = new System.Drawing.Point(492, 8);
+            this.StartAllButton.Name = "StartAllButton";
+            this.StartAllButton.Size = new System.Drawing.Size(88, 32);
+            this.StartAllButton.TabIndex = 5;
+            this.StartAllButton.Text = "Start All";
+            this.StartAllButton.UseVisualStyleBackColor = false;
+            this.StartAllButton.Click += new System.EventHandler(this.StartAllButton_Click);
+            // 
+            // StopButton
+            // 
+            this.StopButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(231)))), ((int)(((byte)(76)))), ((int)(((byte)(60)))));
+            this.StopButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.StopButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.StopButton.ForeColor = System.Drawing.Color.White;
+            this.StopButton.Location = new System.Drawing.Point(388, 8);
+            this.StopButton.Name = "StopButton";
+            this.StopButton.Size = new System.Drawing.Size(88, 32);
+            this.StopButton.TabIndex = 4;
+            this.StopButton.Text = "Stop";
+            this.StopButton.UseVisualStyleBackColor = false;
+            this.StopButton.Click += new System.EventHandler(this.StopButton_Click);
+            // 
+            // StartButton
+            // 
+            this.StartButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(46)))), ((int)(((byte)(204)))), ((int)(((byte)(113)))));
+            this.StartButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.StartButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.StartButton.ForeColor = System.Drawing.Color.White;
+            this.StartButton.Location = new System.Drawing.Point(296, 8);
+            this.StartButton.Name = "StartButton";
+            this.StartButton.Size = new System.Drawing.Size(88, 32);
+            this.StartButton.TabIndex = 3;
+            this.StartButton.Text = "Start";
+            this.StartButton.UseVisualStyleBackColor = false;
+            this.StartButton.Click += new System.EventHandler(this.StartButton_Click);
+            // 
+            // DeleteButton
+            // 
+            this.DeleteButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(192)))), ((int)(((byte)(57)))), ((int)(((byte)(43)))));
+            this.DeleteButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.DeleteButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.DeleteButton.ForeColor = System.Drawing.Color.White;
+            this.DeleteButton.Location = new System.Drawing.Point(192, 8);
+            this.DeleteButton.Name = "DeleteButton";
+            this.DeleteButton.Size = new System.Drawing.Size(88, 32);
+            this.DeleteButton.TabIndex = 2;
+            this.DeleteButton.Text = "Delete App";
+            this.DeleteButton.UseVisualStyleBackColor = false;
+            this.DeleteButton.Click += new System.EventHandler(this.DeleteButton_Click);
+            // 
+            // EditButton
+            // 
+            this.EditButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
+            this.EditButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.EditButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.EditButton.ForeColor = System.Drawing.Color.White;
+            this.EditButton.Location = new System.Drawing.Point(100, 8);
+            this.EditButton.Name = "EditButton";
+            this.EditButton.Size = new System.Drawing.Size(88, 32);
+            this.EditButton.TabIndex = 1;
+            this.EditButton.Text = "Edit App";
+            this.EditButton.UseVisualStyleBackColor = false;
+            this.EditButton.Click += new System.EventHandler(this.EditButton_Click);
+            // 
+            // AddButton
+            // 
+            this.AddButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(41)))), ((int)(((byte)(128)))), ((int)(((byte)(185)))));
+            this.AddButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.AddButton.Font = new System.Drawing.Font("Segoe UI", 8F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.AddButton.ForeColor = System.Drawing.Color.White;
+            this.AddButton.Location = new System.Drawing.Point(8, 8);
+            this.AddButton.Name = "AddButton";
+            this.AddButton.Size = new System.Drawing.Size(88, 32);
+            this.AddButton.TabIndex = 0;
+            this.AddButton.Text = "Add App";
+            this.AddButton.UseVisualStyleBackColor = false;
+            this.AddButton.Click += new System.EventHandler(this.AddButton_Click);
+            // 
+            // SelectedGroupLabel
+            // 
+            this.SelectedGroupLabel.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(44)))), ((int)(((byte)(62)))), ((int)(((byte)(80)))));
+            this.SelectedGroupLabel.Dock = System.Windows.Forms.DockStyle.Top;
+            this.SelectedGroupLabel.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.SelectedGroupLabel.ForeColor = System.Drawing.Color.White;
+            this.SelectedGroupLabel.Location = new System.Drawing.Point(0, 0);
+            this.SelectedGroupLabel.Name = "SelectedGroupLabel";
+            this.SelectedGroupLabel.Padding = new System.Windows.Forms.Padding(8, 0, 0, 0);
+            this.SelectedGroupLabel.Size = new System.Drawing.Size(880, 28);
+            this.SelectedGroupLabel.TabIndex = 0;
+            this.SelectedGroupLabel.Text = "Select a group to manage applications";
+            this.SelectedGroupLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            // 
+            // AppSubtitle
+            // 
+            this.AppSubtitle.AutoSize = true;
+            this.AppSubtitle.Font = new System.Drawing.Font("Segoe UI", 7F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.AppSubtitle.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(100)))), ((int)(((byte)(100)))), ((int)(((byte)(100)))));
+            this.AppSubtitle.Location = new System.Drawing.Point(377, 38);
+            this.AppSubtitle.Margin = new System.Windows.Forms.Padding(4, 0, 4, 0);
+            this.AppSubtitle.Name = "AppSubtitle";
+            this.AppSubtitle.Size = new System.Drawing.Size(56, 12);
+            this.AppSubtitle.TabIndex = 3;
+            this.AppSubtitle.Text = "- ForStation";
+            // 
             // Main
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -470,6 +500,7 @@
             ((System.ComponentModel.ISupportInitialize)(this.LogoPictureBox)).EndInit();
             this.MainSplitContainer.Panel1.ResumeLayout(false);
             this.MainSplitContainer.Panel2.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)(this.MainSplitContainer)).EndInit();
             this.MainSplitContainer.ResumeLayout(false);
             this.GroupButtonPanel.ResumeLayout(false);
             this.ButtonPanel.ResumeLayout(false);
@@ -483,6 +514,7 @@
         private System.Windows.Forms.Label SubtitleLabel;
         private System.Windows.Forms.Label TitleLabel;
         private System.Windows.Forms.PictureBox LogoPictureBox;
+        private System.Windows.Forms.Button SettingsButton;
         private System.Windows.Forms.SplitContainer MainSplitContainer;
         private System.Windows.Forms.Label GroupLabel;
         private System.Windows.Forms.ListBox GroupListBox;
@@ -511,6 +543,7 @@
         private System.Windows.Forms.Button StopAllButton;
         private System.Windows.Forms.Button LogsButton;
         private System.Windows.Forms.Button RefreshButton;
+        private System.Windows.Forms.Label AppSubtitle;
     }
 }
 

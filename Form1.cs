@@ -17,6 +17,7 @@ namespace InstanceManager
     {
         private StorageService _storageService;
         private ProcessManager _processManager;
+        private SettingsService _settingsService;
         private Timer _statusUpdateTimer;
 
         // Tracks which apps were started/authorized through Instance Manager (or were running at startup)
@@ -43,6 +44,7 @@ namespace InstanceManager
             try
             {
                 InitializeServices();
+                UpdateStationNameDisplay();
                 TerminateAlreadyRunningApps();
                 SetupTimer();
                 LoadGroups();
@@ -75,6 +77,7 @@ namespace InstanceManager
         {
             _storageService = new StorageService();
             _processManager = new ProcessManager();
+            _settingsService = new SettingsService();
         }
 
         /// <summary>
@@ -1262,6 +1265,43 @@ namespace InstanceManager
             {
                 SimpleLogger.Error("LogsButton_Click @ Form1.cs", $"Error opening logs folder: {ex.Message}");
                 MessageBoxHelper.ShowError(this, $"Error opening logs folder: {ex.Message}");
+            }
+        }
+
+        private void UpdateStationNameDisplay()
+        {
+            string stationName = _settingsService.StationName;
+            if (!string.IsNullOrEmpty(stationName))
+            {
+                AppSubtitle.Text = $"- {stationName}";
+                AppSubtitle.Visible = true;
+            }
+            else
+            {
+                AppSubtitle.Text = "";
+                AppSubtitle.Visible = false;
+            }
+        }
+
+        private void SettingsButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                string stationName;
+                var result = InputDialog.Show(this, "Settings", "Enter station name:", _settingsService.StationName, out stationName);
+
+                if (result == DialogResult.OK)
+                {
+                    _settingsService.StationName = stationName;
+                    UpdateStationNameDisplay();
+                    SimpleLogger.Info("SettingsButton_Click @ Form1.cs", $"Station name updated to: {stationName}");
+                    MessageBoxHelper.ShowSuccess(this, "Station name updated successfully!");
+                }
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("SettingsButton_Click @ Form1.cs", $"Error updating settings: {ex.Message}");
+                MessageBoxHelper.ShowError(this, $"Error updating settings: {ex.Message}");
             }
         }
 
