@@ -15,6 +15,13 @@ namespace InstanceManager.Services
         private List<ManagedApplication> _applications;
         private List<ApplicationGroup> _groups;
 
+        // Dirty tracking to avoid writing to disk when nothing changed
+        private bool _appsDirty;
+        private bool _groupsDirty;
+        private DateTime _lastAppSave = DateTime.MinValue;
+        private DateTime _lastGroupSave = DateTime.MinValue;
+        private const int MinSaveIntervalSeconds = 10;
+
         public StorageService()
         {
             _storagePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "applications.json");
@@ -118,9 +125,36 @@ namespace InstanceManager.Services
 
         public void UpdateApplication(ManagedApplication app)
         {
+            UpdateApplicationInternal(app, forceSave: true);
+        }
+
+        /// <summary>
+        /// Updates only transient/runtime state (IsRunning, timestamps) without forcing an immediate disk save.
+        /// Use this for frequent timer-tick updates to avoid disk thrashing.
+        /// </summary>
+        public void UpdateApplicationTransient(ManagedApplication app)
+        {
+            UpdateApplicationInternal(app, forceSave: false);
+        }
+
+        private void UpdateApplicationInternal(ManagedApplication app, bool forceSave)
+        {
             var existingApp = _applications.FirstOrDefault(a => a.Index == app.Index);
             if (existingApp != null)
             {
+                // Track whether any persistent (non-transient) field actually changed
+                bool persistentChanged =
+                    existingApp.AppName != app.AppName ||
+                    existingApp.Directory != app.Directory ||
+                    existingApp.GroupId != app.GroupId ||
+                    existingApp.KeepOpen != app.KeepOpen ||
+                    existingApp.CrashCount != app.CrashCount ||
+                    existingApp.RetryCount != app.RetryCount ||
+                    existingApp.MaxRetries != app.MaxRetries ||
+                    existingApp.StartDelaySeconds != app.StartDelaySeconds ||
+                    existingApp.LastStart != app.LastStart ||
+                    existingApp.LastStop != app.LastStop;
+
                 existingApp.AppName = app.AppName;
                 existingApp.Directory = app.Directory;
                 existingApp.IsRunning = app.IsRunning;
@@ -132,8 +166,40 @@ namespace InstanceManager.Services
                 existingApp.RetryCount = app.RetryCount;
                 existingApp.MaxRetries = app.MaxRetries;
                 existingApp.StartDelaySeconds = app.StartDelaySeconds;
+
+                if (persistentChanged)
+                {
+                    _appsDirty = true;
+                }
+
+                // forceSave: always write to disk immediately (user-initiated actions)
+                // non-forceSave: throttled writes for timer-tick updates
+                if (forceSave)
+                {
+                    SaveApplications();
+                }
+                else if (_appsDirty && (DateTime.Now - _lastAppSave).TotalSeconds >= MinSaveIntervalSeconds)
+                {
+                    SaveApplications();
+                }
+
+                SimpleLogger.Debug("UpdateApplication @ StorageService.cs", $"Updated application: {app.AppName} (Index: {app.Index}, forceSave: {forceSave})");
+            }
+        }
+
+        /// <summary>
+        /// Flushes any pending dirty data to disk. Should be called periodically
+        /// and before application exit to ensure no data is lost.
+        /// </summary>
+        public void FlushPendingChanges()
+        {
+            if (_appsDirty)
+            {
                 SaveApplications();
-                SimpleLogger.Info("UpdateApplication @ StorageService.cs", $"Updated application: {app.AppName} (Index: {app.Index})");
+            }
+            if (_groupsDirty)
+            {
+                SaveGroups();
             }
         }
 
@@ -209,6 +275,8 @@ namespace InstanceManager.Services
             {
                 string json = SerializeGroups(_groups);
                 File.WriteAllText(_groupStoragePath, json);
+                _groupsDirty = false;
+                _lastGroupSave = DateTime.Now;
                 SimpleLogger.Debug("SaveGroups @ StorageService.cs", $"Saved {_groups.Count} groups to storage");
             }
             catch (Exception ex)
@@ -356,6 +424,8 @@ namespace InstanceManager.Services
             {
                 string json = SerializeApplications(_applications);
                 File.WriteAllText(_storagePath, json);
+                _appsDirty = false;
+                _lastAppSave = DateTime.Now;
                 SimpleLogger.Debug("SaveApplications @ StorageService.cs", $"Saved {_applications.Count} applications to storage");
             }
             catch (Exception ex)

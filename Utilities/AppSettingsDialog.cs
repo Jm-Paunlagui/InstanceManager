@@ -23,11 +23,24 @@ namespace InstanceManager
         private Button _okButton;
         private Button _cancelButton;
 
+        // Shared font instances to avoid creating duplicate Font objects
+        private Font _normalFont;
+        private Font _boldFont;
+        private Font _smallBoldFont;
+        private Font _buttonFont;
+
         public string NewDirectory { get { return _directoryTextBox.Text.Trim(); } }
 
         public EditAppDialog(ManagedApplication app)
         {
             _app = app;
+
+            // Create shared fonts once
+            _normalFont = new Font("AUMOVIO Screen", 9F);
+            _boldFont = new Font("AUMOVIO Screen", 9F, FontStyle.Bold);
+            _smallBoldFont = new Font("AUMOVIO Screen", 7F, FontStyle.Bold);
+            _buttonFont = new Font("AUMOVIO Screen", 8F, FontStyle.Bold);
+
             InitializeControls();
         }
 
@@ -39,7 +52,7 @@ namespace InstanceManager
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.StartPosition = FormStartPosition.CenterParent;
-            this.Font = new Font("AUMOVIO Screen", 9F);
+            this.Font = _normalFont;
 
             int labelX = 20;
             int controlX = 170;
@@ -52,7 +65,7 @@ namespace InstanceManager
                 Text = "Application Path",
                 Location = new Point(labelX, y),
                 AutoSize = true,
-                Font = new Font("AUMOVIO Screen", 9F, FontStyle.Bold)
+                Font = _boldFont
             };
             this.Controls.Add(dirSectionLabel);
 
@@ -63,7 +76,7 @@ namespace InstanceManager
                 Text = _app.Directory ?? "",
                 Location = new Point(labelX, y),
                 Size = new Size(280, 23),
-                Font = new Font("AUMOVIO Screen", 9F)
+                Font = _normalFont
             };
             _browseButton = new Button
             {
@@ -73,7 +86,7 @@ namespace InstanceManager
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(52, 152, 219),
                 ForeColor = Color.White,
-                Font = new Font("AUMOVIO Screen", 7F, FontStyle.Bold)
+                Font = _smallBoldFont
             };
             _browseButton.Click += BrowseButton_Click;
             _openPathButton = new Button
@@ -84,7 +97,7 @@ namespace InstanceManager
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(155, 89, 182),
                 ForeColor = Color.White,
-                Font = new Font("AUMOVIO Screen", 7F, FontStyle.Bold)
+                Font = _smallBoldFont
             };
             _openPathButton.Click += OpenPathButton_Click;
             this.Controls.Add(_directoryTextBox);
@@ -99,7 +112,7 @@ namespace InstanceManager
                 Text = "Crash Recovery Settings",
                 Location = new Point(labelX, y),
                 AutoSize = true,
-                Font = new Font("AUMOVIO Screen", 9F, FontStyle.Bold)
+                Font = _boldFont
             };
             this.Controls.Add(settingsSectionLabel);
 
@@ -174,7 +187,7 @@ namespace InstanceManager
                 Text = "Statistics",
                 Location = new Point(labelX, y),
                 AutoSize = true,
-                Font = new Font("AUMOVIO Screen", 9F, FontStyle.Bold)
+                Font = _boldFont
             };
             this.Controls.Add(statsSectionLabel);
 
@@ -192,7 +205,7 @@ namespace InstanceManager
                 Text = _app.CrashCount.ToString(),
                 Location = new Point(controlX, y + 2),
                 AutoSize = true,
-                Font = new Font("AUMOVIO Screen", 9F, FontStyle.Bold)
+                Font = _boldFont
             };
             _resetCrashButton = new Button
             {
@@ -202,7 +215,7 @@ namespace InstanceManager
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(243, 156, 18),
                 ForeColor = Color.White,
-                Font = new Font("AUMOVIO Screen", 7F, FontStyle.Bold)
+                Font = _smallBoldFont
             };
             _resetCrashButton.Click += (s, e) =>
             {
@@ -227,7 +240,7 @@ namespace InstanceManager
                 Text = $"{_app.RetryCount} / {_app.MaxRetries}",
                 Location = new Point(controlX, y + 2),
                 AutoSize = true,
-                Font = new Font("AUMOVIO Screen", 9F, FontStyle.Bold)
+                Font = _boldFont
             };
             _resetRetryButton = new Button
             {
@@ -237,7 +250,7 @@ namespace InstanceManager
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(243, 156, 18),
                 ForeColor = Color.White,
-                Font = new Font("AUMOVIO Screen", 7F, FontStyle.Bold)
+                Font = _smallBoldFont
             };
             _resetRetryButton.Click += (s, e) =>
             {
@@ -259,7 +272,7 @@ namespace InstanceManager
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(46, 204, 113),
                 ForeColor = Color.White,
-                Font = new Font("AUMOVIO Screen", 8F, FontStyle.Bold)
+                Font = _buttonFont
             };
             _okButton.Click += OkButton_Click;
 
@@ -272,7 +285,7 @@ namespace InstanceManager
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(192, 57, 43),
                 ForeColor = Color.White,
-                Font = new Font("AUMOVIO Screen", 8F, FontStyle.Bold)
+                Font = _buttonFont
             };
 
             this.Controls.Add(_okButton);
@@ -280,6 +293,18 @@ namespace InstanceManager
 
             this.AcceptButton = _okButton;
             this.CancelButton = _cancelButton;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                if (_normalFont != null) { _normalFont.Dispose(); _normalFont = null; }
+                if (_boldFont != null) { _boldFont.Dispose(); _boldFont = null; }
+                if (_smallBoldFont != null) { _smallBoldFont.Dispose(); _smallBoldFont = null; }
+                if (_buttonFont != null) { _buttonFont.Dispose(); _buttonFont = null; }
+            }
+            base.Dispose(disposing);
         }
 
         private void BrowseButton_Click(object sender, EventArgs e)

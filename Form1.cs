@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -453,14 +453,20 @@ namespace InstanceManager
                         continue;
                     }
 
+                    // Take a single process snapshot per app to avoid multiple GetProcessesByName calls
+                    var snapshot = _processManager.GetProcessSnapshot(app);
+                    bool isRunning = snapshot.HasWindowedProcess;
+
                     // Skip watchdog checks for apps the user intentionally stopped
                     if (_pendingStop.Contains(app.Index))
                     {
-                        bool stillRunning = _processManager.IsApplicationRunning(app);
-                        if (!stillRunning)
+                        if (!isRunning)
                         {
                             // Also clean up any lingering background processes
-                            _processManager.KillBackgroundProcesses(app);
+                            if (snapshot.HasBackgroundProcess)
+                            {
+                                _processManager.KillBackgroundProcesses(app);
+                            }
                             _pendingStop.Remove(app.Index);
                             if (item != null && item.SubItems[3].Text == "Running")
                             {
@@ -483,21 +489,19 @@ namespace InstanceManager
                     }
 
                     bool wasRunning = app.IsRunning;
-                    bool isRunning = _processManager.IsApplicationRunning(app);
 
                     // Detect background zombie processes (no window but process still alive)
                     // This handles apps like Excel that close their window but linger in the background
-                    if (!isRunning && wasRunning && _processManager.HasBackgroundProcess(app))
+                    if (!isRunning && wasRunning && snapshot.HasBackgroundProcess)
                     {
                         int killed = _processManager.KillBackgroundProcesses(app);
                         SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
                             $"'{app.AppName}' lost its window but had {killed} background process(es) - killed them");
 
-                        // Fall through to the "was running, now stopped" logic below
+                        // Re-snapshot after background kill to get fresh state
+                        snapshot = _processManager.GetProcessSnapshot(app);
+                        isRunning = snapshot.HasWindowedProcess;
                     }
-
-                    // Re-check after potential background kill
-                    isRunning = _processManager.IsApplicationRunning(app);
 
                     // Detect unauthorized external launch
                     if (isRunning && !wasRunning && !_authorizedApps.Contains(app.Index))
@@ -506,7 +510,7 @@ namespace InstanceManager
                         continue;
                     }
 
-                    // App was stopped externally (outside Instance Manager) — possible crash
+                    // App was stopped externally (outside Instance Manager) � possible crash
                     if (!isRunning && wasRunning)
                     {
                         _authorizedApps.Remove(app.Index);
@@ -519,7 +523,7 @@ namespace InstanceManager
                         {
                             app.CrashCount++;
                             app.RetryCount++;
-                            _storageService.UpdateApplication(app);
+                            _storageService.UpdateApplicationTransient(app);
 
                             // Check if max retries exhausted
                             if (app.RetryCount >= app.MaxRetries)
@@ -577,7 +581,7 @@ namespace InstanceManager
                         }
                         else
                         {
-                            _storageService.UpdateApplication(app);
+                            _storageService.UpdateApplicationTransient(app);
 
                             if (item != null)
                             {
@@ -596,25 +600,13 @@ namespace InstanceManager
                     if (app.IsRunning != isRunning)
                     {
                         app.IsRunning = isRunning;
-                        _storageService.UpdateApplication(app);
+                        _storageService.UpdateApplicationTransient(app);
                     }
 
-                    if (item != null)
-                    {
-                        string statusText = isRunning ? "Running" : "Stopped";
-                        if (item.SubItems[3].Text != statusText)
-                        {
-                            item.SubItems[3].Text = statusText;
-                            item.ForeColor = isRunning ? Color.Green : Color.Black;
-                        }
-
-                        item.SubItems[4].Text = app.GetKeepOpenDisplay();
-                        item.SubItems[5].Text = app.CrashCount.ToString();
-                        item.SubItems[6].Text = app.RetryCount.ToString();
-                        item.SubItems[7].Text = app.GetLastStartDisplay();
-                        item.SubItems[8].Text = app.GetLastStopDisplay();
-                    }
                 }
+
+                // Flush any throttled storage changes periodically
+                _storageService.FlushPendingChanges();
             }
             catch (Exception ex)
             {
@@ -663,7 +655,7 @@ namespace InstanceManager
 
                     app.LastStart = DateTime.Now;
                     app.IsRunning = true;
-                    _storageService.UpdateApplication(app);
+                    _storageService.UpdateApplicationTransient(app);
 
                     if (item != null)
                     {
@@ -1355,9 +1347,16 @@ namespace InstanceManager
                 _statusUpdateTimer = null;
             }
 
+            // Flush any pending data before closing
+            if (_storageService != null)
+            {
+                _storageService.FlushPendingChanges();
+            }
+
             base.OnFormClosing(e);
 
             SimpleLogger.Info("OnFormClosing @ Form1.cs", "Application closing");
+            SimpleLogger.Flush();
         }
     }
 }

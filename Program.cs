@@ -53,6 +53,7 @@ namespace InstanceManager
             }
             finally
             {
+                SimpleLogger.Flush();
                 if (_mutex != null)
                 {
                     _mutex.ReleaseMutex();

@@ -10,11 +10,16 @@ namespace InstanceManager.Utilities
         private TextBox inputTextBox;
         private Button okButton;
         private Button cancelButton;
+        private Font _normalFont;
+        private Font _buttonFont;
 
         public string InputValue { get { return inputTextBox.Text.Trim(); } }
 
         public InputDialog(string title, string prompt, string defaultValue)
         {
+            _normalFont = new Font("AUMOVIO Screen", 9F);
+            _buttonFont = new Font("AUMOVIO Screen", 8F, FontStyle.Bold);
+
             this.Text = title;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.StartPosition = FormStartPosition.CenterParent;
@@ -28,7 +33,7 @@ namespace InstanceManager.Utilities
                 Text = prompt,
                 Location = new Point(15, 15),
                 AutoSize = true,
-                Font = new Font("AUMOVIO Screen", 9F)
+                Font = _normalFont
             };
             this.Controls.Add(promptLabel);
 
@@ -36,7 +41,7 @@ namespace InstanceManager.Utilities
             {
                 Location = new Point(15, 40),
                 Size = new Size(335, 23),
-                Font = new Font("AUMOVIO Screen", 9F),
+                Font = _normalFont,
                 Text = defaultValue ?? ""
             };
             this.Controls.Add(inputTextBox);
@@ -50,7 +55,7 @@ namespace InstanceManager.Utilities
                 BackColor = Color.FromArgb(41, 128, 185),
                 FlatStyle = FlatStyle.Flat,
                 ForeColor = Color.White,
-                Font = new Font("AUMOVIO Screen", 8F, FontStyle.Bold)
+                Font = _buttonFont
             };
             this.Controls.Add(okButton);
 
@@ -67,6 +72,16 @@ namespace InstanceManager.Utilities
 
             this.AcceptButton = okButton;
             this.CancelButton = cancelButton;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                if (_normalFont != null) { _normalFont.Dispose(); _normalFont = null; }
+                if (_buttonFont != null) { _buttonFont.Dispose(); _buttonFont = null; }
+            }
+            base.Dispose(disposing);
         }
 
         public static DialogResult Show(IWin32Window owner, string title, string prompt, string defaultValue, out string result)

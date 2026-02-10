@@ -110,24 +110,39 @@ namespace InstanceManager.Utilities
 
         private void SetIcon(MessageBoxIcon icon)
         {
+            Icon systemIcon;
             switch (icon)
             {
-                case MessageBoxIcon.Information:
-                    iconPictureBox.Image = SystemIcons.Information.ToBitmap();
-                    break;
                 case MessageBoxIcon.Warning:
-                    iconPictureBox.Image = SystemIcons.Warning.ToBitmap();
+                    systemIcon = SystemIcons.Warning;
                     break;
                 case MessageBoxIcon.Error:
-                    iconPictureBox.Image = SystemIcons.Error.ToBitmap();
+                    systemIcon = SystemIcons.Error;
                     break;
                 case MessageBoxIcon.Question:
-                    iconPictureBox.Image = SystemIcons.Question.ToBitmap();
+                    systemIcon = SystemIcons.Question;
                     break;
                 default:
-                    iconPictureBox.Image = SystemIcons.Information.ToBitmap();
+                    systemIcon = SystemIcons.Information;
                     break;
             }
+            // ToBitmap() creates a new Bitmap that the PictureBox will own.
+            // It will be disposed when the PictureBox is disposed via the form.
+            iconPictureBox.Image = systemIcon.ToBitmap();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                // Dispose the bitmap created by ToBitmap() to prevent GDI handle leak
+                if (iconPictureBox != null && iconPictureBox.Image != null)
+                {
+                    iconPictureBox.Image.Dispose();
+                    iconPictureBox.Image = null;
+                }
+            }
+            base.Dispose(disposing);
         }
 
         public static DialogResult Show(Form owner, string message, string title, MessageBoxButtons buttons, MessageBoxIcon icon)
@@ -143,7 +158,7 @@ namespace InstanceManager.Utilities
                     // Ensure it stays within screen bounds
                     Screen screen = Screen.FromControl(owner);
                     if (x < screen.WorkingArea.Left) x = screen.WorkingArea.Left + 10;
-                    if (y < screen.WorkingArea.Top) x = screen.WorkingArea.Top + 10;
+                    if (y < screen.WorkingArea.Top) y = screen.WorkingArea.Top + 10;
                     if (x + msgBox.Width > screen.WorkingArea.Right) 
                         x = screen.WorkingArea.Right - msgBox.Width - 10;
                     if (y + msgBox.Height > screen.WorkingArea.Bottom) 
