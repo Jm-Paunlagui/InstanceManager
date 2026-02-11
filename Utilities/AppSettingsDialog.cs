@@ -3,9 +3,9 @@ using System.Drawing;
 using System.Windows.Forms;
 using System.IO;
 using System.Diagnostics;
-using InstanceManager.Models;
+using IntelligentMutexExecutionEnvironment.Models;
 
-namespace InstanceManager
+namespace IntelligentMutexExecutionEnvironment
 {
     public class EditAppDialog : Form
     {

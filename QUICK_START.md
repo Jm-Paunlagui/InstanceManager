@@ -4,303 +4,212 @@
 
 1. **Launch the Application**
    - Double-click `InstanceManager.exe`
-   - The application window will open in the **bottom-right corner** of the screen
-   - The list will be empty on first run
+   - The window opens in the **bottom-right corner** of the screen
+   - The group list and application list will be empty on first run
 
-2. **Add Your First Application**
-   - Click the **Add** button
-   - Browse to an executable file (e.g., `C:\Windows\System32\notepad.exe`)
-   - Click OK
-   - The application will appear in the list with Index 1, Status "Stopped", Last Start "Never", Last Stop "Never"
+2. **Set a Station Name** (optional)
+   - Click the **Settings** button
+   - Enter a station name (e.g., "Line 1 Station A")
+   - The name appears in the title bar subtitle
+
+3. **Create Your First Group**
+   - Click **Add Group**
+   - Enter a group name (e.g., "Production Apps")
+   - The group appears in the left panel and is auto-selected
+
+4. **Add Applications to the Group**
+   - With the group selected, click **Add**
+   - Browse to an executable file (e.g., `notepad.exe`)
+   - The application appears in the list with Status "Stopped"
 
 ---
 
-## Testing the Application
+## Basic Operations
 
-### Test 1: Start an Application
-1. Select "notepad" (or your added app) from the list
-2. Click **Start** button
-3. The application should launch
-4. Status column should show **"Running"** in green text
-5. **Last Start** column should show the current date and time
-6. Check logs: `logs\[today's date].log` for start event
+### Starting an Application
+1. Select an application from the list
+2. Click **Start**
+3. Status changes: **Starting...** (orange) ? **Running** (green)
+4. Last Start timestamp is recorded
 
-### Test 2: Duplicate Detection (Add)
-1. Click **Add** button
-2. Browse to the **same** application you just added (e.g., notepad.exe)
-3. Click OK
-4. You should see a warning: *"Application 'notepad' already exists in the management list"*
-5. Application should **NOT** be added again
-6. Check logs for duplicate detection warning
-
-### Test 3: Try Starting Again (Mutex Test)
-1. With the application still running, select it again
-2. Click **Start** button
-3. You should see message: *"notepad is already running!"*
-4. This proves the mutex functionality works
-
-### Test 4: Stop an Application
-1. Select the running application
-2. Click **Stop** button
+### Stopping an Application
+1. Select a running application
+2. Click **Stop**
 3. Confirm the action
-4. Application should close
-5. Status should change to **"Stopped"** in black text
-6. **Last Stop** column should show the current date and time
-7. Check logs for stop event
+4. Status changes: **Stopping...** (orange) ? **Stopped** (black)
+5. Last Stop timestamp is recorded
 
-### Test 5: Add Multiple Applications
-1. Add several different applications (e.g., calc.exe, mspaint.exe)
-2. Each should get a unique index (1, 2, 3, etc.)
-3. All are saved in `applications.json`
+### Start All / Stop All
+- **Start All**: Launches all stopped applications in the selected group
+  - If apps have startup delays, they launch sequentially with countdown timers
+- **Stop All**: Stops all running applications in the selected group
 
-### Test 6: Real-time Monitoring (External Stop)
-1. Start an application through Instance Manager
-2. Manually close it using Task Manager or its own close button
-3. Wait 2–3 seconds
-4. Instance Manager should automatically detect it stopped
-5. Status should update to **"Stopped"**
-6. **Last Stop** should be recorded automatically
-7. Check logs for: *"was stopped externally"*
-
-### Test 7: Unauthorized External Launch Detection ??
-> This is the core security feature — the **Authorized Process Watchdog**.
-
-1. Add an application to Instance Manager (e.g., notepad.exe)
-2. Make sure it is **not running** (Status = "Stopped")
-3. **Do NOT** click Start — instead, go to File Explorer and **double-click** the .exe directly
-4. Wait 2–3 seconds
-5. Instance Manager should:
-   - **Kill the process** automatically
-   - Show a warning: *"notepad was launched outside of Instance Manager and has been terminated."*
-6. Status remains **"Stopped"**
-7. Check logs for: *"Unauthorized launch detected"*
-
-### Test 8: Edit an Application
+### Editing an Application
 1. Select an application
-2. Click **Edit** button
-3. Browse to a different executable
-4. Click OK
-5. Application name and path should update
+2. Click **Edit**
+3. Change the executable path, toggle Keep Open, adjust delays, or reset counters
+4. Click OK to save
 
-### Test 9: Edit to Duplicate Prevention
-1. Add two different applications
-2. Select the first application
-3. Click **Edit** button
-4. Try to change it to the **same path** as the second application
-5. You should see a warning about duplicate
-6. Edit should be prevented
-
-### Test 10: Delete an Application
+### Deleting an Application
 1. Select an application
-2. Click **Delete** button
-3. Confirm deletion
-4. Application is removed from list (executable file remains on disk)
+2. Click **Delete**
+3. Confirm — the app is removed from management (the actual file is not deleted)
 
-### Test 11: Persistence
-1. Add some applications and start a few
-2. Close Instance Manager
-3. Reopen Instance Manager
-4. All your applications should still be in the list
-5. Running status should be accurately detected
-6. **Last Start** and **Last Stop** timestamps should be preserved
-7. Apps that were running before restart are marked as authorized (not killed)
+---
 
-### Test 12: Graceful Onboarding
-1. Start an application **before** launching Instance Manager (e.g., open notepad manually)
-2. Add that application to Instance Manager
-3. It should show as **"Running"** and should **NOT** be killed
-4. This proves graceful onboarding — apps running before Instance Manager are authorized
+## Group Management
+
+| Action | How |
+|--------|-----|
+| **Add Group** | Click "Add Group", enter name |
+| **Edit Group** | Select group, click "Edit Group", enter new name |
+| **Delete Group** | Select group, click "Delete Group" — running apps are stopped first |
+
+Groups organize applications logically. The watchdog monitors apps across **all** groups, not just the visible one.
+
+---
+
+## Keep Open (Auto-Restart)
+
+Configure per-application via the **Edit** dialog:
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **Keep Open** | Enable auto-restart on crash | Off |
+| **Start Delay** | Seconds to wait before restarting | 5 |
+| **Max Retries** | Maximum restart attempts before giving up | 3 |
+| **Startup Delay** | Seconds to wait between apps during Start All | 0 |
+
+### Crash Recovery Flow
+1. App crashes ? Status: **Restarting (5s)** with live countdown
+2. Countdown reaches 0 ? Status: **Starting...**
+3. App relaunches ? Status: **Starting...** ? **Running**
+4. If max retries exhausted ? Status: **Failed** (red)
+
+Reset crash/retry counters via the **Edit** dialog at any time.
+
+---
+
+## Status Column Reference
+
+| Status | Color | Meaning |
+|--------|-------|---------|
+| Stopped | Black | Not running |
+| Starting... | Orange | Launched, waiting for window |
+| Running | Green | Process window detected |
+| Stopping... | Orange | Shutdown in progress |
+| Restarting (Ns) | Orange | Crash restart countdown |
+| Starting... | Orange | Countdown finished, relaunching |
+| Waiting (Ns) | Orange | Sequential Start All delay |
+| Failed | Red | Max retries exhausted |
 
 ---
 
 ## ListView Columns
 
-| Column | Description |
-|--------|-------------|
-| **Index** | Auto-incremented ID |
-| **Application** | Name of the executable (without .exe) |
-| **Directory** | Full path to the executable |
-| **Status** | "Running" (green) or "Stopped" (black) |
-| **Last Start** | Timestamp of last start, or "Never" |
-| **Last Stop** | Timestamp of last stop, or "Never" |
+| # | Column | Description |
+|---|--------|-------------|
+| 0 | **Index** | Auto-incremented ID |
+| 1 | **Application** | Executable name (without .exe) |
+| 2 | **Directory** | Full path to the executable |
+| 3 | **Status** | Current state with color coding |
+| 4 | **Keep Open** | "Yes" or "No" |
+| 5 | **Crashes** | Total crash count |
+| 6 | **Retries** | Current retry count (resets on successful start) |
+| 7 | **Last Start** | Timestamp or "Never" |
+| 8 | **Last Stop** | Timestamp or "Never" |
 
 ---
 
-## Log File Example
+## Unauthorized Launch Detection
 
-After testing, check your log file at `logs\YYYY-MM-DD.log`:
+Instance Manager enforces that managed applications must be started through its interface:
 
+1. Add an application to Instance Manager
+2. If someone launches that `.exe` directly (double-click, shortcut, etc.)
+3. Within 5 seconds, Instance Manager:
+   - **Kills** the unauthorized process
+   - Shows a warning notification
+4. The status remains **Stopped**
+
+> **Note:** Applications already running when Instance Manager starts are **terminated** with a notification listing all affected apps.
+
+---
+
+## Testing Checklist
+
+### Basic Tests
+- [ ] Create a group and add an application
+- [ ] Start ? verify "Starting..." ? "Running" transition
+- [ ] Stop ? verify "Stopping..." ? "Stopped" transition
+- [ ] Start All / Stop All with multiple apps
+- [ ] Edit an application's path and settings
+- [ ] Delete an application
+- [ ] Delete a group (with running apps)
+
+### Watchdog Tests
+- [ ] Launch a managed app externally ? verify it gets killed
+- [ ] Close a running app via Task Manager ? verify status updates to "Stopped"
+- [ ] Start Instance Manager while a managed app is already running ? verify it gets terminated
+
+### Keep Open Tests
+- [ ] Enable Keep Open on an app, start it, then close it externally
+- [ ] Verify countdown appears: "Restarting (5s)" ? "Starting..." ? "Running"
+- [ ] Close it enough times to exhaust max retries ? verify "Failed" status
+- [ ] Reset retry count via Edit dialog ? verify app can restart again
+
+### Sequential Start All Tests
+- [ ] Set startup delays on multiple apps (e.g., 3s, 5s)
+- [ ] Click Start All ? verify apps launch one-by-one with "Waiting (Ns)" countdowns
+
+### Performance Tests
+- [ ] Add 10+ apps to a single group
+- [ ] Start several and monitor CPU in Task Manager ? should be < 1%
+- [ ] Memory should remain < 50 MB
+
+---
+
+## Log Files
+
+**Location:** `logs/YYYY-MM-DD.log`
+
+**Format:**
 ```
-[YOUR-PC/YourUser 192.168.1.100][2026-02-05 14:30:00][INFO][PID:12345][Main @ Program.cs] - InstanceManager application starting
-[YOUR-PC/YourUser 192.168.1.100][2026-02-05 14:30:01][INFO][PID:12345][DetectAlreadyRunningApps @ Form1.cs] - 'notepad' was already running at startup, marking as authorized
-[YOUR-PC/YourUser 192.168.1.100][2026-02-05 14:30:01][INFO][PID:12345][LoadApplications @ Form1.cs] - Loaded 3 applications
-[YOUR-PC/YourUser 192.168.1.100][2026-02-05 14:30:15][INFO][PID:12345][AddApplication @ StorageService.cs] - Added application: calc (Index: 4)
-[YOUR-PC/YourUser 192.168.1.100][2026-02-05 14:30:20][INFO][PID:12345][StartApplication @ ProcessManager.cs] - Successfully started calc (PID: 9876)
-[YOUR-PC/YourUser 192.168.1.100][2026-02-05 14:30:45][INFO][PID:12345][StopApplication @ ProcessManager.cs] - Gracefully stopped calc (PID: 9876)
-[YOUR-PC/YourUser 192.168.1.100][2026-02-05 14:31:10][WARN][PID:12345][HandleUnauthorizedLaunch @ Form1.cs] - Unauthorized launch detected for 'EXCEL' - killing process
-[YOUR-PC/YourUser 192.168.1.100][2026-02-05 14:31:10][WARN][PID:12345][HandleUnauthorizedLaunch @ Form1.cs] - User notified about unauthorized launch of 'EXCEL'
+[HOSTNAME/USER IP][2025-06-15 14:30:00][INFO][PID:12345][StartApplication @ ProcessManager.cs] - Successfully started notepad (PID: 9876)
+[HOSTNAME/USER IP][2025-06-15 14:30:05][WARN][PID:12345][HandleUnauthorizedLaunch @ Form1.cs] - Unauthorized launch detected for 'notepad' - killing process
+```
+
+**View logs in real-time:**
+```cmd
+powershell Get-Content -Path "logs\2025-06-15.log" -Wait -Tail 20
 ```
 
 ---
 
-## JSON Storage Example
+## Data Files
 
-Check `applications.json`:
+| File | Content |
+|------|---------|
+| `applications.json` | All managed applications with settings and timestamps |
+| `groups.json` | Group definitions |
+| `settings.json` | Station name |
+| `logs/*.log` | Daily log files (auto-cleaned after 30 days) |
 
-```json
-[
-  {
-    "Index": 1,
-    "AppName": "DryCabinet",
-    "Directory": "D:\\Projects\\Desktop\\DryCabinet\\bin\\Release\\DryCabinet.exe",
-    "AddedDate": "2026-02-05T16:00:00",
-    "IsRunning": false,
-    "LastStart": "2026-02-05T16:05:30",
-    "LastStop": "2026-02-05T16:10:45"
-  },
-  {
-    "Index": 2,
-    "AppName": "EXCEL",
-    "Directory": "C:\\Program Files (x86)\\Microsoft Office\\root\\Office16\\EXCEL.EXE",
-    "AddedDate": "2026-02-05T17:16:20",
-    "IsRunning": false,
-    "LastStart": "2026-02-05T17:16:25",
-    "LastStop": null
-  }
-]
-```
-
----
-
-## Performance Testing
-
-### CPU Usage Test
-1. Add 5–10 applications
-2. Start several of them
-3. Open Task Manager
-4. Check CPU usage of `InstanceManager.exe`
-5. Should be **< 1%** (mostly 0%) with 2-second status updates
-
-### Memory Test
-1. Leave Instance Manager running for an extended period
-2. Monitor memory usage in Task Manager
-3. Should remain stable (**< 50 MB** typically)
-
-### Watchdog Responsiveness Test
-1. Add a managed application
-2. Launch it externally (double-click)
-3. Measure time until Instance Manager kills it
-4. Should be **within 2 seconds**
+All files are created automatically. Delete any file to reset that data.
 
 ---
 
 ## Troubleshooting
 
-### Application Won't Start
-- Check if file path is correct (Edit the application)
-- Ensure the executable file exists
-- Check logs for error messages
-- Verify file permissions
-
-### Application Won't Stop
-- Check logs for "Force killed" message
-- Application might have been closed externally
-- Click Refresh to update status
-
-### Unauthorized Launch Not Detected
-- Ensure the application is in the managed list
-- Ensure Instance Manager is running
-- Wait up to 2 seconds for the timer tick
-- Check logs for watchdog activity
-
-### "Illegal characters in path" Error
-- This was fixed — the JSON deserializer now properly unescapes `\\` to `\`
-- If you still see this, delete `applications.json` and re-add your applications
-
-### Logs Not Creating
-- Verify write permissions in application directory
-- Check if `logs/` folder exists
-- Manually create `logs/` folder if needed
-
-### Status Not Updating
-- Wait 2–3 seconds for timer to tick
-- Click Refresh button to force update
-- Check if application name matches process name
-
-### MessageBox Appearing in Center of Screen
-- Should no longer happen — CustomMessageBox is centered on the form
-- If it does, check that `MessageBoxHelper` is being used instead of `MessageBox.Show`
-
----
-
-## Advanced Usage
-
-### Command Prompt Monitoring
-```cmd
-# View logs in real-time
-powershell Get-Content -Path "logs\2026-02-05.log" -Wait -Tail 10
-
-# Check if process is running
-tasklist | findstr notepad
-
-# View JSON data
-type applications.json
-```
-
-### Stress Test
-1. Add 20+ applications
-2. Start 10–15 simultaneously through Instance Manager
-3. Monitor performance (CPU < 1%, Memory < 50 MB)
-4. Try launching some externally — they should be killed
-5. Stop all
-6. Verify all logs were written correctly
-
----
-
-## LRA Specific Testing
-
-For your LRA reflow sorter scenario:
-
-1. Add your production application to Instance Manager
-2. Set Instance Manager to start on Windows startup
-3. Only use Instance Manager to launch the application
-4. If anyone tries to launch the app directly, it will be **automatically killed**
-5. Monitor logs for any unauthorized launch attempts
-6. Verify that only one instance runs at a time
-7. Check Last Start / Last Stop timestamps for audit trail
-
----
-
-## Expected Behavior
-
-? **Should Work:**
-- Prevent multiple instances of same application
-- Detect and kill applications launched outside Instance Manager
-- Real-time status monitoring (2-second interval)
-- Persistent storage across restarts (including timestamps)
-- Graceful and force shutdown
-- Comprehensive logging with machine identifier
-- Minimal CPU/memory impact
-- Duplicate detection on Add and Edit
-- MessageBox dialogs centered on form
-- Form positioned in bottom-right corner
-
-?? **Known Limitations:**
-- Cannot manage applications requiring elevated permissions (Run as Administrator)
-- 2-second delay for unauthorized launch detection (timer interval)
-- Basic process name matching (won't detect renamed executables)
-- MessageBox dialogs are custom — not native Windows dialogs
-
----
-
-## Support
-
-For issues or questions:
-1. Check logs at `logs/YYYY-MM-DD.log` first
-2. Verify application paths in the list
-3. Test with simple applications (notepad, calc) before production apps
-4. Review `README.md` for architecture details
-5. Review `IMPLEMENTATION_SUMMARY.md` for full technical documentation
+| Problem | Solution |
+|---------|----------|
+| App won't start | Check file path in Edit dialog; verify the .exe exists |
+| App won't stop | Check logs for errors; app may have already closed externally |
+| Status stuck on "Starting..." | Wait for the 10-second grace period; check if the app creates a window |
+| Unauthorized launch not detected | Wait up to 5 seconds; ensure the app is in the managed list |
+| "Failed" status won't clear | Edit the app and reset the retry count |
+| Logs not appearing | Check write permissions in the application directory |
+| Station name not saving | Check write permissions for `settings.json` |
 
 ---
 

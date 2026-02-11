@@ -1,6 +1,6 @@
 using System;
 
-namespace InstanceManager.Models
+namespace IntelligentMutexExecutionEnvironment.Models
 {
     [Serializable]
     public class ManagedApplication

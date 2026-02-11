@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-namespace InstanceManager.Utilities
+namespace IntelligentMutexExecutionEnvironment.Utilities
 {
     public static class SimpleLogger
     {

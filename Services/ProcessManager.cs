@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.IO;
-using InstanceManager.Models;
-using InstanceManager.Utilities;
+using IntelligentMutexExecutionEnvironment.Models;
+using IntelligentMutexExecutionEnvironment.Utilities;
 
-namespace InstanceManager.Services
+namespace IntelligentMutexExecutionEnvironment.Services
 {
     public class ProcessManager
     {

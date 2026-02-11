@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace InstanceManager.Models
+namespace IntelligentMutexExecutionEnvironment.Models
 {
     [Serializable]
     public class ApplicationGroup

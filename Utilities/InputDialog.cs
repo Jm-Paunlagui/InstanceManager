@@ -2,7 +2,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace InstanceManager.Utilities
+namespace IntelligentMutexExecutionEnvironment.Utilities
 {
     public class InputDialog : Form
     {

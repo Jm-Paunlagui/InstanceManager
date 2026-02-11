@@ -7,11 +7,11 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using System.IO;
-using InstanceManager.Models;
-using InstanceManager.Services;
-using InstanceManager.Utilities;
+using IntelligentMutexExecutionEnvironment.Models;
+using IntelligentMutexExecutionEnvironment.Services;
+using IntelligentMutexExecutionEnvironment.Utilities;
 
-namespace InstanceManager
+namespace IntelligentMutexExecutionEnvironment
 {
     public partial class Main : Form
     {

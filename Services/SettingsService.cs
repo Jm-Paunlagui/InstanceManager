@@ -1,9 +1,9 @@
 using System;
 using System.IO;
 using System.Text;
-using InstanceManager.Utilities;
+using IntelligentMutexExecutionEnvironment.Utilities;
 
-namespace InstanceManager.Services
+namespace IntelligentMutexExecutionEnvironment.Services
 {
     public class SettingsService
     {

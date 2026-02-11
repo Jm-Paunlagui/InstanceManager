@@ -1,4 +1,4 @@
-﻿namespace InstanceManager
+﻿namespace IntelligentMutexExecutionEnvironment
 {
     partial class Main
     {
@@ -28,6 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Main));
             this.HeaderPanel = new System.Windows.Forms.Panel();
             this.SettingsButton = new System.Windows.Forms.Button();
             this.AppSubtitle = new System.Windows.Forms.Label();
@@ -66,6 +67,7 @@
             this.LogsButton = new System.Windows.Forms.Button();
             this.RefreshButton = new System.Windows.Forms.Button();
             this.SelectedGroupLabel = new System.Windows.Forms.Label();
+            this.UserGuideButton = new System.Windows.Forms.Button();
             this.HeaderPanel.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.LogoPictureBox)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.MainSplitContainer)).BeginInit();
@@ -83,6 +85,7 @@
             // HeaderPanel
             // 
             this.HeaderPanel.BackColor = System.Drawing.SystemColors.Control;
+            this.HeaderPanel.Controls.Add(this.UserGuideButton);
             this.HeaderPanel.Controls.Add(this.SettingsButton);
             this.HeaderPanel.Controls.Add(this.AppSubtitle);
             this.HeaderPanel.Controls.Add(this.SubtitleLabel);
@@ -93,7 +96,7 @@
             this.HeaderPanel.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             this.HeaderPanel.Name = "HeaderPanel";
             this.HeaderPanel.Padding = new System.Windows.Forms.Padding(10, 8, 10, 8);
-            this.HeaderPanel.Size = new System.Drawing.Size(1084, 60);
+            this.HeaderPanel.Size = new System.Drawing.Size(1131, 60);
             this.HeaderPanel.TabIndex = 52;
             // 
             // SettingsButton
@@ -103,7 +106,7 @@
             this.SettingsButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.SettingsButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.SettingsButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
-            this.SettingsButton.Location = new System.Drawing.Point(994, 16);
+            this.SettingsButton.Location = new System.Drawing.Point(1041, 16);
             this.SettingsButton.Name = "SettingsButton";
             this.SettingsButton.Size = new System.Drawing.Size(75, 28);
             this.SettingsButton.TabIndex = 4;
@@ -150,7 +153,7 @@
             // LogoPictureBox
             // 
             this.LogoPictureBox.Dock = System.Windows.Forms.DockStyle.Left;
-            this.LogoPictureBox.Image = global::InstanceManager.Properties.Resources.Logo;
+            this.LogoPictureBox.Image = global::IntelligentMutexExecutionEnvironment.Properties.Resources.Logo;
             this.LogoPictureBox.Location = new System.Drawing.Point(10, 8);
             this.LogoPictureBox.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             this.LogoPictureBox.Name = "LogoPictureBox";
@@ -178,7 +181,7 @@
             this.MainSplitContainer.Panel2.Controls.Add(this.AppListView);
             this.MainSplitContainer.Panel2.Controls.Add(this.ButtonPanel);
             this.MainSplitContainer.Panel2.Controls.Add(this.SelectedGroupLabel);
-            this.MainSplitContainer.Size = new System.Drawing.Size(1084, 330);
+            this.MainSplitContainer.Size = new System.Drawing.Size(1131, 340);
             this.MainSplitContainer.SplitterDistance = 200;
             this.MainSplitContainer.TabIndex = 53;
             // 
@@ -190,7 +193,7 @@
             this.GroupListBox.ItemHeight = 16;
             this.GroupListBox.Location = new System.Drawing.Point(0, 28);
             this.GroupListBox.Name = "GroupListBox";
-            this.GroupListBox.Size = new System.Drawing.Size(200, 262);
+            this.GroupListBox.Size = new System.Drawing.Size(200, 272);
             this.GroupListBox.TabIndex = 1;
             this.GroupListBox.SelectedIndexChanged += new System.EventHandler(this.GroupListBox_SelectedIndexChanged);
             // 
@@ -201,7 +204,7 @@
             this.GroupButtonPanel.Controls.Add(this.EditGroupButton);
             this.GroupButtonPanel.Controls.Add(this.DeleteGroupButton);
             this.GroupButtonPanel.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.GroupButtonPanel.Location = new System.Drawing.Point(0, 290);
+            this.GroupButtonPanel.Location = new System.Drawing.Point(0, 300);
             this.GroupButtonPanel.Name = "GroupButtonPanel";
             this.GroupButtonPanel.Padding = new System.Windows.Forms.Padding(4);
             this.GroupButtonPanel.Size = new System.Drawing.Size(200, 40);
@@ -283,7 +286,7 @@
             this.AppListView.Location = new System.Drawing.Point(0, 28);
             this.AppListView.MultiSelect = false;
             this.AppListView.Name = "AppListView";
-            this.AppListView.Size = new System.Drawing.Size(880, 232);
+            this.AppListView.Size = new System.Drawing.Size(927, 242);
             this.AppListView.TabIndex = 1;
             this.AppListView.UseCompatibleStateImageBehavior = false;
             this.AppListView.View = System.Windows.Forms.View.Details;
@@ -341,10 +344,10 @@
             this.ButtonPanel.Controls.Add(this.GroupActionsGroupBox);
             this.ButtonPanel.Controls.Add(this.ToolsGroupBox);
             this.ButtonPanel.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.ButtonPanel.Location = new System.Drawing.Point(0, 260);
+            this.ButtonPanel.Location = new System.Drawing.Point(0, 270);
             this.ButtonPanel.Name = "ButtonPanel";
             this.ButtonPanel.Padding = new System.Windows.Forms.Padding(5);
-            this.ButtonPanel.Size = new System.Drawing.Size(880, 70);
+            this.ButtonPanel.Size = new System.Drawing.Size(927, 70);
             this.ButtonPanel.TabIndex = 2;
             // 
             // ManageAppsGroupBox
@@ -539,18 +542,34 @@
             this.SelectedGroupLabel.Location = new System.Drawing.Point(0, 0);
             this.SelectedGroupLabel.Name = "SelectedGroupLabel";
             this.SelectedGroupLabel.Padding = new System.Windows.Forms.Padding(8, 0, 0, 0);
-            this.SelectedGroupLabel.Size = new System.Drawing.Size(880, 28);
+            this.SelectedGroupLabel.Size = new System.Drawing.Size(927, 28);
             this.SelectedGroupLabel.TabIndex = 0;
             this.SelectedGroupLabel.Text = "Select a group to manage applications";
             this.SelectedGroupLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            // 
+            // UserGuideButton
+            // 
+            this.UserGuideButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.UserGuideButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(224)))), ((int)(((byte)(192)))));
+            this.UserGuideButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.UserGuideButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.UserGuideButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
+            this.UserGuideButton.Location = new System.Drawing.Point(952, 16);
+            this.UserGuideButton.Name = "UserGuideButton";
+            this.UserGuideButton.Size = new System.Drawing.Size(83, 28);
+            this.UserGuideButton.TabIndex = 5;
+            this.UserGuideButton.Text = "User Guide";
+            this.UserGuideButton.UseVisualStyleBackColor = false;
             // 
             // Main
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(1084, 390);
+            this.BackgroundImageLayout = System.Windows.Forms.ImageLayout.None;
+            this.ClientSize = new System.Drawing.Size(1131, 400);
             this.Controls.Add(this.MainSplitContainer);
             this.Controls.Add(this.HeaderPanel);
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Name = "Main";
             this.StartPosition = System.Windows.Forms.FormStartPosition.Manual;
             this.Text = "Local MA";
@@ -612,6 +631,7 @@
         private System.Windows.Forms.Button LogsButton;
         private System.Windows.Forms.Button RefreshButton;
         private System.Windows.Forms.Label AppSubtitle;
+        private System.Windows.Forms.Button UserGuideButton;
     }
 }
 

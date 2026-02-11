@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Windows.Forms;
-using InstanceManager.Utilities;
+using IntelligentMutexExecutionEnvironment.Utilities;
 
-namespace InstanceManager
+namespace IntelligentMutexExecutionEnvironment
 {
     internal static class Program
     {
@@ -19,10 +19,11 @@ namespace InstanceManager
         {
             // Ensure only one instance of Instance Manager is running
             bool createdNew;
-            _mutex = new Mutex(true, "Global\\InstanceManager_SingleInstance_Mutex", out createdNew);
+            _mutex = new Mutex(true, "Global\\IntelligentMutexExecutionEnvironment_SingleInstance_Mutex", out createdNew);
             if (!createdNew)
             {
-                MessageBox.Show("Instance Manager is already running.", "Instance Manager",
+                MessageBox.Show("Intelligent Mutex Execution Environment is already running.",
+                    "Intelligent Mutex Execution Environment",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
@@ -36,7 +37,7 @@ namespace InstanceManager
                 // Catch unhandled non-UI thread exceptions
                 AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
 
-                SimpleLogger.Info("Main @ Program.cs", "InstanceManager application starting");
+                SimpleLogger.Info("Main @ Program.cs", "IntelligentMutexExecutionEnvironment application starting");
 
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
@@ -44,7 +45,7 @@ namespace InstanceManager
                 SimpleLogger.Info("Main @ Program.cs", "Running main form");
                 Application.Run(new Main());
                 
-                SimpleLogger.Info("Main @ Program.cs", "InstanceManager application terminated");
+                SimpleLogger.Info("Main @ Program.cs", "IntelligentMutexExecutionEnvironment application terminated");
             }
             catch (Exception ex)
             {

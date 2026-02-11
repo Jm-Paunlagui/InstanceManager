@@ -2,14 +2,11 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-// General Information about an assembly is controlled through the following
-// set of attributes. Change these attribute values to modify the information
-// associated with an assembly.
-[assembly: AssemblyTitle("InstanceManager")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyTitle("IntelligentMutexExecutionEnvironment")]
+[assembly: AssemblyDescription("Prevents simultaneous application launches")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Aumovio SE")]
-[assembly: AssemblyProduct("InstanceManager")]
+[assembly: AssemblyProduct("IntelligentMutexExecutionEnvironment")]
 [assembly: AssemblyCopyright("Copyright © Aumovio SE 2026")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
