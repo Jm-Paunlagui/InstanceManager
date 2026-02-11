@@ -31,14 +31,33 @@ namespace InstanceManager.Services
         {
             try
             {
+                string json = null;
+
                 if (File.Exists(_settingsPath))
                 {
-                    string json = File.ReadAllText(_settingsPath);
-                    if (!string.IsNullOrEmpty(json))
+                    json = File.ReadAllText(_settingsPath);
+                }
+
+                // Fall back to temp file if primary is missing/empty (interrupted save)
+                if (string.IsNullOrEmpty(json) || json.Trim().Length < 2)
+                {
+                    string tempPath = _settingsPath + ".tmp";
+                    if (File.Exists(tempPath))
                     {
-                        _stationName = ParseStationName(json);
-                        SimpleLogger.Info("Load @ SettingsService.cs", $"Loaded station name: {_stationName}");
+                        json = File.ReadAllText(tempPath);
+                        if (!string.IsNullOrEmpty(json) && json.Trim().Length >= 2)
+                        {
+                            SimpleLogger.Warn("Load @ SettingsService.cs", "Recovered settings from temp file");
+                            try { File.Copy(tempPath, _settingsPath, true); }
+                            catch { /* non-critical */ }
+                        }
                     }
+                }
+
+                if (!string.IsNullOrEmpty(json))
+                {
+                    _stationName = ParseStationName(json);
+                    SimpleLogger.Info("Load @ SettingsService.cs", $"Loaded station name: {_stationName}");
                 }
                 else
                 {
@@ -59,7 +78,18 @@ namespace InstanceManager.Services
                 sb.AppendLine("{");
                 sb.AppendLine($"  \"StationName\": \"{EscapeJson(_stationName)}\"");
                 sb.AppendLine("}");
-                File.WriteAllText(_settingsPath, sb.ToString());
+
+                // Write to temp file first, then replace to avoid corruption on crash
+                string tempPath = _settingsPath + ".tmp";
+                File.WriteAllText(tempPath, sb.ToString());
+
+                if (File.Exists(_settingsPath))
+                {
+                    File.Delete(_settingsPath);
+                }
+
+                File.Move(tempPath, _settingsPath);
+
                 SimpleLogger.Info("Save @ SettingsService.cs", $"Saved station name: {_stationName}");
             }
             catch (Exception ex)

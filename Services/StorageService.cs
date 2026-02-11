@@ -729,18 +729,36 @@ namespace InstanceManager.Services
         private void WriteFileAtomically(string targetPath, string content)
         {
             string tempPath = targetPath + ".tmp";
-            File.WriteAllText(tempPath, content);
-            // File.Replace is not available on all .NET 4.0 configurations without the target existing,
-            // so use a delete-then-move approach with backup
             string backupPath = targetPath + ".bak";
+
+            // Write new content to temp file
+            File.WriteAllText(tempPath, content, Encoding.UTF8);
+
             if (File.Exists(targetPath))
             {
-                // Keep a backup in case move fails
+                // Create backup of current file
                 if (File.Exists(backupPath))
-                    File.Delete(backupPath);
-                File.Move(targetPath, backupPath);
+                {
+                    try { File.Delete(backupPath); }
+                    catch { /* non-critical */ }
+                }
+
+                try
+                {
+                    File.Copy(targetPath, backupPath, true);
+                }
+                catch (Exception ex)
+                {
+                    SimpleLogger.Warn("WriteFileAtomically @ StorageService.cs",
+                        $"Could not create backup for {targetPath}: {ex.Message}");
+                }
+
+                // Delete the original and move temp into place
+                File.Delete(targetPath);
             }
+
             File.Move(tempPath, targetPath);
+
             // Clean up backup on success
             if (File.Exists(backupPath))
             {

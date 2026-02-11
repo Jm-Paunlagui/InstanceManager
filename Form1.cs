@@ -37,6 +37,9 @@ namespace InstanceManager
         private Dictionary<int, DateTime> _pendingRestart = new Dictionary<int, DateTime>();
         // Tracks apps that have exhausted max retries and should remain in "Failed" state
         private HashSet<int> _failedApps = new HashSet<int>();
+        // Tracks apps that are pending sequential startup launch (Start All with delays)
+        // so the status update timer doesn't overwrite their countdown text
+        private HashSet<int> _pendingSequentialStart = new HashSet<int>();
 
         public Main()
         {
@@ -83,6 +86,8 @@ namespace InstanceManager
         /// <summary>
         /// On startup, terminate any managed apps that were already running
         /// since they were not launched through Instance Manager.
+        /// Also resets stale runtime state (IsRunning, RetryCount) for all apps
+        /// to prevent false crash detections and accumulated retry counts from previous sessions.
         /// </summary>
         private void TerminateAlreadyRunningApps()
         {
@@ -103,13 +108,21 @@ namespace InstanceManager
 
                         _processManager.StopApplication(app);
 
-                        app.LastStop = DateTime.Now;
-                        app.IsRunning = false;
-                        _storageService.UpdateApplication(app);
+                        _storageService.UpdateApplicationFields(app.Index, isRunning: false, lastStop: DateTime.Now, retryCount: 0);
 
                         terminatedApps.Add(app.AppName ?? "(unknown)");
                     }
+                    else
+                    {
+                        // Reset stale runtime state from previous session
+                        // IsRunning may be true if Instance Manager was closed while the app was running,
+                        // and RetryCount may be non-zero from previous crash recovery attempts
+                        _storageService.UpdateApplicationFields(app.Index, isRunning: false, retryCount: 0);
+                    }
                 }
+
+                // Flush the changes immediately since this is a one-time startup operation
+                _storageService.FlushPendingChanges();
 
                 if (terminatedApps.Count > 0)
                 {
@@ -468,11 +481,16 @@ namespace InstanceManager
                                 _processManager.KillBackgroundProcesses(app);
                             }
                             _pendingStop.Remove(app.Index);
-                            if (item != null && item.SubItems[3].Text == "Running")
+                            if (item != null)
                             {
                                 item.SubItems[3].Text = "Stopped";
                                 item.ForeColor = Color.Black;
                             }
+                        }
+                        else if (item != null)
+                        {
+                            item.SubItems[3].Text = "Stopping";
+                            item.ForeColor = Color.DarkOrange;
                         }
                         continue;
                     }
@@ -487,6 +505,10 @@ namespace InstanceManager
                         }
                         continue;
                     }
+
+                    // Skip status updates for apps waiting in sequential Start All
+                    if (_pendingSequentialStart.Contains(app.Index))
+                        continue;
 
                     bool wasRunning = app.IsRunning;
 
@@ -516,6 +538,8 @@ namespace InstanceManager
                         _authorizedApps.Remove(app.Index);
                         _notifiedUnauthorized.Remove(app.Index);
 
+                        DateTime stopTime = DateTime.Now;
+
                         // If KeepOpen is enabled, treat this as a crash and schedule restart
                         if (app.KeepOpen)
                         {
@@ -531,14 +555,14 @@ namespace InstanceManager
                                 _failedApps.Add(app.Index); // Mark as failed permanently
 
                                 _storageService.UpdateApplicationFields(app.Index, isRunning: false,
-                                    lastStop: DateTime.Now, crashCount: newCrashCount, retryCount: newRetryCount);
+                                    lastStop: stopTime, crashCount: newCrashCount, retryCount: newRetryCount);
 
                                 if (item != null)
                                 {
                                     item.SubItems[3].Text = "Failed";
                                     item.SubItems[5].Text = newCrashCount.ToString();
                                     item.SubItems[6].Text = newRetryCount.ToString();
-                                    item.SubItems[8].Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                                    item.SubItems[8].Text = stopTime.ToString("yyyy-MM-dd HH:mm:ss");
                                     item.ForeColor = Color.Red;
 
                                     var tagApp = item.Tag as ManagedApplication;
@@ -546,7 +570,7 @@ namespace InstanceManager
                                     {
                                         tagApp.CrashCount = newCrashCount;
                                         tagApp.RetryCount = newRetryCount;
-                                        tagApp.LastStop = DateTime.Now;
+                                        tagApp.LastStop = stopTime;
                                         tagApp.IsRunning = false;
                                     }
                                 }
@@ -560,14 +584,14 @@ namespace InstanceManager
                                     $"'{app.AppName}' crashed (KeepOpen=Yes). Crash #{newCrashCount}, retry {newRetryCount}/{app.MaxRetries}, scheduling restart in {delay}s");
 
                                 _storageService.UpdateApplicationFields(app.Index, isRunning: false,
-                                    lastStop: DateTime.Now, crashCount: newCrashCount, retryCount: newRetryCount);
+                                    lastStop: stopTime, crashCount: newCrashCount, retryCount: newRetryCount);
 
                                 if (item != null)
                                 {
                                     item.SubItems[3].Text = $"Restarting ({delay}s)";
                                     item.SubItems[5].Text = newCrashCount.ToString();
                                     item.SubItems[6].Text = newRetryCount.ToString();
-                                    item.SubItems[8].Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                                    item.SubItems[8].Text = stopTime.ToString("yyyy-MM-dd HH:mm:ss");
                                     item.ForeColor = Color.DarkOrange;
 
                                     // Sync tag
@@ -576,7 +600,7 @@ namespace InstanceManager
                                     {
                                         tagApp.CrashCount = newCrashCount;
                                         tagApp.RetryCount = newRetryCount;
-                                        tagApp.LastStop = DateTime.Now;
+                                        tagApp.LastStop = stopTime;
                                         tagApp.IsRunning = false;
                                     }
                                 }
@@ -584,12 +608,12 @@ namespace InstanceManager
                         }
                         else
                         {
-                            _storageService.UpdateApplicationFields(app.Index, isRunning: false, lastStop: DateTime.Now);
+                            _storageService.UpdateApplicationFields(app.Index, isRunning: false, lastStop: stopTime);
 
                             if (item != null)
                             {
                                 item.SubItems[3].Text = "Stopped";
-                                item.SubItems[8].Text = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                                item.SubItems[8].Text = stopTime.ToString("yyyy-MM-dd HH:mm:ss");
                                 item.ForeColor = Color.Black;
                             }
 
@@ -605,6 +629,16 @@ namespace InstanceManager
                         _storageService.UpdateApplicationFields(app.Index, isRunning: isRunning);
                     }
 
+                    // Keep the visible ListView row in sync with the current state
+                    if (item != null)
+                    {
+                        string statusText = isRunning ? "Running" : "Stopped";
+                        if (item.SubItems[3].Text != statusText)
+                        {
+                            item.SubItems[3].Text = statusText;
+                            item.ForeColor = isRunning ? Color.Green : Color.Black;
+                        }
+                    }
                 }
 
                 // Flush any throttled storage changes periodically
@@ -718,8 +752,8 @@ namespace InstanceManager
             // Kill the unauthorized process
             _processManager.StopApplication(app);
 
-            // Update state
-            app.IsRunning = false;
+            // Update state through StorageService (not direct mutation)
+            _storageService.UpdateApplicationFields(app.Index, isRunning: false);
 
             if (item != null)
             {
@@ -1084,6 +1118,13 @@ namespace InstanceManager
             _authorizedApps.Remove(app.Index);
             _notifiedUnauthorized.Remove(app.Index);
 
+            // Show "Stopping" immediately so the user gets visual feedback
+            if (item != null)
+            {
+                item.SubItems[3].Text = "Stopping";
+                item.ForeColor = Color.DarkOrange;
+            }
+
             if (_processManager.StopApplication(app))
             {
                 app.LastStop = DateTime.Now;
@@ -1104,8 +1145,16 @@ namespace InstanceManager
             else
             {
                 _pendingStop.Remove(app.Index);
-                return false;
+
+                // Revert status if stop failed
+                if (item != null)
+                {
+                    item.SubItems[3].Text = "Running";
+                    item.ForeColor = Color.Green;
+                }
             }
+
+            return false;
         }
 
         private void StartAllButton_Click(object sender, EventArgs e)
@@ -1222,45 +1271,64 @@ namespace InstanceManager
             int failed = 0;
             Timer sequentialTimer = null;
 
+            // Mark all apps in the queue so the status update timer doesn't overwrite their countdown
+            foreach (var kvp in appsToStart)
+            {
+                _pendingSequentialStart.Add(kvp.Key.Index);
+            }
+
             // Disable Start All / Stop All buttons while sequential launch is in progress
             StartAllButton.Enabled = false;
             StopAllButton.Enabled = false;
+
+            Action finalize = () =>
+            {
+                if (sequentialTimer != null)
+                {
+                    sequentialTimer.Stop();
+                    sequentialTimer.Dispose();
+                    sequentialTimer = null;
+                }
+
+                // Clear all sequential start markers
+                foreach (var kvp in appsToStart)
+                {
+                    _pendingSequentialStart.Remove(kvp.Key.Index);
+                }
+
+                StartAllButton.Enabled = true;
+                StopAllButton.Enabled = true;
+
+                string msg = $"Started: {started}";
+                if (alreadyRunning > 0) msg += $", Already running: {alreadyRunning}";
+                if (failed > 0) msg += $", Failed: {failed}";
+
+                SimpleLogger.Info("StartAllSequential @ Form1.cs", $"Start All (sequential) for group {_selectedGroupId}: {msg}");
+
+                if (!_isClosing)
+                {
+                    if (failed > 0)
+                        MessageBoxHelper.ShowWarning(this, msg);
+                    else
+                        MessageBoxHelper.ShowSuccess(this, msg);
+                }
+            };
 
             Action launchNext = null;
             launchNext = () =>
             {
                 if (_isClosing || currentIndex >= appsToStart.Count)
                 {
-                    // All done — clean up and show results
-                    if (sequentialTimer != null)
-                    {
-                        sequentialTimer.Stop();
-                        sequentialTimer.Dispose();
-                        sequentialTimer = null;
-                    }
-
-                    StartAllButton.Enabled = true;
-                    StopAllButton.Enabled = true;
-
-                    string msg = $"Started: {started}";
-                    if (alreadyRunning > 0) msg += $", Already running: {alreadyRunning}";
-                    if (failed > 0) msg += $", Failed: {failed}";
-
-                    SimpleLogger.Info("StartAllSequential @ Form1.cs", $"Start All (sequential) for group {_selectedGroupId}: {msg}");
-
-                    if (!_isClosing)
-                    {
-                        if (failed > 0)
-                            MessageBoxHelper.ShowWarning(this, msg);
-                        else
-                            MessageBoxHelper.ShowSuccess(this, msg);
-                    }
+                    finalize();
                     return;
                 }
 
                 var kvp = appsToStart[currentIndex];
                 var app = kvp.Key;
                 var item = kvp.Value;
+
+                // Remove from sequential tracking before launch so watchdog can monitor it
+                _pendingSequentialStart.Remove(app.Index);
 
                 // Launch the current app
                 if (StartSingleApplication(app, item))
@@ -1294,11 +1362,14 @@ namespace InstanceManager
 
                         // Set up a countdown timer
                         int secondsLeft = nextDelay;
+
+                        // Dispose previous timer if any
                         if (sequentialTimer != null)
                         {
                             sequentialTimer.Stop();
                             sequentialTimer.Dispose();
                         }
+
                         sequentialTimer = new Timer();
                         sequentialTimer.Interval = 1000;
                         sequentialTimer.Tick += (s, ev) =>
@@ -1306,7 +1377,10 @@ namespace InstanceManager
                             secondsLeft--;
                             if (secondsLeft <= 0 || _isClosing)
                             {
-                                sequentialTimer.Stop();
+                                if (sequentialTimer != null)
+                                {
+                                    sequentialTimer.Stop();
+                                }
                                 launchNext();
                             }
                             else if (nextItem != null)
@@ -1325,7 +1399,7 @@ namespace InstanceManager
                 else
                 {
                     // No more apps — finalize
-                    launchNext();
+                    finalize();
                 }
             };
 
