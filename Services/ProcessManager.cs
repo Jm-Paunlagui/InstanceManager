@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.IO;
@@ -18,6 +19,109 @@ namespace InstanceManager.Services
             public bool HasWindowedProcess;
             public bool HasBackgroundProcess;
             public int TotalCount;
+        }
+
+        /// <summary>
+        /// Takes a single system-wide process snapshot and returns per-app results.
+        /// This is dramatically more efficient than calling GetProcessesByName per app,
+        /// because each GetProcessesByName call internally enumerates ALL system processes.
+        /// With this approach, we enumerate once regardless of how many apps we monitor.
+        /// </summary>
+        public Dictionary<int, ProcessSnapshot> GetBatchProcessSnapshot(IList<ManagedApplication> apps)
+        {
+            var results = new Dictionary<int, ProcessSnapshot>();
+
+            if (apps == null || apps.Count == 0)
+                return results;
+
+            // Build a lookup of process name -> list of app indices that use that name
+            // (multiple apps could theoretically have the same exe name)
+            var nameToApps = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < apps.Count; i++)
+            {
+                var app = apps[i];
+                if (string.IsNullOrEmpty(app.Directory))
+                    continue;
+
+                string procName = Path.GetFileNameWithoutExtension(app.Directory);
+                if (string.IsNullOrEmpty(procName))
+                    continue;
+
+                List<int> indices;
+                if (!nameToApps.TryGetValue(procName, out indices))
+                {
+                    indices = new List<int>();
+                    nameToApps[procName] = indices;
+                }
+                indices.Add(app.Index);
+
+                // Initialize empty snapshot for each app
+                results[app.Index] = new ProcessSnapshot();
+            }
+
+            if (nameToApps.Count == 0)
+                return results;
+
+            Process[] allProcesses = null;
+            try
+            {
+                allProcesses = Process.GetProcesses();
+
+                for (int i = 0; i < allProcesses.Length; i++)
+                {
+                    try
+                    {
+                        string pName = allProcesses[i].ProcessName;
+
+                        List<int> appIndices;
+                        if (!nameToApps.TryGetValue(pName, out appIndices))
+                            continue;
+
+                        bool hasWindow;
+                        try
+                        {
+                            hasWindow = allProcesses[i].MainWindowHandle != IntPtr.Zero;
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            continue; // Process exited
+                        }
+
+                        for (int j = 0; j < appIndices.Count; j++)
+                        {
+                            int idx = appIndices[j];
+                            var snap = results[idx];
+                            snap.TotalCount++;
+                            if (hasWindow)
+                                snap.HasWindowedProcess = true;
+                            else
+                                snap.HasBackgroundProcess = true;
+                            results[idx] = snap;
+                        }
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Process exited between enumeration and property access
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("GetBatchProcessSnapshot @ ProcessManager.cs",
+                    $"Error during batch snapshot: {ex.Message}");
+            }
+            finally
+            {
+                if (allProcesses != null)
+                {
+                    for (int i = 0; i < allProcesses.Length; i++)
+                    {
+                        allProcesses[i].Dispose();
+                    }
+                }
+            }
+
+            return results;
         }
 
         /// <summary>

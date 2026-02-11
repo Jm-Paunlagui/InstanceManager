@@ -40,6 +40,13 @@ namespace InstanceManager
         // Tracks apps that are pending sequential startup launch (Start All with delays)
         // so the status update timer doesn't overwrite their countdown text
         private HashSet<int> _pendingSequentialStart = new HashSet<int>();
+        // Tracks apps that were recently started and are in a grace period
+        // to allow the process window to appear before watchdog monitoring begins
+        private Dictionary<int, DateTime> _startGracePeriod = new Dictionary<int, DateTime>();
+        // Grace period in seconds after starting an app before watchdog monitoring begins
+        private const int StartGracePeriodSeconds = 10;
+        // Dedicated 1-second timer for smooth restart countdown display
+        private Timer _countdownTimer;
 
         public Main()
         {
@@ -96,12 +103,18 @@ namespace InstanceManager
                 var apps = _storageService.GetAllApplicationsReadOnly();
                 List<string> terminatedApps = new List<string>();
 
+                // Single process enumeration for all apps instead of one per app
+                var snapshots = _processManager.GetBatchProcessSnapshot(apps);
+
                 foreach (var app in apps)
                 {
                     if (string.IsNullOrEmpty(app.Directory))
                         continue;
 
-                    if (_processManager.IsApplicationRunning(app))
+                    ProcessManager.ProcessSnapshot snapshot;
+                    bool isRunning = snapshots.TryGetValue(app.Index, out snapshot) && snapshot.HasWindowedProcess;
+
+                    if (isRunning)
                     {
                         SimpleLogger.Warn("TerminateAlreadyRunningApps @ Form1.cs",
                             $"'{app.AppName}' was running before Instance Manager started - terminating");
@@ -115,8 +128,6 @@ namespace InstanceManager
                     else
                     {
                         // Reset stale runtime state from previous session
-                        // IsRunning may be true if Instance Manager was closed while the app was running,
-                        // and RetryCount may be non-zero from previous crash recovery attempts
                         _storageService.UpdateApplicationFields(app.Index, isRunning: false, retryCount: 0);
                     }
                 }
@@ -145,9 +156,13 @@ namespace InstanceManager
         private void SetupTimer()
         {
             _statusUpdateTimer = new Timer();
-            _statusUpdateTimer.Interval = 3000;
+            _statusUpdateTimer.Interval = 5000;
             _statusUpdateTimer.Tick += StatusUpdateTimer_Tick;
             _statusUpdateTimer.Start();
+
+            _countdownTimer = new Timer();
+            _countdownTimer.Interval = 1000;
+            _countdownTimer.Tick += CountdownTimer_Tick;
         }
 
         private void StatusUpdateTimer_Tick(object sender, EventArgs e)
@@ -165,6 +180,62 @@ namespace InstanceManager
             finally
             {
                 _isUpdatingStatuses = false;
+            }
+        }
+
+        private void CountdownTimer_Tick(object sender, EventArgs e)
+        {
+            if (_isClosing) return;
+
+            try
+            {
+                if (_pendingRestart.Count == 0)
+                {
+                    _countdownTimer.Stop();
+                    return;
+                }
+
+                // Build ListView index only if the selected group is visible
+                Dictionary<int, ListViewItem> listViewIndex = null;
+                if (_selectedGroupId > 0 && AppListView.Items.Count > 0)
+                {
+                    listViewIndex = new Dictionary<int, ListViewItem>(AppListView.Items.Count);
+                    foreach (ListViewItem lvi in AppListView.Items)
+                    {
+                        var tagApp = lvi.Tag as ManagedApplication;
+                        if (tagApp != null)
+                        {
+                            listViewIndex[tagApp.Index] = lvi;
+                        }
+                    }
+                }
+
+                foreach (var kvp in _pendingRestart)
+                {
+                    ListViewItem item = null;
+                    if (listViewIndex != null)
+                    {
+                        listViewIndex.TryGetValue(kvp.Key, out item);
+                    }
+
+                    if (item != null)
+                    {
+                        int secondsLeft = (int)Math.Ceiling((kvp.Value - DateTime.Now).TotalSeconds);
+                        if (secondsLeft <= 0)
+                        {
+                            item.SubItems[3].Text = "Starting...";
+                        }
+                        else
+                        {
+                            item.SubItems[3].Text = $"Restarting ({secondsLeft}s)";
+                        }
+                        item.ForeColor = Color.DarkOrange;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("CountdownTimer_Tick @ Form1.cs", $"Error in countdown tick: {ex.Message}");
             }
         }
 
@@ -351,6 +422,7 @@ namespace InstanceManager
                         _pendingStop.Remove(app.Index);
                         _pendingRestart.Remove(app.Index);
                         _failedApps.Remove(app.Index);
+                        _startGracePeriod.Remove(app.Index);
                     }
 
                     string groupName = selectedGroup.GroupName;
@@ -428,24 +500,36 @@ namespace InstanceManager
                 // to enforce watchdog across all groups
                 var allApps = _storageService.GetAllApplicationsReadOnly();
 
+                // Single process enumeration for ALL apps — replaces N individual
+                // GetProcessesByName calls with one Process.GetProcesses() call
+                var snapshots = _processManager.GetBatchProcessSnapshot(allApps);
+
+                // Build an index of ListView items by app Index for O(1) lookup
+                // instead of O(n) linear scan per app
+                Dictionary<int, ListViewItem> listViewIndex = null;
+                if (_selectedGroupId > 0 && AppListView.Items.Count > 0)
+                {
+                    listViewIndex = new Dictionary<int, ListViewItem>(AppListView.Items.Count);
+                    foreach (ListViewItem lvi in AppListView.Items)
+                    {
+                        var tagApp = lvi.Tag as ManagedApplication;
+                        if (tagApp != null)
+                        {
+                            listViewIndex[tagApp.Index] = lvi;
+                        }
+                    }
+                }
+
                 foreach (var app in allApps)
                 {
                     if (string.IsNullOrEmpty(app.Directory))
                         continue;
 
-                    // Find the corresponding ListView item if this app is in the currently displayed group
+                    // Find the corresponding ListView item using O(1) dictionary lookup
                     ListViewItem item = null;
-                    if (app.GroupId == _selectedGroupId)
+                    if (listViewIndex != null && app.GroupId == _selectedGroupId)
                     {
-                        foreach (ListViewItem lvi in AppListView.Items)
-                        {
-                            var tagApp = lvi.Tag as ManagedApplication;
-                            if (tagApp != null && tagApp.Index == app.Index)
-                            {
-                                item = lvi;
-                                break;
-                            }
-                        }
+                        listViewIndex.TryGetValue(app.Index, out item);
                     }
 
                     // Handle pending restart for KeepOpen apps
@@ -457,17 +541,16 @@ namespace InstanceManager
                             _pendingRestart.Remove(app.Index);
                             AttemptAutoRestart(app, item);
                         }
-                        else if (item != null)
-                        {
-                            int secondsLeft = (int)Math.Ceiling((restartTime - DateTime.Now).TotalSeconds);
-                            item.SubItems[3].Text = $"Restarting ({secondsLeft}s)";
-                            item.ForeColor = Color.DarkOrange;
-                        }
+                        // Countdown display is handled by _countdownTimer every 1s
                         continue;
                     }
 
-                    // Take a single process snapshot per app to avoid multiple GetProcessesByName calls
-                    var snapshot = _processManager.GetProcessSnapshot(app);
+                    // Use the pre-computed batch snapshot instead of per-app process query
+                    ProcessManager.ProcessSnapshot snapshot;
+                    if (!snapshots.TryGetValue(app.Index, out snapshot))
+                    {
+                        snapshot = new ProcessManager.ProcessSnapshot();
+                    }
                     bool isRunning = snapshot.HasWindowedProcess;
 
                     // Skip watchdog checks for apps the user intentionally stopped
@@ -489,7 +572,7 @@ namespace InstanceManager
                         }
                         else if (item != null)
                         {
-                            item.SubItems[3].Text = "Stopping";
+                            item.SubItems[3].Text = "Stopping...";
                             item.ForeColor = Color.DarkOrange;
                         }
                         continue;
@@ -510,6 +593,33 @@ namespace InstanceManager
                     if (_pendingSequentialStart.Contains(app.Index))
                         continue;
 
+                    // Skip watchdog checks for apps still in their startup grace period
+                    // (window may not have appeared yet)
+                    if (_startGracePeriod.ContainsKey(app.Index))
+                    {
+                        if (DateTime.Now >= _startGracePeriod[app.Index])
+                        {
+                            _startGracePeriod.Remove(app.Index);
+                        }
+                        else
+                        {
+                            if (item != null)
+                            {
+                                if (isRunning)
+                                {
+                                    item.SubItems[3].Text = "Running";
+                                    item.ForeColor = Color.Green;
+                                }
+                                else
+                                {
+                                    item.SubItems[3].Text = "Starting...";
+                                    item.ForeColor = Color.DarkOrange;
+                                }
+                            }
+                            continue;
+                        }
+                    }
+
                     bool wasRunning = app.IsRunning;
 
                     // Detect background zombie processes (no window but process still alive)
@@ -520,9 +630,8 @@ namespace InstanceManager
                         SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
                             $"'{app.AppName}' lost its window but had {killed} background process(es) - killed them");
 
-                        // Re-snapshot after background kill to get fresh state
-                        snapshot = _processManager.GetProcessSnapshot(app);
-                        isRunning = snapshot.HasWindowedProcess;
+                        // After killing background processes, the state is definitively "not running"
+                        // No need to re-snapshot since we just killed all background processes
                     }
 
                     // Detect unauthorized external launch
@@ -580,6 +689,12 @@ namespace InstanceManager
                                 int delay = Math.Max(app.StartDelaySeconds, 1);
                                 _pendingRestart[app.Index] = DateTime.Now.AddSeconds(delay);
 
+                                // Start the 1-second countdown timer if not already running
+                                if (!_countdownTimer.Enabled)
+                                {
+                                    _countdownTimer.Start();
+                                }
+
                                 SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
                                     $"'{app.AppName}' crashed (KeepOpen=Yes). Crash #{newCrashCount}, retry {newRetryCount}/{app.MaxRetries}, scheduling restart in {delay}s");
 
@@ -594,7 +709,6 @@ namespace InstanceManager
                                     item.SubItems[8].Text = stopTime.ToString("yyyy-MM-dd HH:mm:ss");
                                     item.ForeColor = Color.DarkOrange;
 
-                                    // Sync tag
                                     var tagApp = item.Tag as ManagedApplication;
                                     if (tagApp != null)
                                     {
@@ -689,15 +803,19 @@ namespace InstanceManager
                     _authorizedApps.Add(app.Index);
                     _notifiedUnauthorized.Remove(app.Index);
 
+                    // Grant a grace period so the watchdog doesn't treat the app as crashed
+                    // before its main window has had time to appear
+                    _startGracePeriod[app.Index] = DateTime.Now.AddSeconds(StartGracePeriodSeconds);
+
                     DateTime now = DateTime.Now;
                     _storageService.UpdateApplicationFields(app.Index, isRunning: true, lastStart: now, retryCount: 0);
 
                     if (item != null)
                     {
-                        item.SubItems[3].Text = "Running";
+                        item.SubItems[3].Text = "Starting...";
                         item.SubItems[6].Text = "0";
                         item.SubItems[7].Text = now.ToString("yyyy-MM-dd HH:mm:ss");
-                        item.ForeColor = Color.Green;
+                        item.ForeColor = Color.DarkOrange;
 
                         var tagApp = item.Tag as ManagedApplication;
                         if (tagApp != null)
@@ -976,6 +1094,7 @@ namespace InstanceManager
                     _pendingStop.Remove(app.Index);
                     _pendingRestart.Remove(app.Index);
                     _failedApps.Remove(app.Index);
+                    _startGracePeriod.Remove(app.Index);
                     _storageService.RemoveApplication(app.Index);
                     AppListView.Items.Remove(selectedItem);
 
@@ -1042,6 +1161,10 @@ namespace InstanceManager
                 _pendingStop.Remove(app.Index);
                 _failedApps.Remove(app.Index);
 
+                // Grant a grace period so the watchdog doesn't treat the app as crashed
+                // before its main window has had time to appear
+                _startGracePeriod[app.Index] = DateTime.Now.AddSeconds(StartGracePeriodSeconds);
+
                 // Reset retry count on manual start so the app gets a fresh set of retries
                 app.RetryCount = 0;
                 app.LastStart = DateTime.Now;
@@ -1050,10 +1173,10 @@ namespace InstanceManager
 
                 if (item != null)
                 {
-                    item.SubItems[3].Text = "Running";
+                    item.SubItems[3].Text = "Starting...";
                     item.SubItems[6].Text = app.RetryCount.ToString();
                     item.SubItems[7].Text = app.GetLastStartDisplay();
-                    item.ForeColor = Color.Green;
+                    item.ForeColor = Color.DarkOrange;
                 }
 
                 return true;
@@ -1117,11 +1240,12 @@ namespace InstanceManager
         {
             _authorizedApps.Remove(app.Index);
             _notifiedUnauthorized.Remove(app.Index);
+            _startGracePeriod.Remove(app.Index);
 
             // Show "Stopping" immediately so the user gets visual feedback
             if (item != null)
             {
-                item.SubItems[3].Text = "Stopping";
+                item.SubItems[3].Text = "Stopping...";
                 item.ForeColor = Color.DarkOrange;
             }
 
@@ -1152,9 +1276,9 @@ namespace InstanceManager
                     item.SubItems[3].Text = "Running";
                     item.ForeColor = Color.Green;
                 }
-            }
 
-            return false;
+                return false;
+            }
         }
 
         private void StartAllButton_Click(object sender, EventArgs e)
@@ -1584,6 +1708,13 @@ namespace InstanceManager
                 _statusUpdateTimer.Stop();
                 _statusUpdateTimer.Dispose();
                 _statusUpdateTimer = null;
+            }
+
+            if (_countdownTimer != null)
+            {
+                _countdownTimer.Stop();
+                _countdownTimer.Dispose();
+                _countdownTimer = null;
             }
 
             // Flush any pending data before closing

@@ -85,6 +85,7 @@
       <DependentUpon>Resources.resx</DependentUpon>
       <DesignTime>True</DesignTime>
     </Compile>
+    <None Include="Form1.cs.fixed" />
     <None Include="IMPLEMENTATION_SUMMARY.md" />
     <None Include="NLog.config" />
     <None Include="packages.config" />
