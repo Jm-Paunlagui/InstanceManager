@@ -1555,8 +1555,9 @@ namespace IntelligentMutexExecutionEnvironment
                 int failed = 0;
                 int notRunning = 0;
 
-                foreach (ListViewItem item in AppListView.Items)
+                for (int i = AppListView.Items.Count - 1; i >= 0; i--)
                 {
+                    ListViewItem item = AppListView.Items[i];
                     var app = item.Tag as ManagedApplication;
                     if (app == null) continue;
 
@@ -1657,6 +1658,30 @@ namespace IntelligentMutexExecutionEnvironment
             {
                 SimpleLogger.Error("SettingsButton_Click @ Form1.cs", $"Error updating settings: {ex.Message}");
                 MessageBoxHelper.ShowError(this, $"Error updating settings: {ex.Message}");
+            }
+        }
+
+        private void UserGuideButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                string guidePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "USER_GUIDE.md");
+
+                if (File.Exists(guidePath))
+                {
+                    System.Diagnostics.Process.Start(guidePath);
+                    SimpleLogger.Info("UserGuideButton_Click @ Form1.cs", $"Opened user guide: {guidePath}");
+                }
+                else
+                {
+                    MessageBoxHelper.ShowWarning(this, $"User guide not found:\n\n{guidePath}");
+                    SimpleLogger.Warn("UserGuideButton_Click @ Form1.cs", $"User guide does not exist: {guidePath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("UserGuideButton_Click @ Form1.cs", $"Error opening user guide: {ex.Message}");
+                MessageBoxHelper.ShowError(this, $"Error opening user guide: {ex.Message}");
             }
         }
 

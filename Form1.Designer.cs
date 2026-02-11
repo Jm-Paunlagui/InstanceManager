@@ -560,6 +560,7 @@
             this.UserGuideButton.TabIndex = 5;
             this.UserGuideButton.Text = "User Guide";
             this.UserGuideButton.UseVisualStyleBackColor = false;
+            this.UserGuideButton.Click += new System.EventHandler(this.UserGuideButton_Click);
             // 
             // Main
             // 
