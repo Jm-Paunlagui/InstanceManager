@@ -1,338 +1,284 @@
-# Intelligent Mutex Execution Environment - Implementation Summary
+# Instance Manager — Implementation Summary
 
-## ? Project Complete
+## Project Status: ? Complete
 
-### What Has Been Implemented
+---
 
-#### 1. **Core Application Features**
-? Windows Forms application targeting .NET Framework 4.0  
-? Add applications to management list  
-? Edit application paths  
-? Delete applications from management  
-? Start applications with instance checking (MUTEX functionality)  
-? Stop applications (graceful with fallback to force kill)  
-? Real-time status monitoring (2-second interval)  
-? Duplicate application detection on Add and Edit  
-? Last Start / Last Stop timestamp tracking  
+## Implemented Features
 
-#### 2. **Authorized Process Watchdog (Core Algorithm)**
-? Polling-based whitelist process watchdog with debounced notification  
+### 1. Group-Based Application Management
+? Create, edit, and delete application groups  
+? Applications are organized per group with duplicate detection within each group  
+? Deleting a group stops all running apps in that group first  
+? Watchdog monitors all groups simultaneously, not just the visible one  
+
+### 2. Application CRUD
+? Add applications via file browser (duplicate detection per group)  
+? Edit application path and settings (Keep Open, delays, counter resets)  
+? Delete applications with confirmation (cleans up all tracking state)  
+? Applications persist across restarts via JSON storage  
+
+### 3. Start / Stop with Visual Feedback
+? Start: "Starting..." (orange) ? "Running" (green) once window detected  
+? Stop: "Stopping..." (orange) ? "Stopped" (black) once process exits  
+? Start All: Immediate batch launch or sequential with per-app startup delays  
+? Stop All: Stops all running apps in the selected group  
+? Sequential Start All with live "Waiting (Ns)" countdown per app  
+
+### 4. Authorized Process Watchdog
+? Startup enforcement: apps already running are terminated with user notification  
+? Unauthorized launch detection: externally-launched managed apps are killed  
 ? Authorization tracking via `_authorizedApps` HashSet  
-? Detects unauthorized external launches within 2 seconds  
-? Automatically kills processes not started through Instance Manager  
-? Warns user about unauthorized launches with debounced notifications  
-? Graceful onboarding — apps already running at startup are marked as authorized  
-? Detects external stops and records LastStop timestamp  
-? Cleans up tracking state on Stop, Delete, and external termination  
+? Debounced notifications: user warned only once per unauthorized attempt  
+? Non-blocking notifications via `BeginInvoke`  
+? Pending stop protection: watchdog doesn't interfere during user-initiated stops  
 
-#### 3. **Data Persistence**
-? JSON-based storage (applications.json)  
-? Custom JSON serializer/deserializer for .NET 4.0 compatibility  
-? Proper JSON escaping/unescaping for Windows file paths (`\\`, `"`, etc.)  
-? Stores: Index, AppName, Directory, AddedDate, IsRunning, LastStart, LastStop  
-? Nullable DateTime support (`null` in JSON for never-started/never-stopped)  
-? No database dependency — fully file-based  
+### 5. Crash Recovery (Keep Open)
+? Auto-restart on crash with configurable delay (1–300 seconds)  
+? Max retries with configurable limit (default: 3)  
+? Live 1-second countdown: "Restarting (5s)" ? "Restarting (4s)" ? ... ? "Starting..."  
+? "Failed" state when max retries exhausted  
+? 10-second startup grace period before watchdog monitoring begins  
+? Crash and retry counters resettable via Edit dialog  
+? Background zombie process detection and cleanup  
 
-#### 4. **Process Management**
-? Instance checking before application launch  
-? Process monitoring by executable name  
-? Graceful shutdown via `CloseMainWindow()` (3-second timeout)  
-? Force kill fallback via `Process.Kill()`  
-? Running instance count tracking  
-? Real-time status updates  
-? Unauthorized external launch detection and termination  
+### 6. Performance Optimizations
+? Batch process snapshot: single `Process.GetProcesses()` for all apps  
+? O(1) ListView item lookup via dictionary index  
+? 5-second status poll interval (balanced CPU vs. responsiveness)  
+? Dedicated 1-second countdown timer (starts/stops on demand)  
+? Throttled storage writes with minimum save intervals  
+? Atomic file writes (write-to-temp-then-rename)  
+? Buffered logging (flush every 5s or 50 entries)  
+? Cached machine info (no repeated DNS lookups)  
 
-#### 5. **Logging System**
-? Custom `SimpleLogger` implementation (zero dependencies)  
-? Thread-safe logging with lock mechanism  
-? Custom log format matching specification:
-```
-[MACHINE_IDENTIFIER][TIMESTAMP][LEVEL][PID:processId][FUNCTION @ FILE:LINE] - MESSAGE
-```
-? Daily log file rotation (YYYY-MM-DD.log)  
-? Auto-create `logs/` directory  
-? Logs all application actions (start, stop, add, edit, delete, unauthorized launches)  
+### 7. Station Name Settings
+? Configurable station name via Settings dialog  
+? Displayed in title bar subtitle  
+? Persisted in `settings.json` with atomic writes  
+
+### 8. Logging System
+? Custom `SimpleLogger` — zero external dependencies  
+? Thread-safe with lock mechanism  
+? Buffered writes with configurable flush interval  
+? Daily log file rotation (`logs/YYYY-MM-DD.log`)  
+? Automatic cleanup of logs older than 30 days  
+? Immediate flush on ERROR/FATAL  
 ? Silent failure — logging never crashes the application  
 
-**Log Levels Implemented:**
-- `INFO`  — Normal operations (start, stop, add, delete, edit)
-- `DEBUG` — Detailed diagnostic information (process checks, JSON loading)
-- `WARN`  — Warning conditions (duplicates, unauthorized launches, force kills)
-- `ERROR` — Error conditions (file not found, process failures)
-- `FATAL` — Critical failures (application crash)
-
-**Example Log Output:**
+**Format:**
 ```
-[JmPaunlagui/user 192.168.1.100][2025-12-03 14:30:00][INFO][PID:23632][StartApplication @ ProcessManager.cs] - Successfully started DryCabinet (PID: 9876)
-[JmPaunlagui/user 192.168.1.100][2025-12-03 14:30:05][WARN][PID:23632][HandleUnauthorizedLaunch @ Form1.cs] - Unauthorized launch detected for 'EXCEL' - killing process
+[HOSTNAME/USER IP][TIMESTAMP][LEVEL][PID:id][LOCATION] - MESSAGE
 ```
 
-#### 6. **User Interface**
-? Professional header with AUMOVIO logo, title, and subtitle  
-? ListView with 6 columns: Index, Application, Directory, Status, Last Start, Last Stop  
-? Color-coded status (Green = Running, Black = Stopped)  
-? Action buttons: Add, Edit, Delete, Start, Stop, Refresh  
-? Custom MessageBox (`CustomMessageBox`) centered on form position  
-? Helper methods: `ShowSuccess`, `ShowError`, `ShowWarning`, `ShowInfo`, `ShowQuestion`  
-? File browser dialogs centered on form (`OpenFileDialog` with owner)  
-? Confirmation dialogs for destructive actions (Delete, Stop)  
+### 9. Data Persistence
+? `applications.json` — app data with custom JSON serializer  
+? `groups.json` — group definitions  
+? `settings.json` — station name  
+? Proper Windows path escaping (`\\`)  
+? Nullable DateTime support  
+? Backward compatible with older JSON files  
+? Dirty-flag tracking to avoid unnecessary writes  
+
+### 10. User Interface
+? Group list panel with Add/Edit/Delete group buttons  
+? 9-column ListView: Index, Application, Directory, Status, Keep Open, Crashes, Retries, Last Start, Last Stop  
+? Color-coded status (Green, Orange, Red, Black)  
+? Custom MessageBox positioned relative to owner form  
 ? Form positioned in bottom-right corner of screen  
-? Compact layout with adjusted column widths  
-
-#### 7. **Performance Optimizations**
-? Minimal CPU usage (< 1%, typically 0%)  
-? Efficient 2-second timer-based polling  
-? Updates only changed ListView items (no full refresh on tick)  
-? Proper resource disposal (Process objects, Timer on close)  
-? Thread-safe operations  
-? Lightweight memory footprint (< 50 MB)  
-? `BeginInvoke` for non-blocking unauthorized launch notifications  
-
-#### 8. **Error Handling & Foolproofing**
-? Try-catch blocks on all operations  
-? Comprehensive error logging with stack traces  
-? User-friendly error messages via `CustomMessageBox`  
-? Graceful degradation on failures  
-? File existence validation before launching applications  
-? Process validation before start/stop  
-? Duplicate application prevention on Add and Edit  
-? Path normalization for case-insensitive comparison  
-? Backward-compatible JSON loading (old files without LastStart/LastStop)  
+? Input dialogs for group names and station name  
+? Edit dialog for per-app settings  
+? Buttons disabled/enabled based on group selection state  
 
 ---
 
-## ?? File Structure
+## Architecture
 
+### File Structure
 ```
 InstanceManager/
-??? Form1.cs                          Main UI logic, event handlers, Authorized Process Watchdog
-??? Form1.Designer.cs                 UI control definitions (6-column ListView, buttons)
+??? Form1.cs                          Main UI, watchdog, crash recovery, group management
+??? Form1.Designer.cs                 UI control definitions (9-column ListView)
 ??? Form1.resx                        Form resources
-??? Program.cs                        Application entry point with startup/shutdown logging
+??? Program.cs                        Application entry point
 ??? Models/
-?   ??? ManagedApplication.cs         Data model (Index, AppName, Directory, LastStart, LastStop)
+?   ??? ManagedApplication.cs         App model (14 properties)
+?   ??? ApplicationGroup.cs           Group model (GroupId, GroupName, CreatedDate)
 ??? Services/
-?   ??? StorageService.cs             JSON storage with custom serialization + duplicate checking
-?   ??? ProcessManager.cs             Process monitoring, start, stop, instance counting
+?   ??? StorageService.cs             JSON CRUD, throttled saves, atomic writes
+?   ??? ProcessManager.cs             Batch snapshots, start/stop, zombie cleanup
+?   ??? SettingsService.cs            Station name persistence
 ??? Utilities/
-?   ??? SimpleLogger.cs               Thread-safe custom logging (zero dependencies)
-?   ??? CustomMessageBox.cs           Custom dialog positioned relative to owner form
-?   ??? MessageBoxHelper.cs           Convenience wrappers (ShowSuccess, ShowError, etc.)
-??? Properties/
-?   ??? AssemblyInfo.cs               Assembly metadata
-?   ??? Resources.Designer.cs         Resource accessors (Logo)
-?   ??? Settings.Designer.cs          Application settings
-??? packages.config                   Package references (empty — no external dependencies)
-??? NLog.config                       Configuration reference (not actively used)
-??? README.md                         Complete technical documentation
-??? QUICK_START.md                     Step-by-step testing guide
-??? IMPLEMENTATION_SUMMARY.md          This file
-??? applications.json                  Auto-generated application data storage
-??? logs/                              Auto-generated daily log files
+?   ??? SimpleLogger.cs               Buffered thread-safe logging
+?   ??? CustomMessageBox.cs           Owner-relative positioned dialogs
+?   ??? MessageBoxHelper.cs           Convenience wrappers
+?   ??? InputDialog.cs                Text input dialogs
+?   ??? AppSettingsDialog.cs          Per-app settings dialog
+??? applications.json                 Auto-generated
+??? groups.json                       Auto-generated
+??? settings.json                     Auto-generated
+??? logs/                             Auto-generated daily log files
 ```
+
+### Data Models
+
+**ManagedApplication:**
+| Property | Type | Default |
+|----------|------|---------|
+| Index | int | Auto-assigned |
+| GroupId | int | From selected group |
+| AppName | string | From filename |
+| Directory | string | Full path |
+| AddedDate | DateTime | Now |
+| IsRunning | bool | false |
+| LastStart | DateTime? | null |
+| LastStop | DateTime? | null |
+| KeepOpen | bool | false |
+| CrashCount | int | 0 |
+| RetryCount | int | 0 |
+| MaxRetries | int | 3 |
+| StartDelaySeconds | int | 5 |
+| StartupDelaySeconds | int | 0 |
+
+**ApplicationGroup:**
+| Property | Type |
+|----------|------|
+| GroupId | int |
+| GroupName | string |
+| CreatedDate | DateTime |
+
+### Timers
+
+| Timer | Interval | Purpose |
+|-------|----------|---------|
+| `_statusUpdateTimer` | 5000ms | Watchdog polling, status sync, crash detection |
+| `_countdownTimer` | 1000ms | Smooth restart countdown display (on-demand) |
+| Sequential timer | 1000ms | Start All delay countdown (temporary, per operation) |
+
+### Tracking Sets
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `_authorizedApps` | HashSet\<int\> | Apps allowed to run |
+| `_notifiedUnauthorized` | HashSet\<int\> | Prevents duplicate warnings |
+| `_pendingStop` | HashSet\<int\> | Blocks watchdog during user stop |
+| `_pendingRestart` | Dictionary\<int, DateTime\> | Crash restart schedule |
+| `_failedApps` | HashSet\<int\> | Max retries exhausted |
+| `_pendingSequentialStart` | HashSet\<int\> | Sequential Start All queue |
+| `_startGracePeriod` | Dictionary\<int, DateTime\> | Post-launch grace period |
 
 ---
 
-## ?? Core Algorithm: Authorized Process Watchdog
-
-The heart of the application is a **Polling-Based Whitelist Process Watchdog with Debounced Notification**.
-
-### How It Works
+## Watchdog Algorithm
 
 ```
-???????????????????????????????????????????????????????????????????
-?                    Timer Tick (every 2 seconds)                  ?
-???????????????????????????????????????????????????????????????????
-?                                                                 ?
-?  For each managed application:                                  ?
-?                                                                 ?
-?    Was Stopped ? Now Running?                                   ?
-?      ??? In _authorizedApps? ? ? Authorized, update status     ?
-?      ??? NOT in _authorizedApps? ? ? UNAUTHORIZED              ?
-?            ??? Kill process immediately                         ?
-?            ??? Log warning                                      ?
-?            ??? Notify user (once per attempt, debounced)        ?
-?                                                                 ?
-?    Was Running ? Now Stopped?                                   ?
-?      ??? Remove from _authorizedApps                            ?
-?      ??? Record LastStop timestamp                              ?
-?      ??? Update UI and storage                                  ?
-?                                                                 ?
-?    No Change?                                                   ?
-?      ??? Refresh display values                                 ?
-?                                                                 ?
-???????????????????????????????????????????????????????????????????
+StatusUpdateTimer_Tick (every 5 seconds):
+???????????????????????????????????????????????????????????
+?  1. Batch process snapshot (single GetProcesses() call) ?
+?  2. Build ListView index (Dictionary for O(1) lookup)   ?
+?  3. For each app across ALL groups:                     ?
+?                                                         ?
+?     Pending Restart?                                    ?
+?       ? Expired? ? AttemptAutoRestart                   ?
+?       ? Not yet? ? Skip (countdown timer handles UI)   ?
+?                                                         ?
+?     Pending Stop?                                       ?
+?       ? Exited? ? "Stopped", cleanup background procs  ?
+?       ? Still up? ? "Stopping..."                      ?
+?                                                         ?
+?     Failed?                                             ?
+?       ? Show "Failed" (red)                             ?
+?                                                         ?
+?     Grace Period?                                       ?
+?       ? Window up? ? "Running"                          ?
+?       ? Not yet? ? "Starting..."                        ?
+?                                                         ?
+?     Was Running ? Now Stopped?                          ?
+?       ? KeepOpen? ? Schedule restart, start countdown   ?
+?       ? No? ? Record stop, show "Stopped"              ?
+?                                                         ?
+?     Was Stopped ? Now Running? (unauthorized)           ?
+?       ? Kill + warn user                                ?
+?                                                         ?
+?     Sync state ? Update storage + ListView              ?
+?  4. FlushPendingChanges()                               ?
+???????????????????????????????????????????????????????????
+
+CountdownTimer_Tick (every 1 second, on-demand):
+???????????????????????????????????????????????????????????
+?  For each pending restart:                              ?
+?    seconds > 0? ? "Restarting (Ns)"                    ?
+?    seconds ? 0? ? "Starting..."                        ?
+?  No pending restarts? ? Stop timer                      ?
+???????????????????????????????????????????????????????????
 ```
 
-### Authorization Flow
+### Authorization Rules
 
-| Action | `_authorizedApps` | `_notifiedUnauthorized` |
-|--------|-------------------|-------------------------|
-| Instance Manager starts, app already running | **Added** | — |
+| Action | _authorizedApps | _notifiedUnauthorized |
+|--------|-----------------|----------------------|
+| Instance Manager starts, app running | — (terminated) | — |
 | User clicks Start | **Added** | **Removed** |
 | User clicks Stop | **Removed** | **Removed** |
 | User clicks Delete | **Removed** | **Removed** |
-| App stopped externally | **Removed** | **Removed** |
-| App launched externally (unauthorized) | — | **Added** (after notification) |
-
-### Design Patterns Used
-
-| Pattern | Implementation |
-|---------|---------------|
-| **Watchdog Timer** | 2-second polling via `System.Windows.Forms.Timer` |
-| **Whitelist / Allow-List** | `_authorizedApps` HashSet tracks permitted processes |
-| **Policy Enforcement** | Unauthorized processes are terminated immediately |
-| **Graceful Onboarding** | `DetectAlreadyRunningApps()` at startup |
-| **Debounce / Deduplication** | `_notifiedUnauthorized` prevents repeated warnings |
-| **Non-blocking Notification** | `BeginInvoke` ensures timer isn't blocked by dialogs |
+| App stopped externally (KeepOpen=No) | **Removed** | **Removed** |
+| App crashed (KeepOpen=Yes) | **Removed** | **Removed** |
+| App launched externally | — | **Added** (after warning) |
+| Auto-restart succeeds | **Added** | **Removed** |
 
 ---
 
-## ?? Technical Highlights
+## Performance Metrics
 
-### Custom JSON Serialization
-- Built from scratch for .NET Framework 4.0 (no `System.Web.Script.Serialization` dependency)
-- Proper `\\` escaping/unescaping via placeholder technique for Windows file paths
-- Quote-aware property splitting (`SplitPropertyValues`) handles commas inside strings
-- Nullable DateTime serialization (`"LastStart": null` or `"LastStart": "2026-02-05T17:16:25"`)
-- Backward compatible — loads old JSON files missing new fields without errors
-
-### Custom MessageBox (`CustomMessageBox`)
-- Manually positioned relative to owner form's `Left`, `Top`, `Width`, `Height`
-- Screen boundary protection (won't render off-screen)
-- Supports OK and Yes/No button layouts
-- System icons (Information, Warning, Error, Question)
-- Keyboard support (Enter = OK/Yes, Escape = No/Cancel)
-
-### Process Management
-- Efficient process name lookup via `Process.GetProcessesByName()`
-- Multiple instance handling (kills all instances on stop)
-- Graceful shutdown via `CloseMainWindow()` with 3-second `WaitForExit` timeout
-- Force kill fallback via `Process.Kill()` when graceful shutdown fails
-- Proper `Process.Dispose()` in `finally` blocks
-
-### Thread-Safe Logging (`SimpleLogger`)
-- `lock` based synchronization on all write operations
-- Daily file rotation: `logs/YYYY-MM-DD.log`
-- UTF-8 encoding
-- Automatic `logs/` directory creation
-- Machine identifier: `hostname/username IP_ADDRESS`
-- Process ID included in every log entry
-- Silent failure — exceptions in logging are swallowed
+| Metric | Target | Implementation |
+|--------|--------|----------------|
+| CPU usage | < 1% | Batch snapshots, 5s interval, on-demand countdown |
+| Memory | < 50 MB | Proper disposal, no caching of process objects |
+| Startup | < 1 second | Single batch snapshot for termination check |
+| Detection latency | ? 5 seconds | Status poll interval |
+| Countdown accuracy | 1 second | Dedicated timer |
+| Graceful shutdown | 3 seconds | CloseMainWindow() with timeout |
+| External dependencies | 0 | Custom JSON, custom logging, custom dialogs |
 
 ---
 
-## ?? Performance Metrics
+## Technical Specifications
 
-| Metric | Value |
-|--------|-------|
-| CPU Usage | < 1% (typically 0%) |
-| Memory | < 50 MB |
-| Startup Time | < 1 second |
-| Unauthorized Detection | Within 2 seconds |
-| Status Update Interval | Every 2 seconds |
-| Graceful Shutdown Timeout | 3 seconds |
-| External Dependencies | **0** (zero) |
-
----
-
-## ? Feature Summary
-
-| # | Feature | Description |
-|---|---------|-------------|
-| 1 | **Add Application** | Browse for .exe, save to JSON with auto-incremented index |
-| 2 | **Edit Application** | Change application path, duplicate checking on new path |
-| 3 | **Delete Application** | Remove from management (does not delete actual file) |
-| 4 | **Start Application** | Launch with mutex check, mark as authorized, record LastStart |
-| 5 | **Stop Application** | Graceful + force kill, record LastStop, clean up tracking |
-| 6 | **Refresh** | Reload all applications from JSON |
-| 7 | **Duplicate Detection** | Prevents adding same .exe path twice (case-insensitive) |
-| 8 | **Real-time Monitoring** | 2-second polling updates status, LastStart, LastStop |
-| 9 | **Unauthorized Launch Detection** | Kills externally-launched managed apps, warns user |
-| 10 | **Graceful Onboarding** | Apps running before Instance Manager starts are allowed |
-| 11 | **External Stop Detection** | Detects when apps are closed outside Instance Manager |
-| 12 | **Persistent Timestamps** | LastStart and LastStop survive application restarts |
-| 13 | **Custom MessageBox** | Dialogs centered on form (bottom-right corner alignment) |
-| 14 | **Comprehensive Logging** | Every action logged with machine ID, PID, timestamp, location |
+| Spec | Value |
+|------|-------|
+| .NET Target | .NET Framework 4.0 |
+| C# Version | 7.3 |
+| UI Framework | Windows Forms |
+| Min OS | Windows XP SP3 |
+| IDE | Visual Studio 2010+ |
+| Dependencies | **None** |
 
 ---
 
-## ?? Security & Reliability
+## Objectives Met
 
-? No SQL injection (no database)  
-? Safe file operations (path validation, existence checks)  
-? Process isolation  
-? Exception handling on every operation  
-? No credential storage  
-? Local-only operation  
-? Unauthorized launch enforcement  
-? Silent logging failures  
-
----
-
-## ?? Documentation Provided
-
-| Document | Purpose |
-|----------|---------|
-| `README.md` | Complete technical documentation, architecture, usage |
-| `QUICK_START.md` | Step-by-step testing guide with expected outcomes |
-| `IMPLEMENTATION_SUMMARY.md` | This file — full implementation overview |
-| `NLog.config` | Configuration reference (SimpleLogger used instead) |
-| Code Comments | Inline XML documentation on key methods |
-
----
-
-## ? Objectives Met
-
-| Requirement | Status | Implementation |
-|-------------|--------|----------------|
-| Prevent simultaneous launches | ? | Instance checking + Authorized Process Watchdog |
-| Prevent external launches of managed apps | ? | Unauthorized launch detection and termination |
-| Add/Edit/Delete apps | ? | Full CRUD operations with file browser |
-| Duplicate prevention | ? | Path-based duplicate checking (case-insensitive) |
-| Start/Stop apps | ? | Process management with graceful + force shutdown |
-| JSON storage | ? | Custom serialization with path escaping |
-| No database | ? | File-based only (applications.json) |
-| Logging | ? | Custom SimpleLogger with special format |
-| Special log format | ? | `[MACHINE][TIMESTAMP][LEVEL][PID][LOCATION] - MESSAGE` |
-| Minimal performance impact | ? | < 1% CPU, < 50 MB memory |
-| Foolproof design | ? | Comprehensive error handling + validation |
-| Monitor instances | ? | 2-second real-time updates |
-| Track Last Start / Last Stop | ? | Nullable DateTime with persistent storage |
-| MessageBox aligned to form | ? | CustomMessageBox positioned relative to owner |
-| Form in bottom-right corner | ? | Manual positioning via `Screen.PrimaryScreen.WorkingArea` |
-| Zero external dependencies | ? | No NuGet packages required |
+| Requirement | Status |
+|-------------|--------|
+| Group-based app management | ? |
+| Prevent simultaneous launches | ? |
+| Prevent external launches | ? |
+| Add/Edit/Delete apps | ? |
+| Duplicate prevention per group | ? |
+| Start/Stop with visual feedback | ? |
+| Start All with sequential delays | ? |
+| Auto-restart on crash (Keep Open) | ? |
+| Max retries with failure state | ? |
+| Live countdown timers | ? |
+| JSON storage (no database) | ? |
+| Station name configuration | ? |
+| Comprehensive logging | ? |
+| Low CPU on 10+ apps | ? |
+| Batch process enumeration | ? |
+| Atomic file writes | ? |
+| Zero external dependencies | ? |
+| .NET Framework 4.0 compatible | ? |
 
 ---
 
-## ?? Future Enhancements (Optional)
-
-- [ ] CSV export/import
-- [ ] System tray minimization
-- [ ] Auto-start with Windows
-- [ ] Application categories/groups
-- [ ] Command-line interface
-- [ ] Remote monitoring
-- [ ] Crash detection & auto-restart
-- [ ] Performance graphs
-- [ ] Configurable watchdog interval
-- [ ] Whitelist/blacklist mode toggle
-
----
-
-## ?? Support
-
-For any issues:
-1. Check `logs/[date].log` for detailed information
-2. Review `QUICK_START.md` for testing procedures
-3. Consult `README.md` for technical details
-4. Verify .NET Framework 4.0 is installed
-
----
-
-**Project Status**: ? COMPLETE  
-**Build Status**: ? SUCCESS  
-**Documentation**: ? COMPLETE  
-**Testing Guide**: ? PROVIDED  
-**Ready for Deployment**: ? YES  
-**Repository**: https://github.com/Jm-Paunlagui/InstanceManager
+## Repository
+https://github.com/Jm-Paunlagui/InstanceManager

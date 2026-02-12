@@ -8,7 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace InstanceManager.Properties
+namespace IntelligentMutexExecutionEnvironment.Properties
 {
 
 

@@ -1,17 +1,24 @@
 using System;
 
-namespace InstanceManager.Models
+namespace IntelligentMutexExecutionEnvironment.Models
 {
     [Serializable]
     public class ManagedApplication
     {
         public int Index { get; set; }
+        public int GroupId { get; set; }
         public string AppName { get; set; }
         public string Directory { get; set; }
         public DateTime AddedDate { get; set; }
         public bool IsRunning { get; set; }
         public DateTime? LastStart { get; set; }
         public DateTime? LastStop { get; set; }
+        public bool KeepOpen { get; set; }
+        public int CrashCount { get; set; }
+        public int RetryCount { get; set; }
+        public int MaxRetries { get; set; }
+        public int StartDelaySeconds { get; set; }
+        public int StartupDelaySeconds { get; set; }
 
         public ManagedApplication()
         {
@@ -19,6 +26,12 @@ namespace InstanceManager.Models
             IsRunning = false;
             LastStart = null;
             LastStop = null;
+            KeepOpen = false;
+            CrashCount = 0;
+            RetryCount = 0;
+            MaxRetries = 3;
+            StartDelaySeconds = 5;
+            StartupDelaySeconds = 0;
         }
 
         public string GetLastStartDisplay()
@@ -29,6 +42,11 @@ namespace InstanceManager.Models
         public string GetLastStopDisplay()
         {
             return LastStop.HasValue ? LastStop.Value.ToString("yyyy-MM-dd HH:mm:ss") : "Never";
+        }
+
+        public string GetKeepOpenDisplay()
+        {
+            return KeepOpen ? "Yes" : "No";
         }
 
         public override string ToString()

@@ -2,7 +2,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace InstanceManager.Utilities
+namespace IntelligentMutexExecutionEnvironment.Utilities
 {
     public class CustomMessageBox : Form
     {
@@ -11,6 +11,7 @@ namespace InstanceManager.Utilities
         private Button yesButton;
         private Button noButton;
         private PictureBox iconPictureBox;
+        private Font _labelFont;
 
         public DialogResult Result { get; private set; }
 
@@ -42,9 +43,9 @@ namespace InstanceManager.Utilities
             this.Controls.Add(iconPictureBox);
 
             // Measure the text to determine required label height
-            Font labelFont = new Font("Segoe UI", 9F);
+            _labelFont = new Font("AUMOVIO Screen", 9F);
             Size proposedSize = new Size(labelWidth, int.MaxValue);
-            Size measuredSize = TextRenderer.MeasureText(message, labelFont, proposedSize, TextFormatFlags.WordBreak);
+            Size measuredSize = TextRenderer.MeasureText(message, _labelFont, proposedSize, TextFormatFlags.WordBreak);
             int labelHeight = Math.Max(40, measuredSize.Height + 5);
 
             messageLabel = new Label
@@ -53,7 +54,7 @@ namespace InstanceManager.Utilities
                 Location = new Point(labelX, 20),
                 AutoSize = false,
                 Size = new Size(labelWidth, labelHeight),
-                Font = labelFont
+                Font = _labelFont
             };
             this.Controls.Add(messageLabel);
 
@@ -110,24 +111,44 @@ namespace InstanceManager.Utilities
 
         private void SetIcon(MessageBoxIcon icon)
         {
+            Icon systemIcon;
             switch (icon)
             {
-                case MessageBoxIcon.Information:
-                    iconPictureBox.Image = SystemIcons.Information.ToBitmap();
-                    break;
                 case MessageBoxIcon.Warning:
-                    iconPictureBox.Image = SystemIcons.Warning.ToBitmap();
+                    systemIcon = SystemIcons.Warning;
                     break;
                 case MessageBoxIcon.Error:
-                    iconPictureBox.Image = SystemIcons.Error.ToBitmap();
+                    systemIcon = SystemIcons.Error;
                     break;
                 case MessageBoxIcon.Question:
-                    iconPictureBox.Image = SystemIcons.Question.ToBitmap();
+                    systemIcon = SystemIcons.Question;
                     break;
                 default:
-                    iconPictureBox.Image = SystemIcons.Information.ToBitmap();
+                    systemIcon = SystemIcons.Information;
                     break;
             }
+            // ToBitmap() creates a new Bitmap that the PictureBox will own.
+            // It will be disposed when the PictureBox is disposed via the form.
+            iconPictureBox.Image = systemIcon.ToBitmap();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                // Dispose the bitmap created by ToBitmap() to prevent GDI handle leak
+                if (iconPictureBox != null && iconPictureBox.Image != null)
+                {
+                    iconPictureBox.Image.Dispose();
+                    iconPictureBox.Image = null;
+                }
+                if (_labelFont != null)
+                {
+                    _labelFont.Dispose();
+                    _labelFont = null;
+                }
+            }
+            base.Dispose(disposing);
         }
 
         public static DialogResult Show(Form owner, string message, string title, MessageBoxButtons buttons, MessageBoxIcon icon)
@@ -143,7 +164,7 @@ namespace InstanceManager.Utilities
                     // Ensure it stays within screen bounds
                     Screen screen = Screen.FromControl(owner);
                     if (x < screen.WorkingArea.Left) x = screen.WorkingArea.Left + 10;
-                    if (y < screen.WorkingArea.Top) y = screen.WorkingArea.Top + 10;
+                    if (y < screen.WorkingArea.Top) x = screen.WorkingArea.Top + 10;
                     if (x + msgBox.Width > screen.WorkingArea.Right) 
                         x = screen.WorkingArea.Right - msgBox.Width - 10;
                     if (y + msgBox.Height > screen.WorkingArea.Bottom) 
