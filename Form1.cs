@@ -49,6 +49,12 @@ namespace IntelligentMutexExecutionEnvironment
         private Timer _countdownTimer;
         // Cached group status for owner-drawn group list indicators
         private Dictionary<int, GroupDisplayStatus> _groupDisplayStatus = new Dictionary<int, GroupDisplayStatus>();
+        // Reusable ListView index to avoid per-tick allocation
+        private Dictionary<int, ListViewItem> _listViewIndex = new Dictionary<int, ListViewItem>();
+        // Tracks last time a periodic GC was triggered to prevent memory growth over 24/7 operation
+        private DateTime _lastGcCollect = DateTime.Now;
+        // Interval between periodic GC collections (30 minutes)
+        private const int GcCollectIntervalMinutes = 30;
 
         /// <summary>
         /// Cached rendering state for a single group row in the GroupListBox.
@@ -173,7 +179,7 @@ namespace IntelligentMutexExecutionEnvironment
         private void SetupTimer()
         {
             _statusUpdateTimer = new Timer();
-            _statusUpdateTimer.Interval = 5000;
+            _statusUpdateTimer.Interval = 10000;
             _statusUpdateTimer.Tick += StatusUpdateTimer_Tick;
             _statusUpdateTimer.Start();
 
@@ -189,6 +195,13 @@ namespace IntelligentMutexExecutionEnvironment
             try
             {
                 UpdateApplicationStatuses();
+
+                // Periodic GC to prevent long-term memory growth during 24/7 operation
+                if ((DateTime.Now - _lastGcCollect).TotalMinutes >= GcCollectIntervalMinutes)
+                {
+                    _lastGcCollect = DateTime.Now;
+                    GC.Collect(1, GCCollectionMode.Optimized);
+                }
             }
             catch (Exception ex)
             {
@@ -216,15 +229,8 @@ namespace IntelligentMutexExecutionEnvironment
                 Dictionary<int, ListViewItem> listViewIndex = null;
                 if (_selectedGroupId > 0 && AppListView.Items.Count > 0)
                 {
-                    listViewIndex = new Dictionary<int, ListViewItem>(AppListView.Items.Count);
-                    foreach (ListViewItem lvi in AppListView.Items)
-                    {
-                        var tagApp = lvi.Tag as ManagedApplication;
-                        if (tagApp != null)
-                        {
-                            listViewIndex[tagApp.Index] = lvi;
-                        }
-                    }
+                    listViewIndex = _listViewIndex;
+                    RebuildListViewIndex(listViewIndex);
                 }
 
                 foreach (var kvp in _pendingRestart)
@@ -530,15 +536,8 @@ namespace IntelligentMutexExecutionEnvironment
                 Dictionary<int, ListViewItem> listViewIndex = null;
                 if (_selectedGroupId > 0 && AppListView.Items.Count > 0)
                 {
-                    listViewIndex = new Dictionary<int, ListViewItem>(AppListView.Items.Count);
-                    foreach (ListViewItem lvi in AppListView.Items)
-                    {
-                        var tagApp = lvi.Tag as ManagedApplication;
-                        if (tagApp != null)
-                        {
-                            listViewIndex[tagApp.Index] = lvi;
-                        }
-                    }
+                    listViewIndex = _listViewIndex;
+                    RebuildListViewIndex(listViewIndex);
                 }
 
                 foreach (var app in allApps)
@@ -1845,32 +1844,31 @@ namespace IntelligentMutexExecutionEnvironment
             Color textColor = isSelected ? SystemColors.HighlightText : e.ForeColor;
 
             using (var textBrush = new SolidBrush(textColor))
+            using (var sf = new StringFormat
             {
-                var sf = new StringFormat
-                {
-                    LineAlignment = StringAlignment.Center,
-                    FormatFlags = StringFormatFlags.NoWrap,
-                    Trimming = StringTrimming.EllipsisCharacter
-                };
-
+                LineAlignment = StringAlignment.Center,
+                FormatFlags = StringFormatFlags.NoWrap,
+                Trimming = StringTrimming.EllipsisCharacter
+            })
+            {
                 var nameRect = new RectangleF(textX, e.Bounds.Top, Math.Max(textAvailableWidth, 0), e.Bounds.Height);
                 e.Graphics.DrawString(group.GroupName ?? "(unnamed)", e.Font, textBrush, nameRect, sf);
+            }
 
-                // Draw suffix text (right-aligned)
-                if (!string.IsNullOrEmpty(status.Suffix))
+            // Draw suffix text (right-aligned)
+            if (!string.IsNullOrEmpty(status.Suffix))
+            {
+                Color suffixColor = isSelected ? SystemColors.HighlightText : Color.FromArgb(120, 120, 120);
+                using (var suffixBrush = new SolidBrush(suffixColor))
+                using (var sfRight = new StringFormat
                 {
-                    Color suffixColor = isSelected ? SystemColors.HighlightText : Color.FromArgb(120, 120, 120);
-                    using (var suffixBrush = new SolidBrush(suffixColor))
-                    {
-                        var sfRight = new StringFormat
-                        {
-                            LineAlignment = StringAlignment.Center,
-                            Alignment = StringAlignment.Far,
-                            FormatFlags = StringFormatFlags.NoWrap
-                        };
-                        var suffixRect = new RectangleF(e.Bounds.Right - suffixWidth, e.Bounds.Top, suffixWidth, e.Bounds.Height);
-                        e.Graphics.DrawString(status.Suffix, e.Font, suffixBrush, suffixRect, sfRight);
-                    }
+                    LineAlignment = StringAlignment.Center,
+                    Alignment = StringAlignment.Far,
+                    FormatFlags = StringFormatFlags.NoWrap
+                })
+                {
+                    var suffixRect = new RectangleF(e.Bounds.Right - suffixWidth, e.Bounds.Top, suffixWidth, e.Bounds.Height);
+                    e.Graphics.DrawString(status.Suffix, e.Font, suffixBrush, suffixRect, sfRight);
                 }
             }
 
@@ -1993,6 +1991,23 @@ namespace IntelligentMutexExecutionEnvironment
             if (changed)
             {
                 GroupListBox.Invalidate();
+            }
+        }
+
+        /// <summary>
+        /// Rebuilds the reusable ListView index dictionary from current AppListView items.
+        /// Clears and repopulates to avoid allocating a new dictionary each time.
+        /// </summary>
+        private void RebuildListViewIndex(Dictionary<int, ListViewItem> index)
+        {
+            index.Clear();
+            foreach (ListViewItem lvi in AppListView.Items)
+            {
+                var tagApp = lvi.Tag as ManagedApplication;
+                if (tagApp != null)
+                {
+                    index[tagApp.Index] = lvi;
+                }
             }
         }
 

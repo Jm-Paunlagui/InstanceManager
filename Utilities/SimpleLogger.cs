@@ -16,9 +16,9 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
         private static string _currentLogFile;
         private static DateTime _lastFlush = DateTime.MinValue;
         private static DateTime _lastCleanup = DateTime.MinValue;
-        private const int FlushIntervalSeconds = 5;
-        private const int MaxBufferSize = 50;
-        private const int MaxLogAgeDays = 30;
+        private const int FlushIntervalSeconds = 10;
+        private const int MaxBufferSize = 100;
+        private const int MaxLogAgeDays = 7;
 
         static SimpleLogger()
         {
@@ -76,8 +76,8 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
                         FlushBufferUnsafe(logFile);
                     }
 
-                    // Periodic cleanup of old log files (check once per hour)
-                    if ((DateTime.Now - _lastCleanup).TotalHours >= 1)
+                    // Periodic cleanup of old log files (check once per day)
+                    if ((DateTime.Now - _lastCleanup).TotalHours >= 24)
                     {
                         _lastCleanup = DateTime.Now;
                         CleanupOldLogsUnsafe();

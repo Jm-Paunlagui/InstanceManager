@@ -20,7 +20,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
         private bool _groupsDirty;
         private DateTime _lastAppSave = DateTime.MinValue;
         private DateTime _lastGroupSave = DateTime.MinValue;
-        private const int MinSaveIntervalSeconds = 10;
+        private const int MinSaveIntervalSeconds = 30;
 
         public StorageService()
         {

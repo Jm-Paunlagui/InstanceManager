@@ -21,6 +21,10 @@ namespace IntelligentMutexExecutionEnvironment.Services
             public int TotalCount;
         }
 
+        // Reusable collections to avoid per-tick allocations in GetBatchProcessSnapshot
+        private readonly Dictionary<string, List<int>> _nameToAppsCache = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<int, ProcessSnapshot> _snapshotResultsCache = new Dictionary<int, ProcessSnapshot>();
+
         /// <summary>
         /// Takes a single system-wide process snapshot and returns per-app results.
         /// This is dramatically more efficient than calling GetProcessesByName per app,
@@ -29,14 +33,21 @@ namespace IntelligentMutexExecutionEnvironment.Services
         /// </summary>
         public Dictionary<int, ProcessSnapshot> GetBatchProcessSnapshot(IList<ManagedApplication> apps)
         {
-            var results = new Dictionary<int, ProcessSnapshot>();
+            // Reuse cached collections to avoid allocations on every tick
+            var results = _snapshotResultsCache;
+            results.Clear();
 
             if (apps == null || apps.Count == 0)
                 return results;
 
             // Build a lookup of process name -> list of app indices that use that name
-            // (multiple apps could theoretically have the same exe name)
-            var nameToApps = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+            // Clear reused lists instead of creating new ones
+            var nameToApps = _nameToAppsCache;
+            foreach (var kvp in nameToApps)
+            {
+                kvp.Value.Clear();
+            }
+
             for (int i = 0; i < apps.Count; i++)
             {
                 var app = apps[i];
@@ -69,39 +80,40 @@ namespace IntelligentMutexExecutionEnvironment.Services
 
                 for (int i = 0; i < allProcesses.Length; i++)
                 {
+                    string pName;
                     try
                     {
-                        string pName = allProcesses[i].ProcessName;
-
-                        List<int> appIndices;
-                        if (!nameToApps.TryGetValue(pName, out appIndices))
-                            continue;
-
-                        bool hasWindow;
-                        try
-                        {
-                            hasWindow = allProcesses[i].MainWindowHandle != IntPtr.Zero;
-                        }
-                        catch (InvalidOperationException)
-                        {
-                            continue; // Process exited
-                        }
-
-                        for (int j = 0; j < appIndices.Count; j++)
-                        {
-                            int idx = appIndices[j];
-                            var snap = results[idx];
-                            snap.TotalCount++;
-                            if (hasWindow)
-                                snap.HasWindowedProcess = true;
-                            else
-                                snap.HasBackgroundProcess = true;
-                            results[idx] = snap;
-                        }
+                        pName = allProcesses[i].ProcessName;
                     }
                     catch (InvalidOperationException)
                     {
-                        // Process exited between enumeration and property access
+                        continue; // Process exited
+                    }
+
+                    List<int> appIndices;
+                    if (!nameToApps.TryGetValue(pName, out appIndices))
+                        continue;
+
+                    bool hasWindow;
+                    try
+                    {
+                        hasWindow = allProcesses[i].MainWindowHandle != IntPtr.Zero;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        continue; // Process exited
+                    }
+
+                    for (int j = 0; j < appIndices.Count; j++)
+                    {
+                        int idx = appIndices[j];
+                        var snap = results[idx];
+                        snap.TotalCount++;
+                        if (hasWindow)
+                            snap.HasWindowedProcess = true;
+                        else
+                            snap.HasBackgroundProcess = true;
+                        results[idx] = snap;
                     }
                 }
             }
