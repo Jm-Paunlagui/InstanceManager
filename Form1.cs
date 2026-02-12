@@ -43,8 +43,6 @@ namespace IntelligentMutexExecutionEnvironment
         // Tracks apps that were recently started and are in a grace period
         // to allow the process window to appear before watchdog monitoring begins
         private Dictionary<int, DateTime> _startGracePeriod = new Dictionary<int, DateTime>();
-        // Grace period in seconds after starting an app before watchdog monitoring begins
-        private const int StartGracePeriodSeconds = 10;
         // Dedicated 1-second timer for smooth restart countdown display
         private Timer _countdownTimer;
         // Cached group status for owner-drawn group list indicators
@@ -53,8 +51,6 @@ namespace IntelligentMutexExecutionEnvironment
         private Dictionary<int, ListViewItem> _listViewIndex = new Dictionary<int, ListViewItem>();
         // Tracks last time a periodic GC was triggered to prevent memory growth over 24/7 operation
         private DateTime _lastGcCollect = DateTime.Now;
-        // Interval between periodic GC collections (30 minutes)
-        private const int GcCollectIntervalMinutes = 30;
 
         /// <summary>
         /// Cached rendering state for a single group row in the GroupListBox.
@@ -111,6 +107,21 @@ namespace IntelligentMutexExecutionEnvironment
             _storageService = new StorageService();
             _processManager = new ProcessManager();
             _settingsService = new SettingsService();
+
+            // Apply configurable settings to services
+            ApplySettingsToServices();
+        }
+
+        /// <summary>
+        /// Applies current settings from SettingsService to all dependent services and timers.
+        /// </summary>
+        private void ApplySettingsToServices()
+        {
+            _storageService.SetSaveInterval(_settingsService.StorageSaveIntervalSeconds);
+            SimpleLogger.Configure(
+                _settingsService.LogFlushIntervalSeconds,
+                _settingsService.LogBufferSize,
+                _settingsService.LogRetentionDays);
         }
 
         /// <summary>
@@ -179,7 +190,7 @@ namespace IntelligentMutexExecutionEnvironment
         private void SetupTimer()
         {
             _statusUpdateTimer = new Timer();
-            _statusUpdateTimer.Interval = 10000;
+            _statusUpdateTimer.Interval = _settingsService.StatusPollIntervalMs;
             _statusUpdateTimer.Tick += StatusUpdateTimer_Tick;
             _statusUpdateTimer.Start();
 
@@ -197,7 +208,7 @@ namespace IntelligentMutexExecutionEnvironment
                 UpdateApplicationStatuses();
 
                 // Periodic GC to prevent long-term memory growth during 24/7 operation
-                if ((DateTime.Now - _lastGcCollect).TotalMinutes >= GcCollectIntervalMinutes)
+                if ((DateTime.Now - _lastGcCollect).TotalMinutes >= _settingsService.GcCollectIntervalMinutes)
                 {
                     _lastGcCollect = DateTime.Now;
                     GC.Collect(1, GCCollectionMode.Optimized);
@@ -828,7 +839,7 @@ namespace IntelligentMutexExecutionEnvironment
 
                     // Grant a grace period so the watchdog doesn't treat the app as crashed
                     // before its main window has had time to appear
-                    _startGracePeriod[app.Index] = DateTime.Now.AddSeconds(StartGracePeriodSeconds);
+                    _startGracePeriod[app.Index] = DateTime.Now.AddSeconds(_settingsService.StartGracePeriodSeconds);
 
                     DateTime now = DateTime.Now;
                     _storageService.UpdateApplicationFields(app.Index, isRunning: true, lastStart: now, retryCount: 0);
@@ -1186,7 +1197,7 @@ namespace IntelligentMutexExecutionEnvironment
 
                 // Grant a grace period so the watchdog doesn't treat the app as crashed
                 // before its main window has had time to appear
-                _startGracePeriod[app.Index] = DateTime.Now.AddSeconds(StartGracePeriodSeconds);
+                _startGracePeriod[app.Index] = DateTime.Now.AddSeconds(_settingsService.StartGracePeriodSeconds);
 
                 // Reset retry count on manual start so the app gets a fresh set of retries
                 app.RetryCount = 0;
@@ -1672,15 +1683,43 @@ namespace IntelligentMutexExecutionEnvironment
         {
             try
             {
-                string stationName;
-                var result = InputDialog.Show(this, "Settings", "Enter station name:", _settingsService.StationName, out stationName);
-
-                if (result == DialogResult.OK)
+                using (var dialog = new SettingsDialog(_settingsService))
                 {
-                    _settingsService.StationName = stationName;
-                    UpdateStationNameDisplay();
-                    SimpleLogger.Info("SettingsButton_Click @ Form1.cs", $"Station name updated to: {stationName}");
-                    MessageBoxHelper.ShowSuccess(this, "Station name updated successfully!");
+                    if (dialog.ShowDialog(this) == DialogResult.OK)
+                    {
+                        _settingsService.SaveAll(
+                            dialog.StationName,
+                            dialog.StatusPollIntervalMs,
+                            dialog.StartGracePeriodSeconds,
+                            dialog.GcCollectIntervalMinutes,
+                            dialog.StorageSaveIntervalSeconds,
+                            dialog.LogFlushIntervalSeconds,
+                            dialog.LogBufferSize,
+                            dialog.LogRetentionDays);
+
+                        // Apply settings to running services
+                        ApplySettingsToServices();
+
+                        // Update the status poll timer interval
+                        if (_statusUpdateTimer != null)
+                        {
+                            _statusUpdateTimer.Interval = _settingsService.StatusPollIntervalMs;
+                        }
+
+                        UpdateStationNameDisplay();
+
+                        SimpleLogger.Info("SettingsButton_Click @ Form1.cs",
+                            $"Settings updated: Station={_settingsService.StationName}, " +
+                            $"PollInterval={_settingsService.StatusPollIntervalMs}ms, " +
+                            $"GracePeriod={_settingsService.StartGracePeriodSeconds}s, " +
+                            $"GcInterval={_settingsService.GcCollectIntervalMinutes}min, " +
+                            $"SaveInterval={_settingsService.StorageSaveIntervalSeconds}s, " +
+                            $"LogFlush={_settingsService.LogFlushIntervalSeconds}s, " +
+                            $"LogBuffer={_settingsService.LogBufferSize}, " +
+                            $"LogRetention={_settingsService.LogRetentionDays}d");
+
+                        MessageBoxHelper.ShowSuccess(this, "Settings updated successfully!");
+                    }
                 }
             }
             catch (Exception ex)

@@ -45,26 +45,34 @@
 ### 6. Performance Optimizations
 ? Batch process snapshot: single `Process.GetProcesses()` for all apps  
 ? O(1) ListView item lookup via dictionary index  
-? 5-second status poll interval (balanced CPU vs. responsiveness)  
+? Configurable status poll interval (default: 10s, range: 1–60s)  
 ? Dedicated 1-second countdown timer (starts/stops on demand)  
-? Throttled storage writes with minimum save intervals  
+? Throttled storage writes with configurable minimum save intervals  
 ? Atomic file writes (write-to-temp-then-rename)  
-? Buffered logging (flush every 5s or 50 entries)  
+? Buffered logging with configurable flush interval and buffer size  
 ? Cached machine info (no repeated DNS lookups)  
+? Periodic GC collection with configurable interval for 24/7 stability  
+? Reusable dictionary/list instances to minimize GC pressure on hot paths  
 
-### 7. Station Name Settings
-? Configurable station name via Settings dialog  
-? Displayed in title bar subtitle  
+### 7. Configurable Settings
+? Station name, performance, and logging parameters in a single dialog  
+? Settings grouped into General, Performance, and Logging categories  
+? All parameters validated with min/max ranges  
+? Reset Defaults button (does not affect station name)  
+? Changes take effect immediately without restart  
 ? Persisted in `settings.json` with atomic writes  
+? Backward compatible — old `settings.json` files with only StationName still load correctly  
 
 ### 8. Logging System
 ? Custom `SimpleLogger` — zero external dependencies  
 ? Thread-safe with lock mechanism  
-? Buffered writes with configurable flush interval  
+? Buffered writes with configurable flush interval (default: 10s)  
+? Configurable buffer size (default: 100 entries)  
 ? Daily log file rotation (`logs/YYYY-MM-DD.log`)  
-? Automatic cleanup of logs older than 30 days  
+? Automatic cleanup of logs older than configurable retention period (default: 7 days)  
 ? Immediate flush on ERROR/FATAL  
 ? Silent failure — logging never crashes the application  
+? Runtime reconfiguration via `SimpleLogger.Configure()`  
 
 **Format:**
 ```
@@ -107,12 +115,13 @@ InstanceManager/
 ??? Services/
 ?   ??? StorageService.cs             JSON CRUD, throttled saves, atomic writes
 ?   ??? ProcessManager.cs             Batch snapshots, start/stop, zombie cleanup
-?   ??? SettingsService.cs            Station name persistence
+?   ??? SettingsService.cs            Station name, performance, and logging settings
 ??? Utilities/
-?   ??? SimpleLogger.cs               Buffered thread-safe logging
+?   ??? SimpleLogger.cs               Buffered thread-safe logging with runtime config
 ?   ??? CustomMessageBox.cs           Owner-relative positioned dialogs
 ?   ??? MessageBoxHelper.cs           Convenience wrappers
 ?   ??? InputDialog.cs                Text input dialogs
+?   ??? SettingsDialog.cs             Grouped settings UI (General, Performance, Logging)
 ?   ??? AppSettingsDialog.cs          Per-app settings dialog
 ??? applications.json                 Auto-generated
 ??? groups.json                       Auto-generated
@@ -151,7 +160,7 @@ InstanceManager/
 
 | Timer | Interval | Purpose |
 |-------|----------|---------|
-| `_statusUpdateTimer` | 5000ms | Watchdog polling, status sync, crash detection |
+| `_statusUpdateTimer` | Configurable (default: 10000ms) | Watchdog polling, status sync, crash detection |
 | `_countdownTimer` | 1000ms | Smooth restart countdown display (on-demand) |
 | Sequential timer | 1000ms | Start All delay countdown (temporary, per operation) |
 
@@ -215,7 +224,7 @@ CountdownTimer_Tick (every 1 second, on-demand):
 
 ### Authorization Rules
 
-| Action | _authorizedApps | _notifiedUnauthorized |
+| Action | _authorizedApps | _notified Unauthorized |
 |--------|-----------------|----------------------|
 | Instance Manager starts, app running | — (terminated) | — |
 | User clicks Start | **Added** | **Removed** |
@@ -232,10 +241,10 @@ CountdownTimer_Tick (every 1 second, on-demand):
 
 | Metric | Target | Implementation |
 |--------|--------|----------------|
-| CPU usage | < 1% | Batch snapshots, 5s interval, on-demand countdown |
-| Memory | < 50 MB | Proper disposal, no caching of process objects |
+| CPU usage | < 1% | Batch snapshots, configurable poll interval, on-demand countdown |
+| Memory | < 50 MB | Proper disposal, reusable collections, periodic GC |
 | Startup | < 1 second | Single batch snapshot for termination check |
-| Detection latency | ? 5 seconds | Status poll interval |
+| Detection latency | ? poll interval (default 10s) | Configurable status poll interval |
 | Countdown accuracy | 1 second | Dedicated timer |
 | Graceful shutdown | 3 seconds | CloseMainWindow() with timeout |
 | External dependencies | 0 | Custom JSON, custom logging, custom dialogs |
@@ -270,6 +279,7 @@ CountdownTimer_Tick (every 1 second, on-demand):
 | Max retries with failure state | ? |
 | Live countdown timers | ? |
 | JSON storage (no database) | ? |
+| Configurable settings (performance & logging) | ? |
 | Station name configuration | ? |
 | Comprehensive logging | ? |
 | Low CPU on 10+ apps | ? |
@@ -277,6 +287,7 @@ CountdownTimer_Tick (every 1 second, on-demand):
 | Atomic file writes | ? |
 | Zero external dependencies | ? |
 | .NET Framework 4.0 compatible | ? |
+| 24/7 stability (GC, memory, GDI) | ? |
 
 ---
 

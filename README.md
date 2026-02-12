@@ -52,15 +52,17 @@ The core algorithm — an **Authorized Process Watchdog** — prevents duplicate lau
 ### Performance Optimizations
 - **Batch Process Snapshot**: Single `Process.GetProcesses()` call for all apps instead of N individual `GetProcessesByName()` calls
 - **O(1) ListView Lookup**: Dictionary-indexed item lookup instead of O(n) linear scan per app
-- **5-Second Poll Interval**: Balanced between responsiveness and CPU efficiency
+- **Configurable Poll Interval**: Default 10-second watchdog poll (adjustable 1–60 seconds via Settings)
 - **1-Second Countdown Timer**: Dedicated timer for smooth countdown display (only runs when needed)
-- **Throttled Storage Writes**: Batched file I/O with minimum save intervals
+- **Throttled Storage Writes**: Batched file I/O with configurable minimum save intervals
 - **Atomic File Writes**: Write-to-temp-then-rename pattern prevents data corruption
+- **Periodic GC Collection**: Configurable interval to prevent memory growth during 24/7 operation
+- **Reusable Collections**: Dictionary and list instances are reused across timer ticks to minimize GC pressure
 
 ### Data Storage
 - **Applications**: `applications.json` — per-app settings, timestamps, and runtime state
 - **Groups**: `groups.json` — group definitions
-- **Settings**: `settings.json` — station name configuration
+- **Settings**: `settings.json` — station name, performance, and logging configuration
 - **Logs**: `logs/YYYY-MM-DD.log` — daily rotating log files
 - No database required — fully file-based with atomic writes
 
@@ -71,10 +73,11 @@ All actions are logged in the format:
 ```
 
 **Log Features:**
-- Buffered writes (flush every 5 seconds or 50 entries)
+- Buffered writes (configurable flush interval, default: 10 seconds / 100 entries)
 - Immediate flush on ERROR/FATAL
-- Automatic cleanup of logs older than 30 days
+- Automatic cleanup of logs older than configured retention period (default: 7 days)
 - Machine info cached at startup (no repeated DNS lookups)
+- All logging parameters configurable via Settings dialog
 
 ## Architecture
 
@@ -91,12 +94,13 @@ InstanceManager/
 ??? Services/
 ?   ??? StorageService.cs             JSON CRUD with throttled saves and atomic writes
 ?   ??? ProcessManager.cs             Batch snapshots, start, stop, background process cleanup
-?   ??? SettingsService.cs            Station name persistence
+?   ??? SettingsService.cs            Station name, performance, and logging settings
 ??? Utilities/
-?   ??? SimpleLogger.cs               Buffered thread-safe logging with auto-cleanup
+?   ??? SimpleLogger.cs               Buffered thread-safe logging with runtime configuration
 ?   ??? CustomMessageBox.cs           Owner-relative positioned dialogs
 ?   ??? MessageBoxHelper.cs           Convenience wrappers
-?   ??? InputDialog.cs                Text input dialog (group names, station name)
+?   ??? InputDialog.cs                Text input dialog (group names)
+?   ??? SettingsDialog.cs             Grouped settings UI (General, Performance, Logging)
 ?   ??? AppSettingsDialog.cs          Per-app settings (Keep Open, delays, counter reset)
 ??? Properties/
 ?   ??? AssemblyInfo.cs               Assembly metadata
@@ -117,8 +121,9 @@ InstanceManager/
 | `ApplicationGroup` | Group data model |
 | `StorageService` | JSON persistence with throttling and atomic writes |
 | `ProcessManager` | Batch process snapshots, start/stop/kill operations |
-| `SettingsService` | Station name load/save |
-| `SimpleLogger` | Buffered, thread-safe daily log files |
+| `SettingsService` | Station name, performance, and logging settings |
+| `SimpleLogger` | Buffered, thread-safe daily log files with runtime configuration |
+| `SettingsDialog` | Grouped settings UI (General, Performance, Logging) |
 
 ### Watchdog Algorithm
 
@@ -162,15 +167,17 @@ Every 5 seconds (StatusUpdateTimer_Tick):
 | C# Version | 7.3 |
 | UI Framework | Windows Forms |
 | External Dependencies | **0** (zero) |
-| Status Poll Interval | 5 seconds |
+| Status Poll Interval | 10 seconds (configurable: 1–60s) |
 | Countdown Timer Interval | 1 second |
 | Graceful Shutdown Timeout | 3 seconds |
-| Startup Grace Period | 10 seconds |
+| Startup Grace Period | 10 seconds (configurable: 1–120s) |
+| GC Collect Interval | 30 minutes (configurable: 5–1440 min) |
+| Storage Save Interval | 30 seconds (configurable: 5–300s) |
 | Default Max Retries | 3 |
 | Default Restart Delay | 5 seconds |
-| Log Buffer Size | 50 entries |
-| Log Flush Interval | 5 seconds |
-| Log Retention | 30 days |
+| Log Buffer Size | 100 entries (configurable: 10–1000) |
+| Log Flush Interval | 10 seconds (configurable: 1–120s) |
+| Log Retention | 7 days (configurable: 1–365 days) |
 
 ## Build and Deployment
 
@@ -191,3 +198,16 @@ Every 5 seconds (StatusUpdateTimer_Tick):
 
 ## Repository
 https://github.com/Jm-Paunlagui/InstanceManager
+
+### Station Name Settings
+? Configurable station name via Settings dialog  
+? Displayed in title bar subtitle  
+? Persisted in `settings.json` with atomic writes  
+
+### Configurable Performance & Logging
+? All performance tuning parameters configurable via Settings dialog  
+? Status poll interval, grace period, GC interval, storage save interval  
+? Log flush interval, buffer size, and retention days  
+? Changes take effect immediately without restart  
+? Reset Defaults button to restore all parameters  
+? Settings grouped into General, Performance, and Logging categories  

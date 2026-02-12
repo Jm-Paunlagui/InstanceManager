@@ -8,7 +8,7 @@
 5. [Starting and Stopping Applications](#starting-and-stopping-applications)
 6. [Keep Open (Auto-Restart)](#keep-open-auto-restart)
 7. [Understanding Status Indicators](#understanding-status-indicators)
-8. [Station Name](#station-name)
+8. [Settings](#settings)
 9. [Logs](#logs)
 10. [Security: Unauthorized Launch Prevention](#security-unauthorized-launch-prevention)
 11. [Frequently Asked Questions](#frequently-asked-questions)
@@ -215,17 +215,38 @@ If the application crashes more times than the max retry limit (in a row, withou
 
 ---
 
-## Station Name
+## Settings
 
-Set a station name to identify which workstation Instance Manager is running on.
+The Settings dialog lets you configure the station name and tune performance and logging parameters. Click the **Settings** button in the header to open it.
 
-### Setting the Station Name
-1. Click **Settings**
-2. Enter a station name (e.g., "LRA Line 2 - Station B")
-3. Click OK
-4. The name appears in the title bar as a subtitle
+### General
 
-The station name is saved in `settings.json` and persists across restarts.
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **Station Name** | Identifies the workstation in the title bar | (empty) |
+
+### Performance
+
+| Setting | Range | Default | Description |
+|---------|-------|---------|-------------|
+| **Status Poll Interval (ms)** | 1000–60000 | 10000 | How often the watchdog checks process statuses. Lower = more responsive but higher CPU usage. |
+| **Start Grace Period (seconds)** | 1–120 | 10 | Time after launching an app before the watchdog starts monitoring it. Allows the window to appear. |
+| **GC Collect Interval (minutes)** | 5–1440 | 30 | How often a periodic garbage collection runs to prevent long-term memory growth during 24/7 operation. |
+| **Storage Save Interval (seconds)** | 5–300 | 30 | Minimum time between throttled disk writes for timer-tick updates. User-initiated saves (Add, Edit, Delete) always write immediately. |
+
+### Logging
+
+| Setting | Range | Default | Description |
+|---------|-------|---------|-------------|
+| **Log Flush Interval (seconds)** | 1–120 | 10 | How often buffered log entries are written to disk. |
+| **Log Buffer Size (entries)** | 10–1000 | 100 | Maximum buffered entries before a flush is forced. |
+| **Log Retention (days)** | 1–365 | 7 | Log files older than this are automatically deleted. |
+
+### Reset Defaults
+
+Click **Reset Defaults** in the Settings dialog to restore all performance and logging settings to their defaults. The station name is not affected by reset.
+
+All settings are saved in `settings.json` and persist across restarts. Changes take effect immediately — no restart required.
 
 ---
 
@@ -251,7 +272,7 @@ Instance Manager logs all operations to daily log files.
 ```
 
 ### Log Retention
-Logs older than 30 days are automatically deleted on startup.
+Logs older than the configured retention period (default: 7 days) are automatically deleted. You can change this in **Settings** ? **Log Retention (days)**.
 
 ### Real-Time Log Monitoring
 Open a PowerShell window and run:
@@ -267,7 +288,7 @@ Instance Manager enforces that managed applications can **only** be launched thr
 
 ### How It Works
 1. When you start an app through Instance Manager, it's added to an authorized list
-2. Every 5 seconds, the watchdog checks all managed applications
+2. At each poll interval (default: 10 seconds, configurable in Settings), the watchdog checks all managed applications
 3. If a managed app is running but **not** in the authorized list, it was launched externally
 4. The unauthorized process is **killed immediately**
 5. A warning notification is shown (once per attempt)
@@ -277,8 +298,8 @@ Instance Manager enforces that managed applications can **only** be launched thr
 | Scenario | What Happens |
 |----------|-------------|
 | User starts app via Instance Manager | ? Allowed — added to authorized list |
-| User double-clicks the .exe directly | ? Killed within 5 seconds + warning shown |
-| User opens app via shortcut | ? Killed within 5 seconds + warning shown |
+| User double-clicks the .exe directly | ? Killed within one poll interval + warning shown |
+| User opens app via shortcut | ? Killed within one poll interval + warning shown |
 | App was running before Instance Manager started | ? Terminated on startup + notification |
 | App crashes and auto-restarts (Keep Open) | ? Allowed — re-authorized automatically |
 
@@ -307,13 +328,13 @@ No. Instance Manager only starts and stops processes. It never modifies any appl
 Instance Manager detects running applications by checking for a main window handle. Applications that run purely in the background (no window at all) may not be detected as "Running" and could be falsely treated as crashed.
 
 ### Can I change the watchdog polling interval?
-Not through the UI. The interval is set to 5 seconds in the code (`_statusUpdateTimer.Interval = 5000`).
+Yes. Click **Settings** and adjust the **Status Poll Interval** value. The default is 10000ms (10 seconds). Lower values make detection faster but use more CPU.
 
 ### Where is my data stored?
 All data files are in the same folder as `IntelligentMutexExecutionEnvironment.exe`:
 - `applications.json` — your managed applications
 - `groups.json` — your groups
-- `settings.json` — station name
+- `settings.json` — station name, performance, and logging configuration
 - `logs/` — daily log files
 
 ### How do I reset everything?

@@ -87,6 +87,9 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Utilities\MessageBoxHelper.cs" />
+    <Compile Include="Utilities\SettingsDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Utilities\SimpleLogger.cs" />
     <EmbeddedResource Include="Form1.resx">
       <DependentUpon>Form1.cs</DependentUpon>

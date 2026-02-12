@@ -20,7 +20,15 @@ namespace IntelligentMutexExecutionEnvironment.Services
         private bool _groupsDirty;
         private DateTime _lastAppSave = DateTime.MinValue;
         private DateTime _lastGroupSave = DateTime.MinValue;
-        private const int MinSaveIntervalSeconds = 30;
+        private int _minSaveIntervalSeconds = 30;
+
+        /// <summary>
+        /// Updates the minimum save interval for throttled writes at runtime.
+        /// </summary>
+        public void SetSaveInterval(int seconds)
+        {
+            _minSaveIntervalSeconds = Math.Max(5, seconds);
+        }
 
         public StorageService()
         {
@@ -188,7 +196,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 {
                     SaveApplications();
                 }
-                else if (_appsDirty && (DateTime.Now - _lastAppSave).TotalSeconds >= MinSaveIntervalSeconds)
+                else if (_appsDirty && (DateTime.Now - _lastAppSave).TotalSeconds >= _minSaveIntervalSeconds)
                 {
                     SaveApplications();
                 }
@@ -245,7 +253,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
             }
 
             // Throttled save for timer-tick updates
-            if (_appsDirty && (DateTime.Now - _lastAppSave).TotalSeconds >= MinSaveIntervalSeconds)
+            if (_appsDirty && (DateTime.Now - _lastAppSave).TotalSeconds >= _minSaveIntervalSeconds)
             {
                 SaveApplications();
             }

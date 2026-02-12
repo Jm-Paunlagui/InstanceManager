@@ -10,6 +10,8 @@
 2. **Set a Station Name** (optional)
    - Click the **Settings** button
    - Enter a station name (e.g., "Line 1 Station A")
+   - Optionally adjust performance and logging parameters
+   - Click OK
    - The name appears in the title bar subtitle
 
 3. **Create Your First Group**
@@ -127,7 +129,7 @@ Instance Manager enforces that managed applications must be started through its 
 
 1. Add an application to Instance Manager
 2. If someone launches that `.exe` directly (double-click, shortcut, etc.)
-3. Within 5 seconds, Instance Manager:
+3. Within one poll interval (default: 10 seconds, configurable in Settings), Instance Manager:
    - **Kills** the unauthorized process
    - Shows a warning notification
 4. The status remains **Stopped**
@@ -192,8 +194,8 @@ powershell Get-Content -Path "logs\2025-06-15.log" -Wait -Tail 20
 |------|---------|
 | `applications.json` | All managed applications with settings and timestamps |
 | `groups.json` | Group definitions |
-| `settings.json` | Station name |
-| `logs/*.log` | Daily log files (auto-cleaned after 30 days) |
+| `settings.json` | Station name, performance, and logging configuration |
+| `logs/*.log` | Daily log files (auto-cleaned after configured retention period, default: 7 days) |
 
 All files are created automatically. Delete any file to reset that data.
 
@@ -206,7 +208,7 @@ All files are created automatically. Delete any file to reset that data.
 | App won't start | Check file path in Edit dialog; verify the .exe exists |
 | App won't stop | Check logs for errors; app may have already closed externally |
 | Status stuck on "Starting..." | Wait for the 10-second grace period; check if the app creates a window |
-| Unauthorized launch not detected | Wait up to 5 seconds; ensure the app is in the managed list |
+| Unauthorized launch not detected | Wait up to one poll interval (default: 10s); ensure the app is in the managed list |
 | "Failed" status won't clear | Edit the app and reset the retry count |
 | Logs not appearing | Check write permissions in the application directory |
 | Station name not saving | Check write permissions for `settings.json` |
