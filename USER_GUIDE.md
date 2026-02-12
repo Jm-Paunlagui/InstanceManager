@@ -19,7 +19,7 @@
 ## Getting Started
 
 ### Installation
-No installation is required. Copy `InstanceManager.exe` to any folder and run it. The application creates its data files automatically in the same directory:
+No installation is required. Copy `IntelligentMutexExecutionEnvironment.exe` to any folder and run it. The application creates its data files automatically in the same directory:
 
 | File | Purpose |
 |------|---------|
@@ -29,7 +29,7 @@ No installation is required. Copy `InstanceManager.exe` to any folder and run it
 | `logs/` | Daily log files |
 
 ### First Launch
-1. Double-click `InstanceManager.exe`
+1. Double-click `IntelligentMutexExecutionEnvironment.exe`
 2. The window appears in the **bottom-right corner** of your screen
 3. Both the group list (left) and application list (right) will be empty
 
@@ -310,7 +310,7 @@ Instance Manager detects running applications by checking for a main window hand
 Not through the UI. The interval is set to 5 seconds in the code (`_statusUpdateTimer.Interval = 5000`).
 
 ### Where is my data stored?
-All data files are in the same folder as `InstanceManager.exe`:
+All data files are in the same folder as `IntelligentMutexExecutionEnvironment.exe`:
 - `applications.json` — your managed applications
 - `groups.json` — your groups
 - `settings.json` — station name

@@ -3,7 +3,7 @@
 ## First Time Setup
 
 1. **Launch the Application**
-   - Double-click `InstanceManager.exe`
+   - Double-click `IntelligentMutexExecutionEnvironment.exe`
    - The window opens in the **bottom-right corner** of the screen
    - The group list and application list will be empty on first run
 

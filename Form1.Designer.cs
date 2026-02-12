@@ -30,6 +30,7 @@
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Main));
             this.HeaderPanel = new System.Windows.Forms.Panel();
+            this.UserGuideButton = new System.Windows.Forms.Button();
             this.SettingsButton = new System.Windows.Forms.Button();
             this.AppSubtitle = new System.Windows.Forms.Label();
             this.SubtitleLabel = new System.Windows.Forms.Label();
@@ -67,7 +68,6 @@
             this.LogsButton = new System.Windows.Forms.Button();
             this.RefreshButton = new System.Windows.Forms.Button();
             this.SelectedGroupLabel = new System.Windows.Forms.Label();
-            this.UserGuideButton = new System.Windows.Forms.Button();
             this.HeaderPanel.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.LogoPictureBox)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.MainSplitContainer)).BeginInit();
@@ -98,6 +98,21 @@
             this.HeaderPanel.Padding = new System.Windows.Forms.Padding(10, 8, 10, 8);
             this.HeaderPanel.Size = new System.Drawing.Size(1131, 60);
             this.HeaderPanel.TabIndex = 52;
+            // 
+            // UserGuideButton
+            // 
+            this.UserGuideButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.UserGuideButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(224)))), ((int)(((byte)(192)))));
+            this.UserGuideButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.UserGuideButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.UserGuideButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
+            this.UserGuideButton.Location = new System.Drawing.Point(952, 16);
+            this.UserGuideButton.Name = "UserGuideButton";
+            this.UserGuideButton.Size = new System.Drawing.Size(83, 28);
+            this.UserGuideButton.TabIndex = 5;
+            this.UserGuideButton.Text = "User Guide";
+            this.UserGuideButton.UseVisualStyleBackColor = false;
+            this.UserGuideButton.Click += new System.EventHandler(this.UserGuideButton_Click);
             // 
             // SettingsButton
             // 
@@ -188,13 +203,15 @@
             // GroupListBox
             // 
             this.GroupListBox.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.GroupListBox.DrawMode = System.Windows.Forms.DrawMode.OwnerDrawFixed;
             this.GroupListBox.Font = new System.Drawing.Font("AUMOVIO Screen", 8.999999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.GroupListBox.FormattingEnabled = true;
-            this.GroupListBox.ItemHeight = 16;
+            this.GroupListBox.ItemHeight = 20;
             this.GroupListBox.Location = new System.Drawing.Point(0, 28);
             this.GroupListBox.Name = "GroupListBox";
             this.GroupListBox.Size = new System.Drawing.Size(200, 272);
             this.GroupListBox.TabIndex = 1;
+            this.GroupListBox.DrawItem += new System.Windows.Forms.DrawItemEventHandler(this.GroupListBox_DrawItem);
             this.GroupListBox.SelectedIndexChanged += new System.EventHandler(this.GroupListBox_SelectedIndexChanged);
             // 
             // GroupButtonPanel
@@ -546,21 +563,6 @@
             this.SelectedGroupLabel.TabIndex = 0;
             this.SelectedGroupLabel.Text = "Select a group to manage applications";
             this.SelectedGroupLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
-            // 
-            // UserGuideButton
-            // 
-            this.UserGuideButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.UserGuideButton.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(255)))), ((int)(((byte)(224)))), ((int)(((byte)(192)))));
-            this.UserGuideButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
-            this.UserGuideButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.UserGuideButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
-            this.UserGuideButton.Location = new System.Drawing.Point(952, 16);
-            this.UserGuideButton.Name = "UserGuideButton";
-            this.UserGuideButton.Size = new System.Drawing.Size(83, 28);
-            this.UserGuideButton.TabIndex = 5;
-            this.UserGuideButton.Text = "User Guide";
-            this.UserGuideButton.UseVisualStyleBackColor = false;
-            this.UserGuideButton.Click += new System.EventHandler(this.UserGuideButton_Click);
             // 
             // Main
             // 

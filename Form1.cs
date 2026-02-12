@@ -47,6 +47,9 @@ namespace IntelligentMutexExecutionEnvironment
         private const int StartGracePeriodSeconds = 10;
         // Dedicated 1-second timer for smooth restart countdown display
         private Timer _countdownTimer;
+        // Cached group status for owner-drawn group list indicators
+        // Maps GroupId -> true if any app in the group is running
+        private Dictionary<int, bool> _groupRunningStatus = new Dictionary<int, bool>();
 
         public Main()
         {
@@ -426,6 +429,7 @@ namespace IntelligentMutexExecutionEnvironment
                     }
 
                     string groupName = selectedGroup.GroupName;
+                    _groupRunningStatus.Remove(selectedGroup.GroupId);
                     _storageService.RemoveGroup(selectedGroup.GroupId);
                     GroupListBox.Items.Remove(selectedGroup);
 
@@ -458,6 +462,9 @@ namespace IntelligentMutexExecutionEnvironment
                 {
                     AddApplicationToListView(app);
                 }
+
+                // Update group indicators after loading apps (their IsRunning state is now current)
+                UpdateGroupIndicators(_storageService.GetAllApplicationsReadOnly());
 
                 SimpleLogger.Info("LoadApplicationsForGroup @ Form1.cs", $"Loaded {apps.Count} applications for group {groupId}");
             }
@@ -757,6 +764,9 @@ namespace IntelligentMutexExecutionEnvironment
 
                 // Flush any throttled storage changes periodically
                 _storageService.FlushPendingChanges();
+
+                // Update group indicators in the left panel based on current app states
+                UpdateGroupIndicators(allApps);
             }
             catch (Exception ex)
             {
@@ -1017,7 +1027,7 @@ namespace IntelligentMutexExecutionEnvironment
                                 string newAppName = Path.GetFileNameWithoutExtension(newPath);
                                 SimpleLogger.Warn("EditButton_Click @ Form1.cs", $"Duplicate application detected: {newAppName} at {newPath}");
                                 MessageBoxHelper.ShowWarning(this,
-                                    $"Application '{newAppName}' already exists in this group.\n\nPath: {newPath}");
+                                    $"Application '{newAppName}' already exists in this group.\n\nPath: {newAppName}");
                                 return;
                             }
 
@@ -1179,6 +1189,9 @@ namespace IntelligentMutexExecutionEnvironment
                     item.ForeColor = Color.DarkOrange;
                 }
 
+                // Refresh group indicator immediately
+                UpdateGroupIndicators(_storageService.GetAllApplicationsReadOnly());
+
                 return true;
             }
 
@@ -1263,6 +1276,9 @@ namespace IntelligentMutexExecutionEnvironment
                     item.SubItems[8].Text = app.GetLastStopDisplay();
                     item.ForeColor = Color.Black;
                 }
+
+                // Refresh group indicator immediately
+                UpdateGroupIndicators(_storageService.GetAllApplicationsReadOnly());
 
                 return true;
             }
@@ -1752,6 +1768,109 @@ namespace IntelligentMutexExecutionEnvironment
 
             SimpleLogger.Info("OnFormClosing @ Form1.cs", "Application closing");
             SimpleLogger.Flush();
+        }
+
+        /// <summary>
+        /// Owner-draw handler for GroupListBox. Draws a colored status indicator (circle)
+        /// next to each group name: green if any app in the group is running, red if all stopped.
+        /// The indicator is drawn in a reserved margin area so it stays visible even when selected.
+        /// </summary>
+        private void GroupListBox_DrawItem(object sender, DrawItemEventArgs e)
+        {
+            if (e.Index < 0) return;
+
+            var group = GroupListBox.Items[e.Index] as ApplicationGroup;
+            if (group == null) return;
+
+            bool isRunning;
+            _groupRunningStatus.TryGetValue(group.GroupId, out isRunning);
+
+            // Layout: [4px pad][8px circle][6px gap] = 18px reserved for indicator
+            int circleSize = 8;
+            int indicatorMargin = 18;
+            int circleX = e.Bounds.Left + 4;
+            int circleY = e.Bounds.Top + (e.Bounds.Height - circleSize) / 2;
+
+            bool isSelected = (e.State & DrawItemState.Selected) != 0;
+
+            // Paint indicator area with control background (never highlighted)
+            using (var indicatorBgBrush = new SolidBrush(GroupListBox.BackColor))
+            {
+                e.Graphics.FillRectangle(indicatorBgBrush, e.Bounds.Left, e.Bounds.Top, indicatorMargin, e.Bounds.Height);
+            }
+
+            // Paint text area with selection highlight or normal background
+            Rectangle textAreaRect = new Rectangle(e.Bounds.Left + indicatorMargin, e.Bounds.Top,
+                e.Bounds.Width - indicatorMargin, e.Bounds.Height);
+            Color textAreaBg = isSelected ? SystemColors.Highlight : GroupListBox.BackColor;
+            using (var textBgBrush = new SolidBrush(textAreaBg))
+            {
+                e.Graphics.FillRectangle(textBgBrush, textAreaRect);
+            }
+
+            // Draw status indicator circle
+            Color indicatorColor = isRunning ? Color.Green : Color.Red;
+            using (var brush = new SolidBrush(indicatorColor))
+            {
+                e.Graphics.FillEllipse(brush, circleX, circleY, circleSize, circleSize);
+            }
+
+            // Draw group name text
+            int textX = e.Bounds.Left + indicatorMargin + 2;
+            Color textColor = isSelected ? SystemColors.HighlightText : e.ForeColor;
+            using (var textBrush = new SolidBrush(textColor))
+            {
+                var textRect = new RectangleF(textX, e.Bounds.Top, e.Bounds.Width - textX + e.Bounds.Left, e.Bounds.Height);
+                var sf = new StringFormat { LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
+                e.Graphics.DrawString(group.GroupName ?? "(unnamed)", e.Font, textBrush, textRect, sf);
+            }
+
+            // Draw focus rectangle only around the text area
+            if ((e.State & DrawItemState.Focus) != 0)
+            {
+                ControlPaint.DrawFocusRectangle(e.Graphics, textAreaRect);
+            }
+        }
+
+        /// <summary>
+        /// Updates the cached group running status based on current app states.
+        /// Only invalidates the GroupListBox if any status actually changed.
+        /// Called from the existing watchdog timer tick to avoid extra polling.
+        /// </summary>
+        private void UpdateGroupIndicators(IList<ManagedApplication> allApps)
+        {
+            // Build a set of group IDs that have at least one running app
+            var runningGroups = new HashSet<int>();
+            foreach (var app in allApps)
+            {
+                if (app.IsRunning)
+                {
+                    runningGroups.Add(app.GroupId);
+                }
+            }
+
+            // Check if anything changed compared to cached status
+            bool changed = false;
+
+            // Collect all known group IDs from the ListBox
+            for (int i = 0; i < GroupListBox.Items.Count; i++)
+            {
+                var group = GroupListBox.Items[i] as ApplicationGroup;
+                if (group == null) continue;
+
+                bool newStatus = runningGroups.Contains(group.GroupId);
+                bool oldStatus;
+                if (!_groupRunningStatus.TryGetValue(group.GroupId, out oldStatus) || oldStatus != newStatus)
+                {
+                    _groupRunningStatus[group.GroupId] = newStatus;
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                GroupListBox.Invalidate();
+            }
         }
     }
 }
