@@ -326,7 +326,7 @@
             // StatusColumn
             // 
             this.StatusColumn.Text = "Status";
-            this.StatusColumn.Width = 65;
+            this.StatusColumn.Width = 90;
             // 
             // KeepOpenColumn
             // 
@@ -575,7 +575,7 @@
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Name = "Main";
             this.StartPosition = System.Windows.Forms.FormStartPosition.Manual;
-            this.Text = "Local MA";
+            this.Text = "Local Manufacturing Application";
             this.Load += new System.EventHandler(this.Main_Load);
             this.HeaderPanel.ResumeLayout(false);
             this.HeaderPanel.PerformLayout();

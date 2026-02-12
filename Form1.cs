@@ -48,8 +48,22 @@ namespace IntelligentMutexExecutionEnvironment
         // Dedicated 1-second timer for smooth restart countdown display
         private Timer _countdownTimer;
         // Cached group status for owner-drawn group list indicators
-        // Maps GroupId -> true if any app in the group is running
-        private Dictionary<int, bool> _groupRunningStatus = new Dictionary<int, bool>();
+        private Dictionary<int, GroupDisplayStatus> _groupDisplayStatus = new Dictionary<int, GroupDisplayStatus>();
+
+        /// <summary>
+        /// Cached rendering state for a single group row in the GroupListBox.
+        /// Compared by value to avoid redundant repaints.
+        /// </summary>
+        private struct GroupDisplayStatus
+        {
+            public Color IndicatorColor;
+            public string Suffix; // e.g. "2 / 5" or "" (empty = no suffix)
+
+            public bool Equals(GroupDisplayStatus other)
+            {
+                return IndicatorColor == other.IndicatorColor && Suffix == other.Suffix;
+            }
+        }
 
         public Main()
         {
@@ -429,7 +443,7 @@ namespace IntelligentMutexExecutionEnvironment
                     }
 
                     string groupName = selectedGroup.GroupName;
-                    _groupRunningStatus.Remove(selectedGroup.GroupId);
+                    _groupDisplayStatus.Remove(selectedGroup.GroupId);
                     _storageService.RemoveGroup(selectedGroup.GroupId);
                     GroupListBox.Items.Remove(selectedGroup);
 
@@ -1772,7 +1786,7 @@ namespace IntelligentMutexExecutionEnvironment
 
         /// <summary>
         /// Owner-draw handler for GroupListBox. Draws a colored status indicator (circle)
-        /// next to each group name: green if any app in the group is running, red if all stopped.
+        /// next to each group name with an optional count suffix (e.g. "2 / 5"). 
         /// The indicator is drawn in a reserved margin area so it stays visible even when selected.
         /// </summary>
         private void GroupListBox_DrawItem(object sender, DrawItemEventArgs e)
@@ -1782,8 +1796,11 @@ namespace IntelligentMutexExecutionEnvironment
             var group = GroupListBox.Items[e.Index] as ApplicationGroup;
             if (group == null) return;
 
-            bool isRunning;
-            _groupRunningStatus.TryGetValue(group.GroupId, out isRunning);
+            GroupDisplayStatus status;
+            if (!_groupDisplayStatus.TryGetValue(group.GroupId, out status))
+            {
+                status = new GroupDisplayStatus { IndicatorColor = Color.Gray, Suffix = "" };
+            }
 
             // Layout: [4px pad][8px circle][6px gap] = 18px reserved for indicator
             int circleSize = 8;
@@ -1809,20 +1826,52 @@ namespace IntelligentMutexExecutionEnvironment
             }
 
             // Draw status indicator circle
-            Color indicatorColor = isRunning ? Color.Green : Color.Red;
-            using (var brush = new SolidBrush(indicatorColor))
+            using (var brush = new SolidBrush(status.IndicatorColor))
             {
                 e.Graphics.FillEllipse(brush, circleX, circleY, circleSize, circleSize);
             }
 
-            // Draw group name text
+            // Measure suffix width so we can reserve space for it on the right
+            int suffixWidth = 0;
+            if (!string.IsNullOrEmpty(status.Suffix))
+            {
+                var suffixSize = e.Graphics.MeasureString(status.Suffix, e.Font);
+                suffixWidth = (int)Math.Ceiling(suffixSize.Width) + 4; // 4px right padding
+            }
+
+            // Draw group name text (left-aligned, truncated before suffix area)
             int textX = e.Bounds.Left + indicatorMargin + 2;
+            int textAvailableWidth = e.Bounds.Width - (textX - e.Bounds.Left) - suffixWidth;
             Color textColor = isSelected ? SystemColors.HighlightText : e.ForeColor;
+
             using (var textBrush = new SolidBrush(textColor))
             {
-                var textRect = new RectangleF(textX, e.Bounds.Top, e.Bounds.Width - textX + e.Bounds.Left, e.Bounds.Height);
-                var sf = new StringFormat { LineAlignment = StringAlignment.Center, FormatFlags = StringFormatFlags.NoWrap };
-                e.Graphics.DrawString(group.GroupName ?? "(unnamed)", e.Font, textBrush, textRect, sf);
+                var sf = new StringFormat
+                {
+                    LineAlignment = StringAlignment.Center,
+                    FormatFlags = StringFormatFlags.NoWrap,
+                    Trimming = StringTrimming.EllipsisCharacter
+                };
+
+                var nameRect = new RectangleF(textX, e.Bounds.Top, Math.Max(textAvailableWidth, 0), e.Bounds.Height);
+                e.Graphics.DrawString(group.GroupName ?? "(unnamed)", e.Font, textBrush, nameRect, sf);
+
+                // Draw suffix text (right-aligned)
+                if (!string.IsNullOrEmpty(status.Suffix))
+                {
+                    Color suffixColor = isSelected ? SystemColors.HighlightText : Color.FromArgb(120, 120, 120);
+                    using (var suffixBrush = new SolidBrush(suffixColor))
+                    {
+                        var sfRight = new StringFormat
+                        {
+                            LineAlignment = StringAlignment.Center,
+                            Alignment = StringAlignment.Far,
+                            FormatFlags = StringFormatFlags.NoWrap
+                        };
+                        var suffixRect = new RectangleF(e.Bounds.Right - suffixWidth, e.Bounds.Top, suffixWidth, e.Bounds.Height);
+                        e.Graphics.DrawString(status.Suffix, e.Font, suffixBrush, suffixRect, sfRight);
+                    }
+                }
             }
 
             // Draw focus rectangle only around the text area
@@ -1833,36 +1882,110 @@ namespace IntelligentMutexExecutionEnvironment
         }
 
         /// <summary>
-        /// Updates the cached group running status based on current app states.
-        /// Only invalidates the GroupListBox if any status actually changed.
-        /// Called from the existing watchdog timer tick to avoid extra polling.
+        /// Updates the cached group display status based on current app states and all
+        /// transitional tracking sets. Only invalidates the GroupListBox if any group's
+        /// visual representation actually changed.
         /// </summary>
         private void UpdateGroupIndicators(IList<ManagedApplication> allApps)
         {
-            // Build a set of group IDs that have at least one running app
-            var runningGroups = new HashSet<int>();
+            // Build per-group counters in a single pass over all apps
+            // Using Dictionary instead of LINQ grouping to avoid allocations
+            var groupStats = new Dictionary<int, GroupCounts>();
+
             foreach (var app in allApps)
             {
-                if (app.IsRunning)
+                GroupCounts counts;
+                if (!groupStats.TryGetValue(app.GroupId, out counts))
                 {
-                    runningGroups.Add(app.GroupId);
+                    counts = new GroupCounts();
+                    groupStats[app.GroupId] = counts;
+                }
+
+                counts.Total++;
+
+                if (_failedApps.Contains(app.Index))
+                {
+                    counts.Failed++;
+                }
+                else if (_pendingStop.Contains(app.Index)
+                    || _startGracePeriod.ContainsKey(app.Index)
+                    || _pendingRestart.ContainsKey(app.Index)
+                    || _pendingSequentialStart.Contains(app.Index))
+                {
+                    counts.Transitional++;
+                    // Also count as running if the app is still marked running (stopping scenario)
+                    if (app.IsRunning)
+                        counts.Running++;
+                }
+                else if (app.IsRunning)
+                {
+                    counts.Running++;
                 }
             }
 
-            // Check if anything changed compared to cached status
             bool changed = false;
 
-            // Collect all known group IDs from the ListBox
             for (int i = 0; i < GroupListBox.Items.Count; i++)
             {
                 var group = GroupListBox.Items[i] as ApplicationGroup;
                 if (group == null) continue;
 
-                bool newStatus = runningGroups.Contains(group.GroupId);
-                bool oldStatus;
-                if (!_groupRunningStatus.TryGetValue(group.GroupId, out oldStatus) || oldStatus != newStatus)
+                GroupDisplayStatus newStatus;
+                GroupCounts c;
+                if (!groupStats.TryGetValue(group.GroupId, out c) || c.Total == 0)
                 {
-                    _groupRunningStatus[group.GroupId] = newStatus;
+                    // Empty group — gray, no suffix
+                    newStatus = new GroupDisplayStatus { IndicatorColor = Color.Gray, Suffix = "" };
+                }
+                else if (c.Failed > 0)
+                {
+                    // Has failed apps — red indicator
+                    if (c.Failed >= c.Total)
+                    {
+                        // All failed — no suffix needed
+                        newStatus = new GroupDisplayStatus { IndicatorColor = Color.Red, Suffix = "" };
+                    }
+                    else
+                    {
+                        newStatus = new GroupDisplayStatus
+                        {
+                            IndicatorColor = Color.Red,
+                            Suffix = c.Failed + " / " + c.Total
+                        };
+                    }
+                }
+                else if (c.Transitional > 0)
+                {
+                    // Has transitional apps — orange indicator, no suffix
+                    newStatus = new GroupDisplayStatus { IndicatorColor = Color.DarkOrange, Suffix = "" };
+                }
+                else if (c.Running > 0)
+                {
+                    // Has running apps — green indicator
+                    if (c.Running >= c.Total)
+                    {
+                        // All running — no suffix needed
+                        newStatus = new GroupDisplayStatus { IndicatorColor = Color.Green, Suffix = "" };
+                    }
+                    else
+                    {
+                        newStatus = new GroupDisplayStatus
+                        {
+                            IndicatorColor = Color.Green,
+                            Suffix = c.Running + " / " + c.Total
+                        };
+                    }
+                }
+                else
+                {
+                    // All stopped — gray, no suffix
+                    newStatus = new GroupDisplayStatus { IndicatorColor = Color.Gray, Suffix = "" };
+                }
+
+                GroupDisplayStatus oldStatus;
+                if (!_groupDisplayStatus.TryGetValue(group.GroupId, out oldStatus) || !oldStatus.Equals(newStatus))
+                {
+                    _groupDisplayStatus[group.GroupId] = newStatus;
                     changed = true;
                 }
             }
@@ -1871,6 +1994,18 @@ namespace IntelligentMutexExecutionEnvironment
             {
                 GroupListBox.Invalidate();
             }
+        }
+
+        /// <summary>
+        /// Lightweight counter bucket for per-group status aggregation.
+        /// Used as a reference type (class) so dictionary lookups can mutate in place.
+        /// </summary>
+        private class GroupCounts
+        {
+            public int Total;
+            public int Running;
+            public int Failed;
+            public int Transitional;
         }
     }
 }
