@@ -169,6 +169,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     existingApp.MaxRetries != app.MaxRetries ||
                     existingApp.StartDelaySeconds != app.StartDelaySeconds ||
                     existingApp.StartupDelaySeconds != app.StartupDelaySeconds ||
+                    existingApp.StableRunPeriodSeconds != app.StableRunPeriodSeconds ||
                     existingApp.LastStart != app.LastStart ||
                     existingApp.LastStop != app.LastStop;
 
@@ -184,6 +185,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 existingApp.MaxRetries = app.MaxRetries;
                 existingApp.StartDelaySeconds = app.StartDelaySeconds;
                 existingApp.StartupDelaySeconds = app.StartupDelaySeconds;
+                existingApp.StableRunPeriodSeconds = app.StableRunPeriodSeconds;
 
                 if (persistentChanged)
                 {
@@ -511,7 +513,8 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 sb.AppendLine($"    \"RetryCount\": {app.RetryCount},");
                 sb.AppendLine($"    \"MaxRetries\": {app.MaxRetries},");
                 sb.AppendLine($"    \"StartDelaySeconds\": {app.StartDelaySeconds},");
-                sb.AppendLine($"    \"StartupDelaySeconds\": {app.StartupDelaySeconds}");
+                sb.AppendLine($"    \"StartupDelaySeconds\": {app.StartupDelaySeconds},");
+                sb.AppendLine($"    \"StableRunPeriodSeconds\": {app.StableRunPeriodSeconds}");
                 sb.Append("  }");
                 if (i < apps.Count - 1) sb.AppendLine(",");
                 else sb.AppendLine();
@@ -670,6 +673,11 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         int sud;
                         if (int.TryParse(value, out sud))
                             app.StartupDelaySeconds = sud;
+                        break;
+                    case "StableRunPeriodSeconds":
+                        int srp;
+                        if (int.TryParse(value, out srp))
+                            app.StableRunPeriodSeconds = srp;
                         break;
                 }
             }

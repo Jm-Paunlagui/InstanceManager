@@ -18,6 +18,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
         {
             public bool HasWindowedProcess;
             public bool HasBackgroundProcess;
+            public bool HasNotRespondingProcess;
             public int TotalCount;
         }
 
@@ -104,13 +105,30 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         continue; // Process exited
                     }
 
+                    bool responding = true;
+                    if (hasWindow)
+                    {
+                        try
+                        {
+                            responding = allProcesses[i].Responding;
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            continue; // Process exited
+                        }
+                    }
+
                     for (int j = 0; j < appIndices.Count; j++)
                     {
                         int idx = appIndices[j];
                         var snap = results[idx];
                         snap.TotalCount++;
                         if (hasWindow)
+                        {
                             snap.HasWindowedProcess = true;
+                            if (!responding)
+                                snap.HasNotRespondingProcess = true;
+                        }
                         else
                             snap.HasBackgroundProcess = true;
                         results[idx] = snap;
@@ -165,6 +183,15 @@ namespace IntelligentMutexExecutionEnvironment.Services
                             if (processes[i].MainWindowHandle != IntPtr.Zero)
                             {
                                 snapshot.HasWindowedProcess = true;
+                                try
+                                {
+                                    if (!processes[i].Responding)
+                                        snapshot.HasNotRespondingProcess = true;
+                                }
+                                catch (InvalidOperationException)
+                                {
+                                    // Process already exited
+                                }
                             }
                             else
                             {

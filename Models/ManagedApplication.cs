@@ -19,6 +19,7 @@ namespace IntelligentMutexExecutionEnvironment.Models
         public int MaxRetries { get; set; }
         public int StartDelaySeconds { get; set; }
         public int StartupDelaySeconds { get; set; }
+        public int StableRunPeriodSeconds { get; set; }
 
         public ManagedApplication()
         {
@@ -32,6 +33,7 @@ namespace IntelligentMutexExecutionEnvironment.Models
             MaxRetries = 3;
             StartDelaySeconds = 5;
             StartupDelaySeconds = 0;
+            StableRunPeriodSeconds = 30;
         }
 
         public string GetLastStartDisplay()

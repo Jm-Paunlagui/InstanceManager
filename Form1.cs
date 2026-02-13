@@ -43,6 +43,12 @@ namespace IntelligentMutexExecutionEnvironment
         // Tracks apps that were recently started and are in a grace period
         // to allow the process window to appear before watchdog monitoring begins
         private Dictionary<int, DateTime> _startGracePeriod = new Dictionary<int, DateTime>();
+        // Tracks auto-restarted apps that need to run for a stable period before retry count resets
+        // Key: app Index, Value: DateTime when the app was confirmed as Running after auto-restart
+        private Dictionary<int, DateTime> _stableRunCheck = new Dictionary<int, DateTime>();
+        // Tracks apps whose main window is not responding (possible crash dialog)
+        // Key: app Index, Value: DateTime when not-responding was first detected
+        private Dictionary<int, DateTime> _notRespondingTracking = new Dictionary<int, DateTime>();
         // Dedicated 1-second timer for smooth restart countdown display
         private Timer _countdownTimer;
         // Cached group status for owner-drawn group list indicators
@@ -457,6 +463,8 @@ namespace IntelligentMutexExecutionEnvironment
                         _pendingRestart.Remove(app.Index);
                         _failedApps.Remove(app.Index);
                         _startGracePeriod.Remove(app.Index);
+                        _stableRunCheck.Remove(app.Index);
+                        _notRespondingTracking.Remove(app.Index);
                     }
 
                     string groupName = selectedGroup.GroupName;
@@ -595,6 +603,8 @@ namespace IntelligentMutexExecutionEnvironment
                                 _processManager.KillBackgroundProcesses(app);
                             }
                             _pendingStop.Remove(app.Index);
+                            _stableRunCheck.Remove(app.Index);
+                            _notRespondingTracking.Remove(app.Index);
                             if (item != null)
                             {
                                 item.SubItems[3].Text = "Stopped";
@@ -653,6 +663,71 @@ namespace IntelligentMutexExecutionEnvironment
 
                     bool wasRunning = app.IsRunning;
 
+                    // Check stable run period: if an auto-restarted app has been running
+                    // long enough, reset its retry count to 0
+                    if (isRunning && _stableRunCheck.ContainsKey(app.Index))
+                    {
+                        if (DateTime.Now >= _stableRunCheck[app.Index])
+                        {
+                            _stableRunCheck.Remove(app.Index);
+
+                            if (app.RetryCount > 0)
+                            {
+                                SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
+                                    $"'{app.AppName}' has been running stably — resetting retry count from {app.RetryCount} to 0");
+
+                                _storageService.UpdateApplicationFields(app.Index, retryCount: 0);
+
+                                if (item != null)
+                                {
+                                    item.SubItems[6].Text = "0";
+
+                                    var tagApp = item.Tag as ManagedApplication;
+                                    if (tagApp != null)
+                                    {
+                                        tagApp.RetryCount = 0;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Detect not-responding KeepOpen apps (e.g. unhandled exception dialog)
+                    // If the app has a window but is not responding, it may be stuck on a crash dialog.
+                    // Force-kill it so auto-restart can take over.
+                    if (isRunning && wasRunning && app.KeepOpen && snapshot.HasNotRespondingProcess)
+                    {
+                        if (!_notRespondingTracking.ContainsKey(app.Index))
+                        {
+                            // First detection — record the time and wait one more poll cycle
+                            // to avoid false positives from brief UI freezes
+                            _notRespondingTracking[app.Index] = DateTime.Now;
+
+                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                $"'{app.AppName}' is not responding — will force-kill on next check if still unresponsive");
+                        }
+                        else
+                        {
+                            // Second consecutive detection — force-kill the process
+                            _notRespondingTracking.Remove(app.Index);
+                            _stableRunCheck.Remove(app.Index);
+
+                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                $"'{app.AppName}' is still not responding — force-killing for auto-restart");
+
+                            _processManager.StopApplication(app);
+
+                            // The next tick will detect the app as stopped and trigger the
+                            // crash/restart logic through the normal "!isRunning && wasRunning" path
+                        }
+                        continue;
+                    }
+                    else
+                    {
+                        // App is responding normally — clear any not-responding tracking
+                        _notRespondingTracking.Remove(app.Index);
+                    }
+
                     // Detect background zombie processes (no window but process still alive)
                     // This handles apps like Excel that close their window but linger in the background
                     if (!isRunning && wasRunning && snapshot.HasBackgroundProcess)
@@ -677,6 +752,7 @@ namespace IntelligentMutexExecutionEnvironment
                     {
                         _authorizedApps.Remove(app.Index);
                         _notifiedUnauthorized.Remove(app.Index);
+                        _stableRunCheck.Remove(app.Index);
 
                         DateTime stopTime = DateTime.Now;
 
@@ -692,7 +768,7 @@ namespace IntelligentMutexExecutionEnvironment
                                 SimpleLogger.Error("UpdateApplicationStatuses @ Form1.cs",
                                     $"'{app.AppName}' exceeded max retries ({newRetryCount}/{app.MaxRetries}). Giving up.");
 
-                                _failedApps.Add(app.Index); // Mark as failed permanently
+                                _failedApps.Add(app.Index);
 
                                 _storageService.UpdateApplicationFields(app.Index, isRunning: false,
                                     lastStop: stopTime, crashCount: newCrashCount, retryCount: newRetryCount);
@@ -842,12 +918,18 @@ namespace IntelligentMutexExecutionEnvironment
                     _startGracePeriod[app.Index] = DateTime.Now.AddSeconds(_settingsService.StartGracePeriodSeconds);
 
                     DateTime now = DateTime.Now;
-                    _storageService.UpdateApplicationFields(app.Index, isRunning: true, lastStart: now, retryCount: 0);
+                    // Do NOT reset retryCount here — it will be reset only after the app
+                    // runs stably for the configured StableRunPeriodSeconds
+                    _storageService.UpdateApplicationFields(app.Index, isRunning: true, lastStart: now);
+
+                    // Schedule a stable-run check: retry count resets only after the app
+                    // has been running continuously for StableRunPeriodSeconds
+                    int stablePeriod = Math.Max(app.StableRunPeriodSeconds, 1);
+                    _stableRunCheck[app.Index] = now.AddSeconds(stablePeriod);
 
                     if (item != null)
                     {
                         item.SubItems[3].Text = "Starting...";
-                        item.SubItems[6].Text = "0";
                         item.SubItems[7].Text = now.ToString("yyyy-MM-dd HH:mm:ss");
                         item.ForeColor = Color.DarkOrange;
 
@@ -856,12 +938,12 @@ namespace IntelligentMutexExecutionEnvironment
                         {
                             tagApp.LastStart = now;
                             tagApp.IsRunning = true;
-                            tagApp.RetryCount = 0;
                         }
                     }
 
                     SimpleLogger.Info("AttemptAutoRestart @ Form1.cs",
-                        $"Auto-restarted '{app.AppName}' successfully (Retry {app.RetryCount}/{app.MaxRetries}), retry count reset to 0");
+                        $"Auto-restarted '{app.AppName}' successfully (Retry {app.RetryCount}/{app.MaxRetries}), " +
+                        $"retry count will reset after {stablePeriod}s of stable running");
                 }
                 else
                 {
@@ -1086,7 +1168,8 @@ namespace IntelligentMutexExecutionEnvironment
                         _storageService.UpdateApplication(app);
 
                         SimpleLogger.Info("EditButton_Click @ Form1.cs",
-                            $"Updated '{app.AppName}': KeepOpen={app.KeepOpen}, StartDelay={app.StartDelaySeconds}s, StartupDelay={app.StartupDelaySeconds}s");
+                            $"Updated '{app.AppName}': KeepOpen={app.KeepOpen}, StartDelay={app.StartDelaySeconds}s, " +
+                            $"StartupDelay={app.StartupDelaySeconds}s");
                         MessageBoxHelper.ShowSuccess(this, "Application updated successfully!");
                     }
                 }
@@ -1129,6 +1212,8 @@ namespace IntelligentMutexExecutionEnvironment
                     _pendingRestart.Remove(app.Index);
                     _failedApps.Remove(app.Index);
                     _startGracePeriod.Remove(app.Index);
+                    _stableRunCheck.Remove(app.Index);
+                    _notRespondingTracking.Remove(app.Index);
                     _storageService.RemoveApplication(app.Index);
                     AppListView.Items.Remove(selectedItem);
 
@@ -1278,6 +1363,8 @@ namespace IntelligentMutexExecutionEnvironment
             _authorizedApps.Remove(app.Index);
             _notifiedUnauthorized.Remove(app.Index);
             _startGracePeriod.Remove(app.Index);
+            _stableRunCheck.Remove(app.Index);
+            _notRespondingTracking.Remove(app.Index);
 
             // Show "Stopping" immediately so the user gets visual feedback
             if (item != null)
@@ -1604,6 +1691,8 @@ namespace IntelligentMutexExecutionEnvironment
                     // Cancel any pending restart since user is intentionally stopping all
                     _pendingRestart.Remove(app.Index);
                     _failedApps.Remove(app.Index);
+                    _stableRunCheck.Remove(app.Index);
+                    _notRespondingTracking.Remove(app.Index);
 
                     if (_processManager.IsApplicationRunning(app))
                     {

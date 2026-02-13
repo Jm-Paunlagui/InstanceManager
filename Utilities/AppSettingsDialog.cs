@@ -17,6 +17,7 @@ namespace IntelligentMutexExecutionEnvironment
         private NumericUpDown _startDelayNumeric;
         private NumericUpDown _maxRetriesNumeric;
         private NumericUpDown _startupDelayNumeric;
+        private NumericUpDown _stableRunNumeric;
         private Button _resetCrashButton;
         private Button _resetRetryButton;
         private Label _crashCountLabel;
@@ -48,7 +49,7 @@ namespace IntelligentMutexExecutionEnvironment
         private void InitializeControls()
         {
             this.Text = $"Edit - {_app.AppName}";
-            this.Size = new Size(500, 500);
+            this.Size = new Size(500, 535);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
@@ -122,7 +123,7 @@ namespace IntelligentMutexExecutionEnvironment
             // Startup Delay
             var startupDelayLabel = new Label
             {
-                Text = "Startup Delay (seconds):",
+                Text = "Startup Delay (sec):",
                 Location = new Point(labelX, y + 2),
                 AutoSize = true
             };
@@ -206,7 +207,7 @@ namespace IntelligentMutexExecutionEnvironment
             // Start Delay
             var startDelayLabel = new Label
             {
-                Text = "Restart Delay (seconds):",
+                Text = "Restart Delay (sec):",
                 Location = new Point(labelX, y + 2),
                 AutoSize = true
             };
@@ -220,6 +221,35 @@ namespace IntelligentMutexExecutionEnvironment
             };
             this.Controls.Add(startDelayLabel);
             this.Controls.Add(_startDelayNumeric);
+
+            y += rowHeight;
+
+            // Stable Run Period
+            var stableRunLabel = new Label
+            {
+                Text = "Stable Run Period (sec):",
+                Location = new Point(labelX, y + 2),
+                AutoSize = true
+            };
+            _stableRunNumeric = new NumericUpDown
+            {
+                Minimum = 5,
+                Maximum = 600,
+                Value = Math.Max(5, _app.StableRunPeriodSeconds),
+                Location = new Point(controlX, y),
+                Size = new Size(80, 23)
+            };
+            var stableRunHint = new Label
+            {
+                Text = "Run time before retry count resets",
+                Location = new Point(controlX + 85, y + 2),
+                AutoSize = true,
+                ForeColor = Color.Gray,
+                Font = _normalFont
+            };
+            this.Controls.Add(stableRunLabel);
+            this.Controls.Add(_stableRunNumeric);
+            this.Controls.Add(stableRunHint);
 
             y += rowHeight + 10;
 
@@ -417,8 +447,23 @@ namespace IntelligentMutexExecutionEnvironment
             _app.MaxRetries = (int)_maxRetriesNumeric.Value;
             _app.StartDelaySeconds = (int)_startDelayNumeric.Value;
             _app.StartupDelaySeconds = (int)_startupDelayNumeric.Value;
+            _app.StableRunPeriodSeconds = (int)_stableRunNumeric.Value;
             this.DialogResult = DialogResult.OK;
             this.Close();
+        }
+
+        private void InitializeComponent()
+        {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(EditAppDialog));
+            this.SuspendLayout();
+            // 
+            // EditAppDialog
+            // 
+            this.ClientSize = new System.Drawing.Size(284, 261);
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
+            this.Name = "EditAppDialog";
+            this.ResumeLayout(false);
+
         }
     }
 }

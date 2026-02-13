@@ -113,6 +113,7 @@ Groups let you organize your applications logically — for example, by production
    - **Set Start Delay** — seconds to wait before auto-restart (1–300)
    - **Set Startup Delay** — seconds to wait during sequential Start All (0–300)
    - **Set Max Retries** — maximum restart attempts before giving up
+   - **Set Stable Run Period** — seconds the app must run before retry count resets (5–600, default: 30)
    - **Reset Crash Count** — clear the crash counter
    - **Reset Retry Count** — clear the retry counter and remove "Failed" state
 4. Click OK to save changes
@@ -183,15 +184,23 @@ When a Keep Open application stops unexpectedly:
 3. The retry count increments
 4. A countdown begins: **Restarting (5s)** ? **Restarting (4s)** ? ... ? **Starting...**
 5. The application relaunches automatically
-6. If the relaunch succeeds, the retry count resets to 0
+6. If the relaunch succeeds and the app runs stably for the **Stable Run Period** (default: 30 seconds), the retry count resets to 0
 
 ### When Max Retries Are Exhausted
-If the application crashes more times than the max retry limit (in a row, without a successful run between crashes):
+If the application crashes more times than the max retry limit (without running stably between crashes):
 1. The status changes to **Failed** (red)
 2. No further auto-restart attempts are made
 3. You can fix the issue and either:
    - Click **Start** to manually restart (resets the retry count)
    - Click **Edit** and reset the retry count, then start
+
+### Stable Run Period
+The retry count only resets to 0 after the application has been running continuously for the configured **Stable Run Period** (default: 30 seconds). This prevents apps that crash shortly after starting from resetting retries indefinitely and never reaching "Failed" state.
+
+You can configure this per-application via **Edit** ? **Stable Run Period (seconds)**.
+
+### Unresponsive Application Detection
+If a Keep Open application becomes unresponsive (e.g., due to an unhandled exception dialog that blocks the main window), Instance Manager will detect it and force-kill the process so auto-restart can take over. The detection requires two consecutive poll cycles to confirm the app is truly unresponsive, avoiding false positives from brief UI freezes.
 
 ### Important Notes
 - Manually stopping an app via the **Stop** button does **not** trigger a restart — even with Keep Open enabled
@@ -214,6 +223,8 @@ If the application crashes more times than the max retry limit (in a row, withou
 | **Starting...** | Orange | Restart countdown finished, application is being relaunched | Wait — will change to Running |
 | **Waiting (Ns)** | Orange | Sequential Start All — this app is next in line | Wait for countdown to finish |
 | **Failed** | Red | Auto-restart gave up after max retries | Check the app, then Start manually or reset retries |
+
+> **Note**: Keep Open applications that become unresponsive (e.g., stuck on an unhandled exception dialog) are automatically detected and force-killed after two consecutive poll cycles, allowing auto-restart to take over.
 
 ### Group Status Indicators
 
@@ -343,6 +354,9 @@ No. Instance Manager only starts and stops processes. It never modifies any appl
 
 ### What if my application doesn't have a visible window?
 Instance Manager detects running applications by checking for a main window handle. Applications that run purely in the background (no window at all) may not be detected as "Running" and could be falsely treated as crashed.
+
+### What if my application shows an error dialog (unhandled exception)?
+If a Keep Open application becomes unresponsive due to an error dialog (e.g., an unhandled .NET exception dialog), Instance Manager will detect the unresponsive state after two consecutive poll cycles and force-kill the process. This allows auto-restart to take over without requiring manual intervention.
 
 ### Can I change the watchdog polling interval?
 Yes. Click **Settings** and adjust the **Status Poll Interval** value. The default is 10000ms (10 seconds). Lower values make detection faster but use more CPU.
