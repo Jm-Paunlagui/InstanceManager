@@ -38,7 +38,7 @@
 ? Max retries with configurable limit (default: 3)  
 ? Live 1-second countdown: "Restarting (5s)" ? "Restarting (4s)" ? ... ? "Starting..."  
 ? "Failed" state when max retries exhausted  
-? 10-second startup grace period before watchdog monitoring begins  
+? Configurable startup grace period before watchdog monitoring begins (default: 10 seconds)  
 ? Crash and retry counters resettable via Edit dialog  
 ? Background zombie process detection and cleanup  
 
@@ -82,7 +82,7 @@
 ### 9. Data Persistence
 ? `applications.json` — app data with custom JSON serializer  
 ? `groups.json` — group definitions  
-? `settings.json` — station name  
+? `settings.json` — station name, performance, and logging configuration  
 ? Proper Windows path escaping (`\\`)  
 ? Nullable DateTime support  
 ? Backward compatible with older JSON files  
@@ -94,7 +94,8 @@
 ? Color-coded status (Green, Orange, Red, Black)  
 ? Custom MessageBox positioned relative to owner form  
 ? Form positioned in bottom-right corner of screen  
-? Input dialogs for group names and station name  
+? Settings dialog with grouped configuration (General, Performance, Logging)  
+? Input dialogs for group names  
 ? Edit dialog for per-app settings  
 ? Buttons disabled/enabled based on group selection state  
 
@@ -181,7 +182,7 @@ InstanceManager/
 ## Watchdog Algorithm
 
 ```
-StatusUpdateTimer_Tick (every 5 seconds):
+StatusUpdateTimer_Tick (every poll interval, default: 10 seconds):
 ???????????????????????????????????????????????????????????
 ?  1. Batch process snapshot (single GetProcesses() call) ?
 ?  2. Build ListView index (Dictionary for O(1) lookup)   ?
@@ -224,7 +225,7 @@ CountdownTimer_Tick (every 1 second, on-demand):
 
 ### Authorization Rules
 
-| Action | _authorizedApps | _notified Unauthorized |
+| Action | _authorizedApps | _notifiedUnauthorized |
 |--------|-----------------|----------------------|
 | Instance Manager starts, app running | — (terminated) | — |
 | User clicks Start | **Added** | **Removed** |

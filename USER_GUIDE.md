@@ -25,7 +25,7 @@ No installation is required. Copy `IntelligentMutexExecutionEnvironment.exe` to 
 |------|---------|
 | `applications.json` | Stores your managed applications |
 | `groups.json` | Stores your groups |
-| `settings.json` | Stores your station name |
+| `settings.json` | Stores station name, performance, and logging configuration |
 | `logs/` | Daily log files |
 
 ### First Launch
@@ -43,13 +43,13 @@ When Instance Manager starts, it checks if any managed applications are already 
 The interface is divided into two main areas:
 
 ### Left Panel — Groups
-- **Group List**: Shows all your application groups
+- **Group List**: Shows all your application groups with color-coded status indicators (see [Group Status Indicators](#group-status-indicators))
 - **Add Group / Edit Group / Delete Group**: Manage groups
 
 ### Right Panel — Applications
 - **Application List**: Shows apps in the selected group with 9 columns
 - **Action Buttons**: Add, Edit, Delete, Start, Stop, Start All, Stop All, Refresh
-- **Settings / Logs**: Configure station name or open the logs folder
+- **Settings / Logs**: Configure station name, performance, and logging settings, or open the logs folder
 
 ### Application List Columns
 
@@ -178,7 +178,7 @@ Keep Open automatically restarts an application when it crashes or is closed une
 ### How It Works
 When a Keep Open application stops unexpectedly:
 
-1. The crash is detected by the watchdog (within 5 seconds)
+1. The crash is detected by the watchdog (within one poll interval, default: 10 seconds)
 2. The crash count increments
 3. The retry count increments
 4. A countdown begins: **Restarting (5s)** ? **Restarting (4s)** ? ... ? **Starting...**
@@ -202,6 +202,8 @@ If the application crashes more times than the max retry limit (in a row, withou
 
 ## Understanding Status Indicators
 
+### Application Status
+
 | Status | Color | What It Means | What to Do |
 |--------|-------|---------------|------------|
 | **Stopped** | Black | Application is not running | Click Start to launch |
@@ -212,6 +214,21 @@ If the application crashes more times than the max retry limit (in a row, withou
 | **Starting...** | Orange | Restart countdown finished, application is being relaunched | Wait — will change to Running |
 | **Waiting (Ns)** | Orange | Sequential Start All — this app is next in line | Wait for countdown to finish |
 | **Failed** | Red | Auto-restart gave up after max retries | Check the app, then Start manually or reset retries |
+
+### Group Status Indicators
+
+Each group in the left panel displays a colored circle indicator that summarizes the state of all applications in that group. When only some applications are in a given state, a count suffix (e.g., "2 / 5") appears next to the group name.
+
+| Indicator | Color | What It Means | Count Suffix |
+|-----------|-------|---------------|--------------|
+| ? | Gray | Group has no applications, or all applications are stopped | No |
+| ? | Green | All applications are running | No |
+| ? | Green | Some applications are running | "N / T" (running / total) |
+| ? | Orange | One or more applications are in a transitional state (Starting, Stopping, Restarting, or Waiting) | No |
+| ? | Red | All applications have failed (max retries exhausted) | No |
+| ? | Red | Some applications have failed | "N / T" (failed / total) |
+
+**Priority**: If a group has apps in multiple states, the indicator shows the highest-priority state: **Red** (failed) > **Orange** (transitional) > **Green** (running) > **Gray** (stopped/empty).
 
 ---
 
@@ -358,7 +375,7 @@ Delete `applications.json`, `groups.json`, and `settings.json`, then restart Ins
 
 ### Status Stuck on "Starting..."
 The application has been launched but its window hasn't appeared yet. Possible causes:
-- The application is still loading (wait for the 10-second grace period)
+- The application is still loading (wait for the grace period, default: 10 seconds, configurable in Settings)
 - The application runs without a visible window (not supported for status detection)
 - The application crashed immediately after launch (check logs)
 

@@ -12,7 +12,6 @@ The core algorithm — an **Authorized Process Watchdog** — prevents duplicate lau
 - **Create Groups**: Organize applications into logical groups (e.g., by production line, station)
 - **Edit Groups**: Rename groups with duplicate name detection
 - **Delete Groups**: Remove groups and all associated applications (running apps are stopped first)
-- **Station Name**: Configure a station identifier displayed in the title bar
 
 ### Application Management
 - **Add Applications**: Browse and add executable files to a group (with duplicate detection per group)
@@ -24,7 +23,7 @@ The core algorithm — an **Authorized Process Watchdog** — prevents duplicate lau
 
 ### Authorized Process Watchdog
 - **Startup Enforcement**: Applications already running when Instance Manager starts are terminated
-- **Unauthorized Launch Detection**: Applications launched outside Instance Manager are killed within 5 seconds
+- **Unauthorized Launch Detection**: Applications launched outside Instance Manager are killed within one poll interval (default: 10 seconds)
 - **Authorization Tracking**: Only applications started through Instance Manager are allowed to run
 - **External Stop Detection**: When a running application is closed externally, the status updates automatically
 - **Debounced Notifications**: User is warned only once per unauthorized launch attempt
@@ -34,8 +33,16 @@ The core algorithm — an **Authorized Process Watchdog** — prevents duplicate lau
 - **Configurable Restart Delay**: Per-application delay (1–300 seconds) before auto-restart
 - **Max Retries**: Configurable maximum restart attempts (default: 3) before marking as "Failed"
 - **Live Countdown**: Restart countdown updates every second in the status column
-- **Startup Grace Period**: 10-second window after launch before watchdog monitoring begins
+- **Startup Grace Period**: Configurable window after launch before watchdog monitoring begins (default: 10 seconds)
 - **Crash & Retry Tracking**: Counts are persisted and can be reset via the Edit dialog
+
+### Configurable Settings
+- **Station Name**: Identifies the workstation in the title bar
+- **Performance Tuning**: Status poll interval, grace period, GC interval, storage save interval
+- **Logging Configuration**: Log flush interval, buffer size, and retention days
+- **Reset Defaults**: Restore all performance and logging settings to defaults
+- **Immediate Effect**: All changes apply instantly without restart
+- **Grouped UI**: Settings organized into General, Performance, and Logging categories
 
 ### Status Transitions
 | Status | Color | Meaning |
@@ -128,7 +135,7 @@ InstanceManager/
 ### Watchdog Algorithm
 
 ```
-Every 5 seconds (StatusUpdateTimer_Tick):
+Every poll interval (default: 10 seconds, configurable via Settings):
   1. Get batch process snapshot (single Process.GetProcesses() call)
   2. Build ListView index dictionary for O(1) lookups
   3. For each managed application across ALL groups:
@@ -198,16 +205,3 @@ Every 5 seconds (StatusUpdateTimer_Tick):
 
 ## Repository
 https://github.com/Jm-Paunlagui/InstanceManager
-
-### Station Name Settings
-? Configurable station name via Settings dialog  
-? Displayed in title bar subtitle  
-? Persisted in `settings.json` with atomic writes  
-
-### Configurable Performance & Logging
-? All performance tuning parameters configurable via Settings dialog  
-? Status poll interval, grace period, GC interval, storage save interval  
-? Log flush interval, buffer size, and retention days  
-? Changes take effect immediately without restart  
-? Reset Defaults button to restore all parameters  
-? Settings grouped into General, Performance, and Logging categories  
