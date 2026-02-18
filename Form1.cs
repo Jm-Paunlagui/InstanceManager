@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -57,6 +57,26 @@ namespace IntelligentMutexExecutionEnvironment
         private Dictionary<int, ListViewItem> _listViewIndex = new Dictionary<int, ListViewItem>();
         // Tracks last time a periodic GC was triggered to prevent memory growth over 24/7 operation
         private DateTime _lastGcCollect = DateTime.Now;
+        // Tracks CPU time samples for detecting CPU-hung processes
+        // Key: app Index, Value: (lastSampleTime, lastTotalCpuTime)
+        private Dictionary<int, KeyValuePair<DateTime, TimeSpan>> _cpuTimeSamples = new Dictionary<int, KeyValuePair<DateTime, TimeSpan>>();
+        // Tracks consecutive high-CPU detections to avoid false positives from brief spikes
+        // Key: app Index, Value: number of consecutive high-CPU ticks
+        private Dictionary<int, int> _highCpuStreak = new Dictionary<int, int>();
+        // Number of consecutive high-CPU ticks before treating a process as hung
+        private const int HighCpuStreakThreshold = 3;
+        // CPU usage threshold (0.0 - 1.0) above which a process is considered CPU-hung
+        private const double HighCpuThreshold = 0.95;
+        // Tracks apps whose window title matched an error dialog pattern
+        // Key: app Index, Value: DateTime when first detected
+        private Dictionary<int, DateTime> _errorDialogTracking = new Dictionary<int, DateTime>();
+        // Tracks the established (initial) window title for each running app.
+        // Used to detect unexpected title changes that may indicate an error dialog overlay.
+        // Key: app Index, Value: the window title captured after the grace period
+        private Dictionary<int, string> _knownWindowTitles = new Dictionary<int, string>();
+        // Tracks apps whose window title changed unexpectedly (possible error dialog).
+        // Key: app Index, Value: DateTime when first detected (requires 2 consecutive ticks)
+        private Dictionary<int, DateTime> _titleChangeTracking = new Dictionary<int, DateTime>();
 
         /// <summary>
         /// Cached rendering state for a single group row in the GroupListBox.
@@ -142,6 +162,9 @@ namespace IntelligentMutexExecutionEnvironment
             {
                 var apps = _storageService.GetAllApplicationsReadOnly();
                 List<string> terminatedApps = new List<string>();
+                // Track process names already terminated to avoid duplicate kills
+                // when the same executable appears in multiple groups
+                HashSet<string> terminatedProcessNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 // Single process enumeration for all apps instead of one per app
                 var snapshots = _processManager.GetBatchProcessSnapshot(apps);
@@ -156,14 +179,20 @@ namespace IntelligentMutexExecutionEnvironment
 
                     if (isRunning)
                     {
-                        SimpleLogger.Warn("TerminateAlreadyRunningApps @ Form1.cs",
-                            $"'{app.AppName}' was running before Instance Manager started - terminating");
+                        string processName = Path.GetFileNameWithoutExtension(app.Directory);
 
-                        _processManager.StopApplication(app);
+                        // Only terminate once per process name (same exe in multiple groups)
+                        if (!terminatedProcessNames.Contains(processName))
+                        {
+                            SimpleLogger.Warn("TerminateAlreadyRunningApps @ Form1.cs",
+                                $"'{app.AppName}' was running before Instance Manager started - terminating");
+
+                            _processManager.StopApplication(app);
+                            terminatedProcessNames.Add(processName);
+                            terminatedApps.Add(app.AppName ?? "(unknown)");
+                        }
 
                         _storageService.UpdateApplicationFields(app.Index, isRunning: false, lastStop: DateTime.Now, retryCount: 0);
-
-                        terminatedApps.Add(app.AppName ?? "(unknown)");
                     }
                     else
                     {
@@ -465,6 +494,11 @@ namespace IntelligentMutexExecutionEnvironment
                         _startGracePeriod.Remove(app.Index);
                         _stableRunCheck.Remove(app.Index);
                         _notRespondingTracking.Remove(app.Index);
+                        _cpuTimeSamples.Remove(app.Index);
+                        _highCpuStreak.Remove(app.Index);
+                        _errorDialogTracking.Remove(app.Index);
+                        _knownWindowTitles.Remove(app.Index);
+                        _titleChangeTracking.Remove(app.Index);
                     }
 
                     string groupName = selectedGroup.GroupName;
@@ -517,23 +551,51 @@ namespace IntelligentMutexExecutionEnvironment
         private void AddApplicationToListView(ManagedApplication app)
         {
             bool isRunning = false;
+            bool isCrossGroupRun = false;
             if (!string.IsNullOrEmpty(app.Directory))
             {
                 isRunning = _processManager.IsApplicationRunning(app);
+
+                // If the process is running but this entry didn't start it,
+                // check if a sibling entry in another group is authorized
+                if (isRunning && !_authorizedApps.Contains(app.Index))
+                {
+                    isCrossGroupRun = _storageService.FindAuthorizedSibling(app.Directory, app.Index, _authorizedApps) != null;
+                }
             }
-            app.IsRunning = isRunning;
+
+            // Cross-group running apps should not be marked as IsRunning for this entry
+            app.IsRunning = isRunning && !isCrossGroupRun;
+
+            string statusText;
+            Color statusColor;
+            if (isCrossGroupRun)
+            {
+                statusText = "Running (Other Group)";
+                statusColor = Color.DarkCyan;
+            }
+            else if (isRunning)
+            {
+                statusText = "Running";
+                statusColor = Color.Green;
+            }
+            else
+            {
+                statusText = "Stopped";
+                statusColor = Color.Black;
+            }
 
             ListViewItem item = new ListViewItem(app.Index.ToString());
             item.SubItems.Add(app.AppName ?? "");                    // [1] Application
             item.SubItems.Add(app.Directory ?? "");                  // [2] Directory
-            item.SubItems.Add(isRunning ? "Running" : "Stopped");    // [3] Status
+            item.SubItems.Add(statusText);                           // [3] Status
             item.SubItems.Add(app.GetKeepOpenDisplay());             // [4] Keep Open
             item.SubItems.Add(app.CrashCount.ToString());            // [5] Crashes
             item.SubItems.Add(app.RetryCount.ToString());            // [6] Retries
             item.SubItems.Add(app.GetLastStartDisplay());            // [7] Last Start
             item.SubItems.Add(app.GetLastStopDisplay());             // [8] Last Stop
             item.Tag = app;
-            item.ForeColor = isRunning ? Color.Green : Color.Black;
+            item.ForeColor = statusColor;
 
             AppListView.Items.Add(item);
         }
@@ -546,7 +608,7 @@ namespace IntelligentMutexExecutionEnvironment
                 // to enforce watchdog across all groups
                 var allApps = _storageService.GetAllApplicationsReadOnly();
 
-                // Single process enumeration for ALL apps — replaces N individual
+                // Single process enumeration for ALL apps â€” replaces N individual
                 // GetProcessesByName calls with one Process.GetProcesses() call
                 var snapshots = _processManager.GetBatchProcessSnapshot(allApps);
 
@@ -657,8 +719,8 @@ namespace IntelligentMutexExecutionEnvironment
                                     item.ForeColor = Color.DarkOrange;
                                 }
                             }
-                            continue;
                         }
+                        continue;
                     }
 
                     bool wasRunning = app.IsRunning;
@@ -674,7 +736,7 @@ namespace IntelligentMutexExecutionEnvironment
                             if (app.RetryCount > 0)
                             {
                                 SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
-                                    $"'{app.AppName}' has been running stably — resetting retry count from {app.RetryCount} to 0");
+                                    $"'{app.AppName}' has been running stably â€” resetting retry count from {app.RetryCount} to 0");
 
                                 _storageService.UpdateApplicationFields(app.Index, retryCount: 0);
 
@@ -695,37 +757,231 @@ namespace IntelligentMutexExecutionEnvironment
                     // Detect not-responding KeepOpen apps (e.g. unhandled exception dialog)
                     // If the app has a window but is not responding, it may be stuck on a crash dialog.
                     // Force-kill it so auto-restart can take over.
+                    // Uses configurable NotRespondingTimeoutSeconds per app, or falls back to
+                    // 2 consecutive poll cycles if not configured (timeout = 0).
                     if (isRunning && wasRunning && app.KeepOpen && snapshot.HasNotRespondingProcess)
                     {
                         if (!_notRespondingTracking.ContainsKey(app.Index))
                         {
-                            // First detection — record the time and wait one more poll cycle
-                            // to avoid false positives from brief UI freezes
                             _notRespondingTracking[app.Index] = DateTime.Now;
 
                             SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                $"'{app.AppName}' is not responding — will force-kill on next check if still unresponsive");
+                                $"'{app.AppName}' is not responding â€” monitoring for timeout");
                         }
                         else
                         {
-                            // Second consecutive detection — force-kill the process
-                            _notRespondingTracking.Remove(app.Index);
-                            _stableRunCheck.Remove(app.Index);
+                            int timeoutSeconds = app.NotRespondingTimeoutSeconds;
+                            bool shouldKill;
 
-                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                $"'{app.AppName}' is still not responding — force-killing for auto-restart");
+                            if (timeoutSeconds > 0)
+                            {
+                                // Time-based timeout: kill after the configured duration
+                                double elapsed = (DateTime.Now - _notRespondingTracking[app.Index]).TotalSeconds;
+                                shouldKill = elapsed >= timeoutSeconds;
 
-                            _processManager.StopApplication(app);
+                                if (!shouldKill)
+                                {
+                                    SimpleLogger.Debug("UpdateApplicationStatuses @ Form1.cs",
+                                        $"'{app.AppName}' still not responding ({(int)elapsed}/{timeoutSeconds}s)");
+                                }
+                            }
+                            else
+                            {
+                                // Default: 2 consecutive poll cycles (backward compatible)
+                                shouldKill = true;
+                            }
 
-                            // The next tick will detect the app as stopped and trigger the
-                            // crash/restart logic through the normal "!isRunning && wasRunning" path
+                            if (shouldKill)
+                            {
+                                _notRespondingTracking.Remove(app.Index);
+                                _stableRunCheck.Remove(app.Index);
+                                _cpuTimeSamples.Remove(app.Index);
+                                _highCpuStreak.Remove(app.Index);
+
+                                SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                    $"'{app.AppName}' is still not responding â€” force-killing for auto-restart");
+
+                                _processManager.StopApplication(app);
+                            }
                         }
                         continue;
                     }
                     else
                     {
-                        // App is responding normally — clear any not-responding tracking
+                        // App is responding normally â€” clear any not-responding tracking
                         _notRespondingTracking.Remove(app.Index);
+                    }
+
+                    // Detect error dialog windows (ghost windows that are "responding" but show
+                    // unhandled exception, crash, or error dialogs). These windows pump messages
+                    // so Process.Responding returns true, but the app is effectively stuck.
+                    // Only applies to KeepOpen apps that are running and authorized.
+                    if (isRunning && wasRunning && app.KeepOpen && snapshot.HasErrorDialogWindow)
+                    {
+                        if (!_errorDialogTracking.ContainsKey(app.Index))
+                        {
+                            // First detection â€” wait one more poll cycle to confirm
+                            _errorDialogTracking[app.Index] = DateTime.Now;
+
+                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                $"'{app.AppName}' appears to have an error dialog: \"{snapshot.ErrorDialogTitle}\" â€” confirming on next check");
+                        }
+                        else
+                        {
+                            // Second consecutive detection â€” force-kill
+                            _errorDialogTracking.Remove(app.Index);
+                            _stableRunCheck.Remove(app.Index);
+                            _cpuTimeSamples.Remove(app.Index);
+                            _highCpuStreak.Remove(app.Index);
+
+                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                $"'{app.AppName}' confirmed error dialog: \"{snapshot.ErrorDialogTitle}\" â€” force-killing for auto-restart");
+
+                            _processManager.StopApplication(app);
+                        }
+                        continue;
+                    }
+                    else
+                    {
+                        _errorDialogTracking.Remove(app.Index);
+                    }
+
+                    // Detect window title changes for KeepOpen apps with DetectTitleChange enabled.
+                    // When a WinForms app shows an unhandled exception dialog (ThreadExceptionDialog),
+                    // the dialog's title is just the app's product name â€” no error keyword appears.
+                    // By comparing the current window title to the established title, we can detect
+                    // this class of dialog that would otherwise be invisible to pattern matching.
+                    // Requires 2 consecutive detections to avoid false positives from apps that
+                    // legitimately change their title (e.g. showing a document name).
+                    if (isRunning && wasRunning && app.KeepOpen && app.DetectTitleChange
+                        && snapshot.MainWindowTitle != null)
+                    {
+                        string knownTitle;
+                        if (!_knownWindowTitles.TryGetValue(app.Index, out knownTitle))
+                        {
+                            // First time seeing this app running â€” record its title as the baseline
+                            _knownWindowTitles[app.Index] = snapshot.MainWindowTitle;
+                        }
+                        else if (!string.IsNullOrEmpty(knownTitle)
+                            && !string.IsNullOrEmpty(snapshot.MainWindowTitle)
+                            && knownTitle != snapshot.MainWindowTitle)
+                        {
+                            // Title changed â€” check if this is a confirmed change
+                            if (!_titleChangeTracking.ContainsKey(app.Index))
+                            {
+                                _titleChangeTracking[app.Index] = DateTime.Now;
+
+                                SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                    $"'{app.AppName}' window title changed: \"{knownTitle}\" â†’ \"{snapshot.MainWindowTitle}\" â€” confirming on next check");
+                            }
+                            else
+                            {
+                                // Second consecutive detection â€” treat as error dialog
+                                string changedTitle = snapshot.MainWindowTitle;
+                                _titleChangeTracking.Remove(app.Index);
+                                _knownWindowTitles.Remove(app.Index);
+                                _stableRunCheck.Remove(app.Index);
+                                _cpuTimeSamples.Remove(app.Index);
+                                _highCpuStreak.Remove(app.Index);
+
+                                SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                    $"'{app.AppName}' confirmed title change to \"{changedTitle}\" (was \"{knownTitle}\") â€” force-killing as suspected error dialog");
+
+                                _processManager.StopApplication(app);
+                                continue;
+                            }
+                        }
+                        else
+                        {
+                            // Title is the same â€” clear any pending title change tracking
+                            _titleChangeTracking.Remove(app.Index);
+                        }
+                    }
+                    else if (!isRunning)
+                    {
+                        _knownWindowTitles.Remove(app.Index);
+                        _titleChangeTracking.Remove(app.Index);
+                    }
+
+                    // Detect memory limit breach for KeepOpen apps with a configured MemoryLimitMB.
+                    // Uses WorkingSet64 from the batch snapshot (lightweight kernel query, no overhead).
+                    if (isRunning && wasRunning && app.KeepOpen && app.MemoryLimitMB > 0)
+                    {
+                        long limitBytes = (long)app.MemoryLimitMB * 1024L * 1024L;
+                        if (snapshot.PeakWorkingSetBytes > limitBytes)
+                        {
+                            long usedMB = snapshot.PeakWorkingSetBytes / (1024L * 1024L);
+
+                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                $"'{app.AppName}' exceeded memory limit ({usedMB}MB / {app.MemoryLimitMB}MB) â€” force-killing for auto-restart");
+
+                            _stableRunCheck.Remove(app.Index);
+                            _cpuTimeSamples.Remove(app.Index);
+                            _highCpuStreak.Remove(app.Index);
+
+                            _processManager.StopApplication(app);
+                            // The next tick will detect the app as stopped and trigger crash/restart logic
+                            continue;
+                        }
+                    }
+
+                    // Detect CPU-hung processes for KeepOpen apps.
+                    // Compares TotalProcessorTime across poll ticks to compute CPU utilization.
+                    // If CPU usage exceeds HighCpuThreshold for HighCpuStreakThreshold consecutive
+                    // ticks, the process is considered hung (infinite loop, deadlock spin, etc.).
+                    // This uses only Process.TotalProcessorTime which is a lightweight kernel query.
+                    if (isRunning && wasRunning && app.KeepOpen && snapshot.TotalCpuTime.Ticks > 0)
+                    {
+                        KeyValuePair<DateTime, TimeSpan> lastSample;
+                        if (_cpuTimeSamples.TryGetValue(app.Index, out lastSample))
+                        {
+                            double elapsedSeconds = (DateTime.Now - lastSample.Key).TotalSeconds;
+                            if (elapsedSeconds > 0.5) // Avoid division by near-zero
+                            {
+                                double cpuSeconds = (snapshot.TotalCpuTime - lastSample.Value).TotalSeconds;
+                                double cpuUsage = cpuSeconds / (elapsedSeconds * Environment.ProcessorCount);
+
+                                if (cpuUsage >= HighCpuThreshold)
+                                {
+                                    int streak;
+                                    _highCpuStreak.TryGetValue(app.Index, out streak);
+                                    streak++;
+                                    _highCpuStreak[app.Index] = streak;
+
+                                    if (streak >= HighCpuStreakThreshold)
+                                    {
+                                        SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                            $"'{app.AppName}' has been at {(cpuUsage * 100):F0}% CPU for {streak} consecutive checks â€” force-killing as CPU-hung");
+
+                                        _highCpuStreak.Remove(app.Index);
+                                        _cpuTimeSamples.Remove(app.Index);
+                                        _stableRunCheck.Remove(app.Index);
+
+                                        _processManager.StopApplication(app);
+                                        continue;
+                                    }
+                                    else
+                                    {
+                                        SimpleLogger.Debug("UpdateApplicationStatuses @ Form1.cs",
+                                            $"'{app.AppName}' high CPU: {(cpuUsage * 100):F0}% (streak {streak}/{HighCpuStreakThreshold})");
+                                    }
+                                }
+                                else
+                                {
+                                    // CPU back to normal â€” reset streak
+                                    _highCpuStreak.Remove(app.Index);
+                                }
+                            }
+                        }
+
+                        // Update the sample for next tick comparison
+                        _cpuTimeSamples[app.Index] = new KeyValuePair<DateTime, TimeSpan>(DateTime.Now, snapshot.TotalCpuTime);
+                    }
+                    else if (!isRunning)
+                    {
+                        // Clean up CPU tracking for stopped apps
+                        _cpuTimeSamples.Remove(app.Index);
+                        _highCpuStreak.Remove(app.Index);
                     }
 
                     // Detect background zombie processes (no window but process still alive)
@@ -740,14 +996,41 @@ namespace IntelligentMutexExecutionEnvironment
                         // No need to re-snapshot since we just killed all background processes
                     }
 
-                    // Detect unauthorized external launch
-                    if (isRunning && !wasRunning && !_authorizedApps.Contains(app.Index))
+                    // Detect unauthorized external launch (or cross-group detection)
+                    if (isRunning && !_authorizedApps.Contains(app.Index))
                     {
-                        HandleUnauthorizedLaunch(app, item);
-                        continue;
+                        // Before treating as unauthorized, check if another entry for the same
+                        // executable is authorized (same app added to multiple groups).
+                        // In that case, the process was legitimately started from another group.
+                        // Uses FindAuthorizedSibling to avoid allocating a List on every tick.
+                        var authorizedSibling = _storageService.FindAuthorizedSibling(app.Directory, app.Index, _authorizedApps);
+
+                        if (authorizedSibling != null)
+                        {
+                            // The process is running because it was started from another group entry.
+                            // Don't kill it â€” just update the display to reflect that it's running elsewhere.
+                            // Ensure IsRunning stays false for this entry so group indicators stay correct.
+                            if (app.IsRunning)
+                            {
+                                _storageService.UpdateApplicationFields(app.Index, isRunning: false);
+                            }
+                            if (item != null)
+                            {
+                                item.SubItems[3].Text = "Running (Other Group)";
+                                item.ForeColor = Color.DarkCyan;
+                            }
+                            continue;
+                        }
+
+                        // Only treat as unauthorized if this is a new detection (wasn't running before)
+                        if (!wasRunning)
+                        {
+                            HandleUnauthorizedLaunch(app, item);
+                            continue;
+                        }
                     }
 
-                    // App was stopped externally (outside Instance Manager) — possible crash
+                    // App was stopped externally (outside Instance Manager) â€” possible crash
                     if (!isRunning && wasRunning)
                     {
                         _authorizedApps.Remove(app.Index);
@@ -918,7 +1201,7 @@ namespace IntelligentMutexExecutionEnvironment
                     _startGracePeriod[app.Index] = DateTime.Now.AddSeconds(_settingsService.StartGracePeriodSeconds);
 
                     DateTime now = DateTime.Now;
-                    // Do NOT reset retryCount here — it will be reset only after the app
+                    // Do NOT reset retryCount here â€” it will be reset only after the app
                     // runs stably for the configured StableRunPeriodSeconds
                     _storageService.UpdateApplicationFields(app.Index, isRunning: true, lastStart: now);
 
@@ -1214,6 +1497,11 @@ namespace IntelligentMutexExecutionEnvironment
                     _startGracePeriod.Remove(app.Index);
                     _stableRunCheck.Remove(app.Index);
                     _notRespondingTracking.Remove(app.Index);
+                    _cpuTimeSamples.Remove(app.Index);
+                    _highCpuStreak.Remove(app.Index);
+                    _errorDialogTracking.Remove(app.Index);
+                    _knownWindowTitles.Remove(app.Index);
+                    _titleChangeTracking.Remove(app.Index);
                     _storageService.RemoveApplication(app.Index);
                     AppListView.Items.Remove(selectedItem);
 
@@ -1269,6 +1557,21 @@ namespace IntelligentMutexExecutionEnvironment
 
             if (_processManager.IsApplicationRunning(app))
             {
+                // Check if the process is running because another group entry started it
+                var siblings = _storageService.FindOtherEntriesWithSamePath(app.Directory, app.Index);
+                foreach (var sibling in siblings)
+                {
+                    if (_authorizedApps.Contains(sibling.Index))
+                    {
+                        var siblingGroup = _storageService.GetGroup(sibling.GroupId);
+                        string groupName = siblingGroup != null ? siblingGroup.GroupName : $"Group {sibling.GroupId}";
+                        MessageBoxHelper.ShowWarning(this,
+                            $"'{app.AppName}' is already running in group '{groupName}'.\n\n" +
+                            "You must stop it in the other group first before starting it here.");
+                        return false;
+                    }
+                }
+
                 SimpleLogger.Info("StartSingleApplication @ Form1.cs", $"'{app.AppName}' is already running, skipping");
                 return true; // Already running is not a failure
             }
@@ -1365,6 +1668,11 @@ namespace IntelligentMutexExecutionEnvironment
             _startGracePeriod.Remove(app.Index);
             _stableRunCheck.Remove(app.Index);
             _notRespondingTracking.Remove(app.Index);
+            _cpuTimeSamples.Remove(app.Index);
+            _highCpuStreak.Remove(app.Index);
+            _errorDialogTracking.Remove(app.Index);
+            _knownWindowTitles.Remove(app.Index);
+            _titleChangeTracking.Remove(app.Index);
 
             // Show "Stopping" immediately so the user gets visual feedback
             if (item != null)
@@ -1474,13 +1782,13 @@ namespace IntelligentMutexExecutionEnvironment
 
                 if (hasDelays)
                 {
-                    // Sequential launch with startup delays — use a timer-based approach
+                    // Sequential launch with startup delays â€” use a timer-based approach
                     // to avoid blocking the UI thread
                     StartAllSequential(appsToStart, alreadyRunning);
                     return;
                 }
 
-                // No delays configured — launch all immediately (existing behavior)
+                // No delays configured â€” launch all immediately (existing behavior)
                 foreach (var kvp in appsToStart)
                 {
                     if (StartSingleApplication(kvp.Key, kvp.Value))
@@ -1643,13 +1951,13 @@ namespace IntelligentMutexExecutionEnvironment
                     }
                     else
                     {
-                        // No delay — launch immediately
+                        // No delay â€” launch immediately
                         launchNext();
                     }
                 }
                 else
                 {
-                    // No more apps — finalize
+                    // No more apps â€” finalize
                     finalize();
                 }
             };
@@ -2060,15 +2368,15 @@ namespace IntelligentMutexExecutionEnvironment
                 GroupCounts c;
                 if (!groupStats.TryGetValue(group.GroupId, out c) || c.Total == 0)
                 {
-                    // Empty group — gray, no suffix
+                    // Empty group â€” gray, no suffix
                     newStatus = new GroupDisplayStatus { IndicatorColor = Color.Gray, Suffix = "" };
                 }
                 else if (c.Failed > 0)
                 {
-                    // Has failed apps — red indicator
+                    // Has failed apps â€” red indicator
                     if (c.Failed >= c.Total)
                     {
-                        // All failed — no suffix needed
+                        // All failed â€” no suffix needed
                         newStatus = new GroupDisplayStatus { IndicatorColor = Color.Red, Suffix = "" };
                     }
                     else
@@ -2082,15 +2390,15 @@ namespace IntelligentMutexExecutionEnvironment
                 }
                 else if (c.Transitional > 0)
                 {
-                    // Has transitional apps — orange indicator, no suffix
+                    // Has transitional apps â€” orange indicator, no suffix
                     newStatus = new GroupDisplayStatus { IndicatorColor = Color.DarkOrange, Suffix = "" };
                 }
                 else if (c.Running > 0)
                 {
-                    // Has running apps — green indicator
+                    // Has running apps â€” green indicator
                     if (c.Running >= c.Total)
                     {
-                        // All running — no suffix needed
+                        // All running â€” no suffix needed
                         newStatus = new GroupDisplayStatus { IndicatorColor = Color.Green, Suffix = "" };
                     }
                     else
@@ -2104,7 +2412,7 @@ namespace IntelligentMutexExecutionEnvironment
                 }
                 else
                 {
-                    // All stopped — gray, no suffix
+                    // All stopped â€” gray, no suffix
                     newStatus = new GroupDisplayStatus { IndicatorColor = Color.Gray, Suffix = "" };
                 }
 
