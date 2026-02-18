@@ -1,4 +1,4 @@
-# Instance Manager — User Guide
+ï»¿# Instance Manager â€” User Guide
 
 ## Table of Contents
 1. [Getting Started](#getting-started)
@@ -43,11 +43,11 @@ When Instance Manager starts, it checks if any managed applications are already 
 
 The interface is divided into two main areas:
 
-### Left Panel — Groups
+### Left Panel â€” Groups
 - **Group List**: Shows all your application groups with color-coded status indicators (see [Group Status Indicators](#group-status-indicators))
 - **Add Group / Edit Group / Delete Group**: Manage groups
 
-### Right Panel — Applications
+### Right Panel â€” Applications
 - **Application List**: Shows apps in the selected group with 9 columns
 - **Action Buttons**: Add, Edit, Delete, Start, Stop, Start All, Stop All, Refresh
 - **Settings / Logs**: Configure station name, performance, and logging settings, or open the logs folder
@@ -70,7 +70,7 @@ The interface is divided into two main areas:
 
 ## Managing Groups
 
-Groups let you organize your applications logically — for example, by production line, station, or purpose.
+Groups let you organize your applications logically â€” for example, by production line, station, or purpose.
 
 ### Create a Group
 1. Click **Add Group**
@@ -116,21 +116,21 @@ Groups let you organize your applications logically — for example, by production
 #### Startup Settings
 | Setting | Range | Default | Description |
 |---------|-------|---------|-------------|
-| **Startup Delay (sec)** | 0–300 | 0 | Wait time before launching this app during sequential Start All. Apps with 0 launch immediately. |
+| **Startup Delay (sec)** | 0â€“300 | 0 | Wait time before launching this app during sequential Start All. Apps with 0 launch immediately. |
 
 #### Crash Recovery Settings
 | Setting | Range | Default | Description |
 |---------|-------|---------|-------------|
 | **Keep Open (Auto-Restart)** | Yes/No | No | When enabled, the watchdog automatically restarts the app after a crash. |
-| **Max Retries** | 1–100 | 3 | Maximum number of consecutive restart attempts before giving up. |
-| **Restart Delay (sec)** | 1–300 | 5 | Seconds to wait before attempting a restart after a crash. |
-| **Stable Run Period (sec)** | 5–600 | 30 | How long the app must run continuously after restart before the retry count resets to 0. |
+| **Max Retries** | 1â€“100 | 3 | Maximum number of consecutive restart attempts before giving up. |
+| **Restart Delay (sec)** | 1â€“300 | 5 | Seconds to wait before attempting a restart after a crash. |
+| **Stable Run Period (sec)** | 5â€“600 | 30 | How long the app must run continuously after restart before the retry count resets to 0. |
 
 #### Health Monitoring
 | Setting | Range | Default | Description |
 |---------|-------|---------|-------------|
-| **Not Responding (sec)** | 0–600 | 0 | How long a process can remain unresponsive before being force-killed. `0` = default behavior (2 consecutive poll cycles). Set a higher value for apps that legitimately freeze briefly during heavy operations. |
-| **Memory Limit (MB)** | 0–65536 | 0 | Maximum working set memory allowed. If the process exceeds this limit, it is force-killed for auto-restart. `0` = no limit (disabled). Useful for detecting memory leaks in long-running apps. |
+| **Not Responding (sec)** | 0â€“600 | 0 | How long a process can remain unresponsive before being force-killed. `0` = default behavior (2 consecutive poll cycles). Set a higher value for apps that legitimately freeze briefly during heavy operations. |
+| **Memory Limit (MB)** | 0â€“65536 | 0 | Maximum working set memory allowed. If the process exceeds this limit, it is force-killed for auto-restart. `0` = no limit (disabled). Useful for detecting memory leaks in long-running apps. |
 | **Detect Title Change** | Yes/No | No | When enabled, the watchdog records the app's initial window title and treats a persistent title change as a suspected error dialog (e.g., a WinForms unhandled exception dialog whose title is just the app name). Requires 2 consecutive detections to confirm. Leave disabled for apps that legitimately change their window title (e.g., showing a document name). |
 
 #### Statistics
@@ -206,7 +206,7 @@ When a Keep Open application stops unexpectedly:
 1. The crash is detected by the watchdog (within one poll interval, default: 10 seconds)
 2. The crash count increments
 3. The retry count increments
-4. A countdown begins: **Restarting (5s)** ? **Restarting (4s)** ? ... ? **Starting...**
+4. A countdown begins: **Restarting (5s)** â†’ **Restarting (4s)** â†’ ... â†’ **Starting...**
 5. The application relaunches automatically
 6. If the relaunch succeeds and the app runs stably for the **Stable Run Period** (default: 30 seconds), the retry count resets to 0
 
@@ -221,10 +221,10 @@ If the application crashes more times than the max retry limit (without running 
 ### Stable Run Period
 The retry count only resets to 0 after the application has been running continuously for the configured **Stable Run Period** (default: 30 seconds). This prevents apps that crash shortly after starting from resetting retries indefinitely and never reaching "Failed" state.
 
-You can configure this per-application via **Edit** ? **Stable Run Period (seconds)**.
+You can configure this per-application via **Edit** â†’ **Stable Run Period (seconds)**.
 
 ### Important Notes
-- Manually stopping an app via the **Stop** button does **not** trigger a restart — even with Keep Open enabled
+- Manually stopping an app via the **Stop** button does **not** trigger a restart â€” even with Keep Open enabled
 - The retry count resets to 0 whenever the app successfully starts (manual or auto)
 - The crash count is cumulative and never resets automatically (reset it via Edit)
 
@@ -244,7 +244,7 @@ Detects when an application's UI thread is frozen (e.g., infinite loop, UI deadl
 3. After the configured timeout (or 2 consecutive poll cycles if timeout is `0`), the process is force-killed
 4. Auto-restart takes over
 
-**Configure via:** Edit ? **Not Responding (sec)**
+**Configure via:** Edit â†’ **Not Responding (sec)**
 
 > **Tip**: Set a non-zero value (e.g., 30 seconds) for apps that occasionally freeze briefly during heavy operations like loading large files.
 
@@ -266,7 +266,7 @@ Detects when an application shows a crash or error dialog that is technically "r
 3. On second consecutive detection, the process is force-killed
 4. Auto-restart takes over
 
-This detection is **always active** for Keep Open apps — no configuration needed.
+This detection is **always active** for Keep Open apps â€” no configuration needed.
 
 ### Window Title Change Detection
 
@@ -278,7 +278,7 @@ Detects when an application's window title changes unexpectedly, which can indic
 3. If the title changes and stays changed for 2 consecutive poll cycles, the process is force-killed
 4. Auto-restart takes over
 
-**Configure via:** Edit ? **Detect Title Change** (opt-in, disabled by default)
+**Configure via:** Edit â†’ **Detect Title Change** (opt-in, disabled by default)
 
 > **Warning**: Only enable this for apps with a stable, unchanging window title. Apps that show document names, status text, or progress in their title bar will trigger false positives.
 
@@ -291,9 +291,9 @@ Detects when an application's working set memory exceeds a configured threshold.
 2. If the working set exceeds the configured limit, the process is force-killed immediately (no confirmation wait)
 3. Auto-restart takes over
 
-**Configure via:** Edit ? **Memory Limit (MB)** (set to `0` to disable)
+**Configure via:** Edit â†’ **Memory Limit (MB)** (set to `0` to disable)
 
-> **Tip**: Monitor your app's normal memory usage first, then set the limit to 2–3× the expected peak. For example, if an app normally uses 200 MB, set the limit to 500 MB.
+> **Tip**: Monitor your app's normal memory usage first, then set the limit to 2â€“3Ã— the expected peak. For example, if an app normally uses 200 MB, set the limit to 500 MB.
 
 ### CPU-Hung Process Detection
 
@@ -301,11 +301,11 @@ Detects when an application is consuming excessive CPU continuously, indicating 
 
 **How it works:**
 1. Each poll tick samples `Process.TotalProcessorTime` (a lightweight kernel query)
-2. CPU utilization is computed by comparing samples across ticks: `?CpuTime / (?time × ProcessorCount)`
+2. CPU utilization is computed by comparing samples across ticks: `Î”CpuTime / (Î”time Ã— ProcessorCount)`
 3. If CPU usage exceeds 95% for 3 consecutive poll cycles, the process is force-killed
-4. Brief CPU spikes are tolerated — only sustained high CPU triggers the kill
+4. Brief CPU spikes are tolerated â€” only sustained high CPU triggers the kill
 
-This detection is **always active** for Keep Open apps — no configuration needed.
+This detection is **always active** for Keep Open apps â€” no configuration needed.
 
 > **Note**: This catches spin-wait deadlocks (high CPU) but not idle deadlocks (0% CPU with frozen UI). Idle deadlocks are caught by [Not Responding Detection](#not-responding-detection) instead.
 
@@ -318,7 +318,7 @@ Detects when an application's window disappears but its process remains alive in
 2. Any found background processes are force-killed
 3. The app is then treated as crashed and the normal restart flow begins
 
-This detection is **always active** — no configuration needed.
+This detection is **always active** â€” no configuration needed.
 
 ### Detection Coverage Summary
 
@@ -326,18 +326,18 @@ The following table shows which types of application failures Instance Manager c
 
 | Failure Type | Example | Detection Method | Auto-Restart? |
 |---|---|---|---|
-| **UI Freeze** | Infinite loop on UI thread | Not Responding detection | ? Yes |
-| **Unhandled Exception Dialog** | `NullReferenceException`, `DivideByZeroException` on UI thread | Error Dialog title matching + Title Change detection | ? Yes |
-| **Stack Overflow** | Infinite recursion | Process terminates ? crash detection | ? Yes |
-| **Out of Memory** | Memory exhaustion | Memory Limit detection (proactive) + crash detection (reactive) | ? Yes |
-| **Access Violation** | Writing to invalid memory | Process terminates ? crash detection | ? Yes |
-| **UI Deadlock** | Two locks acquired in opposite order | Not Responding detection (UI blocked) + CPU-Hung detection (spin-wait) | ? Yes |
-| **Background Thread Exception** | Unhandled exception on worker thread | Process terminates ? crash detection + zombie detection | ? Yes |
-| **Environment.FailFast** | Immediate process termination | Process terminates ? crash detection | ? Yes |
-| **Process Crash** | Any unexpected process exit | Window disappears ? crash detection | ? Yes |
-| **Memory Leak** | Gradual memory growth | Memory Limit detection | ? Yes |
-| **CPU Spin Loop** | Infinite `while(true)` with work | CPU-Hung detection (3 consecutive ticks >95%) | ? Yes |
-| **Zombie Process** | Window closed but process lingers | Background Zombie detection | ? Yes |
+| **UI Freeze** | Infinite loop on UI thread | Not Responding detection | âœ… Yes |
+| **Unhandled Exception Dialog** | `NullReferenceException`, `DivideByZeroException` on UI thread | Error Dialog title matching + Title Change detection | âœ… Yes |
+| **Stack Overflow** | Infinite recursion | Process terminates â†’ crash detection | âœ… Yes |
+| **Out of Memory** | Memory exhaustion | Memory Limit detection (proactive) + crash detection (reactive) | âœ… Yes |
+| **Access Violation** | Writing to invalid memory | Process terminates â†’ crash detection | âœ… Yes |
+| **UI Deadlock** | Two locks acquired in opposite order | Not Responding detection (UI blocked) + CPU-Hung detection (spin-wait) | âœ… Yes |
+| **Background Thread Exception** | Unhandled exception on worker thread | Process terminates â†’ crash detection + zombie detection | âœ… Yes |
+| **Environment.FailFast** | Immediate process termination | Process terminates â†’ crash detection | âœ… Yes |
+| **Process Crash** | Any unexpected process exit | Window disappears â†’ crash detection | âœ… Yes |
+| **Memory Leak** | Gradual memory growth | Memory Limit detection | âœ… Yes |
+| **CPU Spin Loop** | Infinite `while(true)` with work | CPU-Hung detection (3 consecutive ticks >95%) | âœ… Yes |
+| **Zombie Process** | Window closed but process lingers | Background Zombie detection | âœ… Yes |
 
 ---
 
@@ -348,13 +348,13 @@ The following table shows which types of application failures Instance Manager c
 | Status | Color | What It Means | What to Do |
 |--------|-------|---------------|------------|
 | **Stopped** | Black | Application is not running | Click Start to launch |
-| **Starting...** | Orange | Application was just launched, waiting for its window to appear | Wait — will change to Running |
+| **Starting...** | Orange | Application was just launched, waiting for its window to appear | Wait â€” will change to Running |
 | **Running** | Green | Application is running normally | No action needed |
 | **Running (Other Group)** | Dark Cyan | Application is running, but it was started from a different group | Stop it in the other group first if you want to start it here |
-| **Stopping...** | Orange | Stop command was sent, waiting for the process to exit | Wait — will change to Stopped |
+| **Stopping...** | Orange | Stop command was sent, waiting for the process to exit | Wait â€” will change to Stopped |
 | **Restarting (Ns)** | Orange | Application crashed, auto-restart countdown in progress | Wait for countdown to finish |
-| **Starting...** | Orange | Restart countdown finished, application is being relaunched | Wait — will change to Running |
-| **Waiting (Ns)** | Orange | Sequential Start All — this app is next in line | Wait for countdown to finish |
+| **Starting...** | Orange | Restart countdown finished, application is being relaunched | Wait â€” will change to Running |
+| **Waiting (Ns)** | Orange | Sequential Start All â€” this app is next in line | Wait for countdown to finish |
 | **Failed** | Red | Auto-restart gave up after max retries | Check the app, then Start manually or reset retries |
 
 ### Group Status Indicators
@@ -363,12 +363,12 @@ Each group in the left panel displays a colored circle indicator that summarizes
 
 | Indicator | Color | What It Means | Count Suffix |
 |-----------|-------|---------------|--------------|
-| ? | Gray | Group has no applications, or all applications are stopped | No |
-| ? | Green | All applications are running | No |
-| ? | Green | Some applications are running | "N / T" (running / total) |
-| ? | Orange | One or more applications are in a transitional state (Starting, Stopping, Restarting, or Waiting) | No |
-| ? | Red | All applications have failed (max retries exhausted) | No |
-| ? | Red | Some applications have failed | "N / T" (failed / total) |
+| â— | Gray | Group has no applications, or all applications are stopped | No |
+| â— | Green | All applications are running | No |
+| â— | Green | Some applications are running | "N / T" (running / total) |
+| â— | Orange | One or more applications are in a transitional state (Starting, Stopping, Restarting, or Waiting) | No |
+| â— | Red | All applications have failed (max retries exhausted) | No |
+| â— | Red | Some applications have failed | "N / T" (failed / total) |
 
 **Priority**: If a group has apps in multiple states, the indicator shows the highest-priority state: **Red** (failed) > **Orange** (transitional) > **Green** (running) > **Gray** (stopped/empty).
 
@@ -388,24 +388,24 @@ The Settings dialog lets you configure the station name and tune performance and
 
 | Setting | Range | Default | Description |
 |---------|-------|---------|-------------|
-| **Status Poll Interval (ms)** | 1000–60000 | 10000 | How often the watchdog checks process statuses. Lower = more responsive but higher CPU usage. |
-| **Start Grace Period (seconds)** | 1–120 | 10 | Time after launching an app before the watchdog starts monitoring it. Allows the window to appear. |
-| **GC Collect Interval (minutes)** | 5–1440 | 30 | How often a periodic garbage collection runs to prevent long-term memory growth during 24/7 operation. |
-| **Storage Save Interval (seconds)** | 5–300 | 30 | Minimum time between throttled disk writes for timer-tick updates. User-initiated saves (Add, Edit, Delete) always write immediately. |
+| **Status Poll Interval (ms)** | 1000â€“60000 | 10000 | How often the watchdog checks process statuses. Lower = more responsive but higher CPU usage. |
+| **Start Grace Period (seconds)** | 1â€“120 | 10 | Time after launching an app before the watchdog starts monitoring it. Allows the window to appear. |
+| **GC Collect Interval (minutes)** | 5â€“1440 | 30 | How often a periodic garbage collection runs to prevent long-term memory growth during 24/7 operation. |
+| **Storage Save Interval (seconds)** | 5â€“300 | 30 | Minimum time between throttled disk writes for timer-tick updates. User-initiated saves (Add, Edit, Delete) always write immediately. |
 
 ### Logging
 
 | Setting | Range | Default | Description |
 |---------|-------|---------|-------------|
-| **Log Flush Interval (seconds)** | 1–120 | 10 | How often buffered log entries are written to disk. |
-| **Log Buffer Size (entries)** | 10–1000 | 100 | Maximum buffered entries before a flush is forced. |
-| **Log Retention (days)** | 1–365 | 7 | Log files older than this are automatically deleted. |
+| **Log Flush Interval (seconds)** | 1â€“120 | 10 | How often buffered log entries are written to disk. |
+| **Log Buffer Size (entries)** | 10â€“1000 | 100 | Maximum buffered entries before a flush is forced. |
+| **Log Retention (days)** | 1â€“365 | 7 | Log files older than this are automatically deleted. |
 
 ### Reset Defaults
 
 Click **Reset Defaults** in the Settings dialog to restore all performance and logging settings to their defaults. The station name is not affected by reset.
 
-All settings are saved in `settings.json` and persist across restarts. Changes take effect immediately — no restart required.
+All settings are saved in `settings.json` and persist across restarts. Changes take effect immediately â€” no restart required.
 
 ---
 
@@ -432,7 +432,7 @@ Instance Manager logs all operations to daily log files.
 ```
 
 ### Log Retention
-Logs older than the configured retention period (default: 7 days) are automatically deleted. You can change this in **Settings** ? **Log Retention (days)**.
+Logs older than the configured retention period (default: 7 days) are automatically deleted. You can change this in **Settings** â†’ **Log Retention (days)**.
 
 ### Real-Time Log Monitoring
 Open a PowerShell window and run:
@@ -457,12 +457,12 @@ Instance Manager enforces that managed applications can **only** be launched thr
 
 | Scenario | What Happens |
 |----------|-------------|
-| User starts app via Instance Manager | ? Allowed — added to authorized list |
-| User double-clicks the .exe directly | ? Killed within one poll interval + warning shown |
-| User opens app via shortcut | ? Killed within one poll interval + warning shown |
-| App was running before Instance Manager started | ? Terminated on startup + notification |
-| App crashes and auto-restarts (Keep Open) | ? Allowed — re-authorized automatically |
-| Same app running in another group | ?? Shown as "Running (Other Group)" — must stop in the other group first |
+| User starts app via Instance Manager | âœ… Allowed â€” added to authorized list |
+| User double-clicks the .exe directly | âŒ Killed within one poll interval + warning shown |
+| User opens app via shortcut | âŒ Killed within one poll interval + warning shown |
+| App was running before Instance Manager started | âŒ Terminated on startup + notification |
+| App crashes and auto-restarts (Keep Open) | âœ… Allowed â€” re-authorized automatically |
+| Same app running in another group | âš ï¸ Shown as "Running (Other Group)" â€” must stop in the other group first |
 
 ### Why This Matters
 - Ensures only one instance of each managed application runs
@@ -477,7 +477,7 @@ Instance Manager enforces that managed applications can **only** be launched thr
 No. Instance Manager runs at standard user level and cannot manage elevated processes. If your managed application requires elevation, Instance Manager won't be able to start or stop it.
 
 ### What happens if I close Instance Manager while applications are running?
-The managed applications **continue running** — Instance Manager does not stop them on exit. However, the watchdog will no longer monitor them. When you restart Instance Manager, any still-running managed apps will be terminated.
+The managed applications **continue running** â€” Instance Manager does not stop them on exit. However, the watchdog will no longer monitor them. When you restart Instance Manager, any still-running managed apps will be terminated.
 
 ### Can I manage the same application in multiple groups?
 Yes, you can add the same executable to different groups. Each entry is tracked independently. However, you cannot run the same application simultaneously from multiple groups. If you try to start an application that is already running in another group, Instance Manager will show a warning telling you which group it's running in. You must stop it in the other group first before starting it in a new one. The status column will show **Running (Other Group)** in dark cyan for entries whose executable is running from a different group.
@@ -490,9 +490,9 @@ Instance Manager detects running applications by checking for a main window hand
 
 ### What if my application shows an error dialog (unhandled exception)?
 Instance Manager has multiple layers of detection for error dialogs:
-1. **Error Dialog Pattern Matching** — If the dialog's window title contains a known error keyword (e.g., "unhandled exception", "NullReferenceException", "fatal error"), it is detected automatically and the process is force-killed after 2 consecutive poll cycles.
-2. **Not Responding Detection** — If the error dialog blocks the UI thread and the window becomes unresponsive, it is detected via `Process.Responding` and force-killed after the configured timeout.
-3. **Title Change Detection** — If the error dialog's title doesn't match any known pattern (e.g., a WinForms `ThreadExceptionDialog` that uses the app's product name as its title), enable **Detect Title Change** in the Edit dialog. The watchdog will detect the title change and force-kill the process.
+1. **Error Dialog Pattern Matching** â€” If the dialog's window title contains a known error keyword (e.g., "unhandled exception", "NullReferenceException", "fatal error"), it is detected automatically and the process is force-killed after 2 consecutive poll cycles.
+2. **Not Responding Detection** â€” If the error dialog blocks the UI thread and the window becomes unresponsive, it is detected via `Process.Responding` and force-killed after the configured timeout.
+3. **Title Change Detection** â€” If the error dialog's title doesn't match any known pattern (e.g., a WinForms `ThreadExceptionDialog` that uses the app's product name as its title), enable **Detect Title Change** in the Edit dialog. The watchdog will detect the title change and force-kill the process.
 
 All three mechanisms trigger auto-restart for Keep Open applications.
 
@@ -502,23 +502,23 @@ All three mechanisms trigger auto-restart for Keep Open applications.
 3. Click OK
 4. If the application's working set exceeds this limit, it will be force-killed and auto-restarted (if Keep Open is enabled)
 
-> **Tip**: Monitor your app's normal memory usage in Task Manager first, then set the limit to 2–3× the expected peak.
+> **Tip**: Monitor your app's normal memory usage in Task Manager first, then set the limit to 2â€“3Ã— the expected peak.
 
 ### What is the "Last Exit Code" in the Edit dialog?
 The Last Exit Code shows the exit code from the most recent process termination. A value of `0` typically means the process exited normally. A non-zero value (shown in red with "abnormal") usually indicates a crash or error. Common non-zero codes:
-- **-1073741819** (0xC0000005) — Access violation
-- **-1073740791** (0xC0000409) — Stack buffer overrun
-- **-532462766** (0xE0434352) — .NET unhandled exception
+- **-1073741819** (0xC0000005) â€” Access violation
+- **-1073740791** (0xC0000409) â€” Stack buffer overrun
+- **-532462766** (0xE0434352) â€” .NET unhandled exception
 
 ### Can I change the watchdog polling interval?
 Yes. Click **Settings** and adjust the **Status Poll Interval** value. The default is 10000ms (10 seconds). Lower values make detection faster but use more CPU.
 
 ### Where is my data stored?
 All data files are in the same folder as `IntelligentMutexExecutionEnvironment.exe`:
-- `applications.json` — your managed applications
-- `groups.json` — your groups
-- `settings.json` — station name, performance, and logging configuration
-- `logs/` — daily log files
+- `applications.json` â€” your managed applications
+- `groups.json` â€” your groups
+- `settings.json` â€” station name, performance, and logging configuration
+- `logs/` â€” daily log files
 
 ### How do I reset everything?
 Delete `applications.json`, `groups.json`, and `settings.json`, then restart Instance Manager.
@@ -528,7 +528,7 @@ Delete `applications.json`, `groups.json`, and `settings.json`, then restart Ins
 ## Troubleshooting
 
 ### Application Won't Start
-1. Check that the file path is correct — click **Edit** and verify the Directory
+1. Check that the file path is correct â€” click **Edit** and verify the Directory
 2. Make sure the `.exe` file exists at that path
 3. Check the log file for error messages
 4. Verify you have permission to run the application
@@ -580,7 +580,7 @@ This means someone (or something) keeps trying to launch the managed application
 
 ### Logs Not Being Created
 1. Make sure Instance Manager has write permission in its directory
-2. Check if the `logs/` folder exists — if not, try creating it manually
+2. Check if the `logs/` folder exists â€” if not, try creating it manually
 3. Restart Instance Manager
 
 ### Data File Corruption
@@ -600,9 +600,7 @@ If `applications.json` or `groups.json` becomes corrupted:
 | .NET Framework | 4.0 or higher |
 | RAM | 50 MB available |
 | Disk Space | 5 MB + log files |
-| Display | 1024×768 or higher |
+| Display | 1024Ã—768 or higher |
 
 ---
 
-## Repository
-https://github.com/Jm-Paunlagui/InstanceManager

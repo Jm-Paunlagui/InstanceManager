@@ -86,6 +86,7 @@
     <Compile Include="Utilities\InputDialog.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Utilities\MarkdownParser.cs" />
     <Compile Include="Utilities\MessageBoxHelper.cs" />
     <Compile Include="Utilities\SettingsDialog.cs">
       <SubType>Form</SubType>
