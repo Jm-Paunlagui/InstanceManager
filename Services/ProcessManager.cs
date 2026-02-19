@@ -54,6 +54,13 @@ namespace IntelligentMutexExecutionEnvironment.Services
         /// </summary>
         private readonly Dictionary<int, int> _appPidMap = new Dictionary<int, int>();
 
+        /// <summary>
+        /// Keeps the Process handle alive so we can read ExitCode after the process terminates.
+        /// On .NET Framework 4.0, the exit code is only available while the Process handle is open.
+        /// Key: app Index, Value: the Process object from Process.Start().
+        /// </summary>
+        private readonly Dictionary<int, Process> _appProcessHandles = new Dictionary<int, Process>();
+
         // Reusable collections to avoid per-tick allocations in GetBatchProcessSnapshot
         private readonly Dictionary<string, List<int>> _nameToAppsCache = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<int, ProcessSnapshot> _snapshotResultsCache = new Dictionary<int, ProcessSnapshot>();
@@ -99,11 +106,34 @@ namespace IntelligentMutexExecutionEnvironment.Services
         }
 
         /// <summary>
+        /// Records the Process handle for a launched application so we can read its ExitCode later.
+        /// The Process object is kept alive (not disposed) until explicitly untracked or replaced.
+        /// </summary>
+        public void TrackLaunchedProcess(int appIndex, Process process)
+        {
+            // Dispose any previously tracked handle for this app
+            Process oldProc;
+            if (_appProcessHandles.TryGetValue(appIndex, out oldProc))
+            {
+                try { oldProc.Dispose(); } catch { }
+            }
+            _appProcessHandles[appIndex] = process;
+        }
+
+        /// <summary>
         /// Removes PID tracking for an application (e.g. after intentional stop).
+        /// Also disposes the kept-alive Process handle.
         /// </summary>
         public void UntrackPid(int appIndex)
         {
             _appPidMap.Remove(appIndex);
+
+            Process proc;
+            if (_appProcessHandles.TryGetValue(appIndex, out proc))
+            {
+                _appProcessHandles.Remove(appIndex);
+                try { proc.Dispose(); } catch { }
+            }
         }
 
         /// <summary>
@@ -113,30 +143,56 @@ namespace IntelligentMutexExecutionEnvironment.Services
         /// </summary>
         public int? GetTrackedExitCode(int appIndex)
         {
+            // First try the kept-alive Process handle (reliable on .NET 4.0)
+            Process proc;
+            if (_appProcessHandles.TryGetValue(appIndex, out proc))
+            {
+                try
+                {
+                    if (proc.HasExited)
+                    {
+                        return proc.ExitCode;
+                    }
+                    // Still running — no exit code yet
+                    return null;
+                }
+                catch (InvalidOperationException)
+                {
+                    // Handle was invalidated
+                }
+                catch (System.ComponentModel.Win32Exception)
+                {
+                    // Access denied
+                }
+                catch (Exception)
+                {
+                    // Unexpected error
+                }
+            }
+
+            // Fallback to PID-based lookup (unlikely to work on .NET 4.0 after handle disposal)
             int pid;
             if (!_appPidMap.TryGetValue(appIndex, out pid))
                 return null;
 
             try
             {
-                Process proc = null;
+                Process procById = null;
                 try
                 {
-                    proc = Process.GetProcessById(pid);
+                    procById = Process.GetProcessById(pid);
                     // Process is still alive — no exit code yet
                     return null;
                 }
                 catch (ArgumentException)
                 {
-                    // Process has exited (GetProcessById throws ArgumentException for non-existent PIDs)
-                    // On .NET 4.0 we cannot retrieve the exit code after the Process object is gone
-                    // unless we kept a handle. Return a sentinel indicating abnormal exit.
+                    // Process has exited — cannot retrieve exit code without the original handle
                     return null;
                 }
                 finally
                 {
-                    if (proc != null)
-                        proc.Dispose();
+                    if (procById != null)
+                        procById.Dispose();
                 }
             }
             catch
@@ -577,33 +633,26 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     WorkingDirectory = Path.GetDirectoryName(app.Directory)
                 };
 
-                Process process = null;
-                try
-                {
-                    process = Process.Start(startInfo);
+                Process process = Process.Start(startInfo);
 
-                    if (process != null)
-                    {
-                        try
-                        {
-                            int pid = process.Id;
-                            // Track the PID for exit code retrieval and precise identification
-                            TrackLaunchedPid(app.Index, pid);
-                            SimpleLogger.Info("StartApplication @ ProcessManager.cs", $"Successfully started {app.AppName} (PID: {pid})");
-                        }
-                        catch (InvalidOperationException)
-                        {
-                            SimpleLogger.Info("StartApplication @ ProcessManager.cs", $"Successfully started {app.AppName} (PID unavailable - process may have exited quickly)");
-                        }
-                        return true;
-                    }
-                }
-                finally
+                if (process != null)
                 {
-                    if (process != null)
+                    try
                     {
-                        process.Dispose();
+                        int pid = process.Id;
+                        // Track the PID for identification
+                        TrackLaunchedPid(app.Index, pid);
+                        // Keep the Process handle alive so we can read ExitCode later
+                        TrackLaunchedProcess(app.Index, process);
+                        SimpleLogger.Info("StartApplication @ ProcessManager.cs", $"Successfully started {app.AppName} (PID: {pid})");
                     }
+                    catch (InvalidOperationException)
+                    {
+                        // PID unavailable but process started — still keep the handle
+                        TrackLaunchedProcess(app.Index, process);
+                        SimpleLogger.Info("StartApplication @ ProcessManager.cs", $"Successfully started {app.AppName} (PID unavailable - process may have exited quickly)");
+                    }
+                    return true;
                 }
 
                 SimpleLogger.Error("StartApplication @ ProcessManager.cs", $"Failed to start {app.AppName}");
@@ -784,6 +833,19 @@ namespace IntelligentMutexExecutionEnvironment.Services
             {
                 return 0;
             }
+        }
+
+        /// <summary>
+        /// Disposes all tracked Process handles. Call on application shutdown.
+        /// </summary>
+        public void DisposeAllTrackedHandles()
+        {
+            foreach (var kvp in _appProcessHandles)
+            {
+                try { kvp.Value.Dispose(); } catch { }
+            }
+            _appProcessHandles.Clear();
+            _appPidMap.Clear();
         }
     }
 }

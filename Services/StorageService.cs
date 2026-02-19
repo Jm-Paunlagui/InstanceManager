@@ -760,15 +760,35 @@ namespace IntelligentMutexExecutionEnvironment.Services
 
         private void WriteFileAtomically(string path, string content)
         {
+            string tempPath = path + ".tmp";
             try
             {
-                string tempPath = path + ".tmp";
                 File.WriteAllText(tempPath, content);
-                File.Replace(tempPath, path, null);
+
+                if (File.Exists(path))
+                {
+                    // Atomic replace: swap temp file into place
+                    File.Replace(tempPath, path, null);
+                }
+                else
+                {
+                    // First write: destination doesn't exist yet, just move
+                    File.Move(tempPath, path);
+                }
             }
             catch (Exception ex)
             {
                 SimpleLogger.Error("WriteFileAtomically", $"Error writing file {path}: {ex.Message}");
+
+                // Clean up orphaned temp file
+                try
+                {
+                    if (File.Exists(tempPath))
+                    {
+                        File.Delete(tempPath);
+                    }
+                }
+                catch { }
             }
         }
 

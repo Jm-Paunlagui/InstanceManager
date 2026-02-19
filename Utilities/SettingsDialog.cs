@@ -256,5 +256,19 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             }
             base.Dispose(disposing);
         }
+
+        private void InitializeComponent()
+        {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(SettingsDialog));
+            this.SuspendLayout();
+            // 
+            // SettingsDialog
+            // 
+            this.ClientSize = new System.Drawing.Size(284, 261);
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
+            this.Name = "SettingsDialog";
+            this.ResumeLayout(false);
+
+        }
     }
 }

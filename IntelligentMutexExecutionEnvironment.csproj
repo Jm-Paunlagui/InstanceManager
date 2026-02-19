@@ -108,6 +108,15 @@
     <EmbeddedResource Include="Utilities\AppSettingsDialog.resx">
       <DependentUpon>AppSettingsDialog.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="Utilities\CustomMessageBox.resx">
+      <DependentUpon>CustomMessageBox.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Utilities\InputDialog.resx">
+      <DependentUpon>InputDialog.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Utilities\SettingsDialog.resx">
+      <DependentUpon>SettingsDialog.cs</DependentUpon>
+    </EmbeddedResource>
     <None Include="Form1.cs.fixed" />
     <None Include="IMPLEMENTATION_SUMMARY.md" />
     <None Include="NLog.config" />

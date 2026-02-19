@@ -26,6 +26,7 @@ namespace IntelligentMutexExecutionEnvironment
         private Label _crashCountLabel;
         private Label _retryCountLabel;
         private Label _lastExitCodeLabel;
+        private Button _copyExitCodeButton;
         private Button _okButton;
         private Button _cancelButton;
 
@@ -461,8 +462,27 @@ namespace IntelligentMutexExecutionEnvironment
                 Font = _boldFont,
                 ForeColor = (_app.LastExitCode.HasValue && _app.LastExitCode.Value != 0) ? Color.Red : Color.Black
             };
+            _copyExitCodeButton = new Button
+            {
+                Text = "Copy",
+                Location = new Point(controlX + 160, y),
+                Size = new Size(60, 23),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(52, 152, 219),
+                ForeColor = Color.White,
+                Font = _smallBoldFont,
+                Visible = _app.LastExitCode.HasValue
+            };
+            _copyExitCodeButton.Click += (s, ev) =>
+            {
+                if (_app.LastExitCode.HasValue)
+                {
+                    Clipboard.SetText(_app.LastExitCode.Value.ToString());
+                }
+            };
             this.Controls.Add(exitCodeLabel);
             this.Controls.Add(_lastExitCodeLabel);
+            this.Controls.Add(_copyExitCodeButton);
 
             y += rowHeight + 15;
 

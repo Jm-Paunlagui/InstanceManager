@@ -594,6 +594,7 @@ namespace IntelligentMutexExecutionEnvironment
             item.SubItems.Add(app.RetryCount.ToString());            // [6] Retries
             item.SubItems.Add(app.GetLastStartDisplay());            // [7] Last Start
             item.SubItems.Add(app.GetLastStopDisplay());             // [8] Last Stop
+            item.SubItems.Add(app.LastExitCode.HasValue ? app.LastExitCode.Value.ToString() : "—"); // [9] Exit Code
             item.Tag = app;
             item.ForeColor = statusColor;
 
@@ -1039,6 +1040,14 @@ namespace IntelligentMutexExecutionEnvironment
 
                         DateTime stopTime = DateTime.Now;
 
+                        // Retrieve exit code from the tracked Process handle before it's cleaned up
+                        int? exitCode = _processManager.GetTrackedExitCode(app.Index);
+                        if (exitCode.HasValue)
+                        {
+                            SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
+                                $"'{app.AppName}' exited with code {exitCode.Value}");
+                        }
+
                         // If KeepOpen is enabled, treat this as a crash and schedule restart
                         if (app.KeepOpen)
                         {
@@ -1054,7 +1063,8 @@ namespace IntelligentMutexExecutionEnvironment
                                 _failedApps.Add(app.Index);
 
                                 _storageService.UpdateApplicationFields(app.Index, isRunning: false,
-                                    lastStop: stopTime, crashCount: newCrashCount, retryCount: newRetryCount);
+                                    lastStop: stopTime, crashCount: newCrashCount, retryCount: newRetryCount,
+                                    lastExitCode: exitCode);
 
                                 if (item != null)
                                 {
@@ -1062,6 +1072,7 @@ namespace IntelligentMutexExecutionEnvironment
                                     item.SubItems[5].Text = newCrashCount.ToString();
                                     item.SubItems[6].Text = newRetryCount.ToString();
                                     item.SubItems[8].Text = stopTime.ToString("yyyy-MM-dd HH:mm:ss");
+                                    item.SubItems[9].Text = exitCode.HasValue ? exitCode.Value.ToString() : "—";
                                     item.ForeColor = Color.Red;
 
                                     var tagApp = item.Tag as ManagedApplication;
@@ -1071,6 +1082,7 @@ namespace IntelligentMutexExecutionEnvironment
                                         tagApp.RetryCount = newRetryCount;
                                         tagApp.LastStop = stopTime;
                                         tagApp.IsRunning = false;
+                                        if (exitCode.HasValue) tagApp.LastExitCode = exitCode.Value;
                                     }
                                 }
                             }
@@ -1089,7 +1101,8 @@ namespace IntelligentMutexExecutionEnvironment
                                     $"'{app.AppName}' crashed (KeepOpen=Yes). Crash #{newCrashCount}, retry {newRetryCount}/{app.MaxRetries}, scheduling restart in {delay}s");
 
                                 _storageService.UpdateApplicationFields(app.Index, isRunning: false,
-                                    lastStop: stopTime, crashCount: newCrashCount, retryCount: newRetryCount);
+                                    lastStop: stopTime, crashCount: newCrashCount, retryCount: newRetryCount,
+                                    lastExitCode: exitCode);
 
                                 if (item != null)
                                 {
@@ -1097,6 +1110,7 @@ namespace IntelligentMutexExecutionEnvironment
                                     item.SubItems[5].Text = newCrashCount.ToString();
                                     item.SubItems[6].Text = newRetryCount.ToString();
                                     item.SubItems[8].Text = stopTime.ToString("yyyy-MM-dd HH:mm:ss");
+                                    item.SubItems[9].Text = exitCode.HasValue ? exitCode.Value.ToString() : "—";
                                     item.ForeColor = Color.DarkOrange;
 
                                     var tagApp = item.Tag as ManagedApplication;
@@ -1106,24 +1120,30 @@ namespace IntelligentMutexExecutionEnvironment
                                         tagApp.RetryCount = newRetryCount;
                                         tagApp.LastStop = stopTime;
                                         tagApp.IsRunning = false;
+                                        if (exitCode.HasValue) tagApp.LastExitCode = exitCode.Value;
                                     }
                                 }
                             }
                         }
                         else
                         {
-                            _storageService.UpdateApplicationFields(app.Index, isRunning: false, lastStop: stopTime);
+                            _storageService.UpdateApplicationFields(app.Index, isRunning: false, lastStop: stopTime,
+                                lastExitCode: exitCode);
 
                             if (item != null)
                             {
                                 item.SubItems[3].Text = "Stopped";
                                 item.SubItems[8].Text = stopTime.ToString("yyyy-MM-dd HH:mm:ss");
+                                item.SubItems[9].Text = exitCode.HasValue ? exitCode.Value.ToString() : "—";
                                 item.ForeColor = Color.Black;
                             }
 
                             SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
                                 $"'{app.AppName}' was stopped externally");
                         }
+
+                        // Clean up the tracked handle after reading exit code
+                        _processManager.UntrackPid(app.Index);
 
                         continue;
                     }
@@ -1681,10 +1701,17 @@ namespace IntelligentMutexExecutionEnvironment
                 item.ForeColor = Color.DarkOrange;
             }
 
+            // Capture exit code before stopping (the tracked handle will be disposed by StopApplication)
+            int? exitCode = _processManager.GetTrackedExitCode(app.Index);
+
             if (_processManager.StopApplication(app))
             {
                 app.LastStop = DateTime.Now;
                 app.IsRunning = false;
+                if (exitCode.HasValue)
+                {
+                    app.LastExitCode = exitCode.Value;
+                }
                 _storageService.UpdateApplication(app);
 
                 _pendingStop.Remove(app.Index);
@@ -1693,6 +1720,7 @@ namespace IntelligentMutexExecutionEnvironment
                 {
                     item.SubItems[3].Text = "Stopped";
                     item.SubItems[8].Text = app.GetLastStopDisplay();
+                    item.SubItems[9].Text = exitCode.HasValue ? exitCode.Value.ToString() : "—";
                     item.ForeColor = Color.Black;
                 }
 
@@ -2130,7 +2158,7 @@ namespace IntelligentMutexExecutionEnvironment
         {
             try
             {
-                string guidePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "USER_GUIDE.md");
+                string guidePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Intelligent Mutex Execution Environment - User Guide Presntation.pdf");
 
                 if (File.Exists(guidePath))
                 {
@@ -2211,6 +2239,12 @@ namespace IntelligentMutexExecutionEnvironment
             if (_storageService != null)
             {
                 _storageService.FlushPendingChanges();
+            }
+
+            // Dispose all tracked Process handles
+            if (_processManager != null)
+            {
+                _processManager.DisposeAllTrackedHandles();
             }
 
             base.OnFormClosing(e);
