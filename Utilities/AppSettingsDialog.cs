@@ -450,10 +450,7 @@ namespace IntelligentMutexExecutionEnvironment
                 AutoSize = true
             };
             string exitCodeText = _app.LastExitCode.HasValue ? _app.LastExitCode.Value.ToString() : "N/A";
-            if (_app.LastExitCode.HasValue && _app.LastExitCode.Value != 0)
-            {
-                exitCodeText += " (abnormal)";
-            }
+
             _lastExitCodeLabel = new Label
             {
                 Text = exitCodeText,
@@ -465,7 +462,7 @@ namespace IntelligentMutexExecutionEnvironment
             _copyExitCodeButton = new Button
             {
                 Text = "Copy",
-                Location = new Point(controlX + 160, y),
+                Location = new Point(controlX + 100, y),
                 Size = new Size(60, 23),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(52, 152, 219),

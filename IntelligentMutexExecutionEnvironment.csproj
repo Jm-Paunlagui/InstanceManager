@@ -119,6 +119,9 @@
     </EmbeddedResource>
     <None Include="Form1.cs.fixed" />
     <None Include="IMPLEMENTATION_SUMMARY.md" />
+    <None Include="Intelligent Mutex Execution Environment - User Guide Presntation.pdf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="NLog.config" />
     <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
@@ -132,9 +135,7 @@
     </Compile>
     <None Include="QUICK_START.md" />
     <None Include="README.md" />
-    <None Include="USER_GUIDE.md">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <None Include="USER_GUIDE.md" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\Logo.png" />
