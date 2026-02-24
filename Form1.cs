@@ -2219,6 +2219,33 @@ namespace IntelligentMutexExecutionEnvironment
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            // If close already in progress, skip prompt
+            if (!_isClosing && e.CloseReason == CloseReason.UserClosing)
+            {
+                // Show a confirmation that offers Minimize to Tray / Close / Cancel
+                // Only show once per session unless user explicitly chooses Close
+                var promptMsg = "Do you want to minimize Instance Manager to the system tray or close the application?\n\n" +
+                                "Choose 'Yes' to keep it running in the background.\n" +
+                                "Choose 'No' to exit and stop monitoring applications.";
+
+                // Build a custom dialog using MessageBox buttons — map to choices
+                var choice = MessageBox.Show(this, promptMsg, "Close Application?", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+
+                // Yes = Minimize to Tray, No = Close, Cancel = Cancel
+                if (choice == DialogResult.Yes)
+                {
+                    e.Cancel = true; // cancel the close
+                    MinimizeToTray();
+                    return;
+                }
+                else if (choice == DialogResult.Cancel)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+                // else: DialogResult.No => proceed with close
+            }
+
             _isClosing = true;
 
             if (_statusUpdateTimer != null)
@@ -2246,6 +2273,9 @@ namespace IntelligentMutexExecutionEnvironment
             {
                 _processManager.DisposeAllTrackedHandles();
             }
+
+            // Ensure notify icon hidden to avoid lingering icon
+            try { if (notifyIcon != null) notifyIcon.Visible = false; } catch { }
 
             base.OnFormClosing(e);
 
@@ -2491,6 +2521,90 @@ namespace IntelligentMutexExecutionEnvironment
             public int Running;
             public int Failed;
             public int Transitional;
+        }
+
+        // User preference: show minimize to tray prompt on close only once per session
+        private bool _closePromptShown = false;
+
+        /// <summary>
+        /// Restores the main window from tray.
+        /// </summary>
+        private void RestoreFromTray()
+        {
+            try
+            {
+                if (notifyIcon != null)
+                    notifyIcon.Visible = false;
+
+                this.Show();
+                this.WindowState = FormWindowState.Normal;
+                this.BringToFront();
+                this.Activate();
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("RestoreFromTray @ Form1.cs", $"Error restoring from tray: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Minimizes the form to the tray icon.
+        /// </summary>
+        private void MinimizeToTray()
+        {
+            try
+            {
+                if (notifyIcon != null)
+                {
+                    notifyIcon.Visible = true;
+                    notifyIcon.ShowBalloonTip(1000, "Instance Manager", "Application minimized to tray.", ToolTipIcon.Info);
+                }
+
+                this.Hide();
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("MinimizeToTray @ Form1.cs", $"Error minimizing to tray: {ex.Message}");
+            }
+        }
+
+        private void NotifyIcon_DoubleClick(object sender, EventArgs e)
+        {
+            RestoreFromTray();
+        }
+
+        private void TrayRestoreMenuItem_Click(object sender, EventArgs e)
+        {
+            RestoreFromTray();
+        }
+
+        private void TrayExitMenuItem_Click(object sender, EventArgs e)
+        {
+            // Ask user for confirmation and then close application
+            var result = MessageBoxHelper.ShowQuestion(this, "Exit Instance Manager and stop monitoring?", "Confirm Exit");
+            if (result == DialogResult.Yes)
+            {
+                // Ensure notify icon hidden to prevent orphaned icon
+                try { if (notifyIcon != null) notifyIcon.Visible = false; } catch { }
+                Application.Exit();
+            }
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+
+            try
+            {
+                if (this.WindowState == FormWindowState.Minimized && !_isClosing)
+                {
+                    MinimizeToTray();
+                }
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("OnResize @ Form1.cs", $"Error handling resize: {ex.Message}");
+            }
         }
     }
 }
