@@ -1,4 +1,4 @@
-﻿# Instance Manager
+﻿# IMEE
 
 ## Overview
 
@@ -24,9 +24,9 @@ The core algorithm — an **Authorized Process Watchdog** — prevents duplicate
 - **Cross-Group Detection**: Same executable in multiple groups shows "Running (Other Group)" status
 
 ### Authorized Process Watchdog
-- **Startup Enforcement**: Applications already running when Instance Manager starts are terminated
-- **Unauthorized Launch Detection**: Applications launched outside Instance Manager are killed within one poll interval (default: 10 seconds)
-- **Authorization Tracking**: Only applications started through Instance Manager are allowed to run
+- **Startup Enforcement**: Applications already running when IMEE starts are terminated
+- **Unauthorized Launch Detection**: Applications launched outside IMEE are killed within one poll interval (default: 10 seconds)
+- **Authorization Tracking**: Only applications started through IMEE are allowed to run
 - **Cross-Group Awareness**: Same executable started from another group is recognized, not treated as unauthorized
 - **External Stop Detection**: When a running application is closed externally, the status updates automatically
 - **Debounced Notifications**: User is warned only once per unauthorized launch attempt

@@ -20,7 +20,7 @@ namespace IntelligentMutexExecutionEnvironment
         private SettingsService _settingsService;
         private Timer _statusUpdateTimer;
 
-        // Tracks which apps were started/authorized through Instance Manager (or were running at startup)
+        // Tracks which apps were started/authorized through IMEE (or were running at startup)
         private HashSet<int> _authorizedApps = new HashSet<int>();
         // Prevents duplicate notifications for the same unauthorized launch
         private HashSet<int> _notifiedUnauthorized = new HashSet<int>();
@@ -152,7 +152,7 @@ namespace IntelligentMutexExecutionEnvironment
 
         /// <summary>
         /// On startup, terminate any managed apps that were already running
-        /// since they were not launched through Instance Manager.
+        /// since they were not launched through IMEE.
         /// Also resets stale runtime state (IsRunning, RetryCount) for all apps
         /// to prevent false crash detections and accumulated retry counts from previous sessions.
         /// </summary>
@@ -185,7 +185,7 @@ namespace IntelligentMutexExecutionEnvironment
                         if (!terminatedProcessNames.Contains(processName))
                         {
                             SimpleLogger.Warn("TerminateAlreadyRunningApps @ Form1.cs",
-                                $"'{app.AppName}' was running before Instance Manager started - terminating");
+                                $"'{app.AppName}' was running before IMEE started - terminating");
 
                             _processManager.StopApplication(app);
                             terminatedProcessNames.Add(processName);
@@ -211,9 +211,9 @@ namespace IntelligentMutexExecutionEnvironment
                         $"Terminated {terminatedApps.Count} application(s) at startup: {appList}");
 
                     MessageBoxHelper.ShowWarning(null,
-                        $"The following application(s) were running before Instance Manager started and have been terminated:\n\n" +
+                        $"The following application(s) were running before IMEE started and have been terminated:\n\n" +
                         $"- {appList}\n\n" +
-                        "All managed applications must be started through Instance Manager.");
+                        "All managed applications must be started through IMEE.");
                 }
             }
             catch (Exception ex)
@@ -1031,7 +1031,7 @@ namespace IntelligentMutexExecutionEnvironment
                         }
                     }
 
-                    // App was stopped externally (outside Instance Manager) — possible crash
+                    // App was stopped externally (outside IMEE) — possible crash
                     if (!isRunning && wasRunning)
                     {
                         _authorizedApps.Remove(app.Index);
@@ -1278,7 +1278,7 @@ namespace IntelligentMutexExecutionEnvironment
         }
 
         /// <summary>
-        /// Handles when a managed application is launched outside of Instance Manager.
+        /// Handles when a managed application is launched outside of IMEE.
         /// Kills the unauthorized process and notifies the user.
         /// </summary>
         private void HandleUnauthorizedLaunch(ManagedApplication app, ListViewItem item)
@@ -1327,8 +1327,8 @@ namespace IntelligentMutexExecutionEnvironment
                                 }
 
                                 MessageBoxHelper.ShowWarning(this,
-                                    $"'{appName}' was launched outside of Instance Manager and has been terminated.\n\n" +
-                                    "Please use Instance Manager to start managed applications.");
+                                    $"'{appName}' was launched outside of IMEE and has been terminated.\n\n" +
+                                    "Please use IMEE to start managed applications.");
 
                                 SimpleLogger.Warn("HandleUnauthorizedLaunch @ Form1.cs",
                                     $"User notified about unauthorized launch of '{appName}'");
@@ -2224,7 +2224,7 @@ namespace IntelligentMutexExecutionEnvironment
             {
                 // Show a confirmation that offers Minimize to Tray / Close / Cancel
                 // Only show once per session unless user explicitly chooses Close
-                var promptMsg = "Do you want to minimize Instance Manager to the system tray or close the application?\n\n" +
+                var promptMsg = "Do you want to minimize IMEE to the system tray or close the application?\n\n" +
                                 "Choose 'Yes' to keep it running in the background.\n" +
                                 "Choose 'No' to exit and stop monitoring applications.";
 
@@ -2557,7 +2557,7 @@ namespace IntelligentMutexExecutionEnvironment
                 if (notifyIcon != null)
                 {
                     notifyIcon.Visible = true;
-                    notifyIcon.ShowBalloonTip(1000, "Instance Manager", "Application minimized to tray.", ToolTipIcon.Info);
+                    notifyIcon.ShowBalloonTip(1000, "IMEE", "Application minimized to tray.", ToolTipIcon.Info);
                 }
 
                 this.Hide();
@@ -2581,7 +2581,7 @@ namespace IntelligentMutexExecutionEnvironment
         private void TrayExitMenuItem_Click(object sender, EventArgs e)
         {
             // Ask user for confirmation and then close application
-            var result = MessageBoxHelper.ShowQuestion(this, "Exit Instance Manager and stop monitoring?", "Confirm Exit");
+            var result = MessageBoxHelper.ShowQuestion(this, "Exit IMEE and stop monitoring?", "Confirm Exit");
             if (result == DialogResult.Yes)
             {
                 // Ensure notify icon hidden to prevent orphaned icon

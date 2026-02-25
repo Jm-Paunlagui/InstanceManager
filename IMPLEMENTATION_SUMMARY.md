@@ -1,4 +1,4 @@
-﻿# Instance Manager — Implementation Summary
+﻿# IMEE — Implementation Summary
 
 ## Project Status: ✅ Complete
 
@@ -314,7 +314,7 @@ The watchdog checks health conditions in this order (first match wins):
 
 | Action | _authorizedApps | _notifiedUnauthorized |
 |--------|-----------------|----------------------|
-| Instance Manager starts, app running | — (terminated) | — |
+| IMEE starts, app running | — (terminated) | — |
 | User clicks Start | **Added** | **Removed** |
 | User clicks Stop | **Removed** | **Removed** |
 | User clicks Delete | **Removed** | **Removed** |

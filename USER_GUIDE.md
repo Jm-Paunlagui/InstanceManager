@@ -1,4 +1,4 @@
-﻿# Instance Manager — User Guide
+﻿# IMEE — User Guide
 
 ## Table of Contents
 1. [Getting Started](#getting-started)
@@ -35,7 +35,7 @@ No installation is required. Copy `IntelligentMutexExecutionEnvironment.exe` to 
 3. Both the group list (left) and application list (right) will be empty
 
 ### Startup Behavior
-When Instance Manager starts, it checks if any managed applications are already running. If so, they are **automatically terminated** and a notification lists the affected apps. This ensures all managed applications are only launched through Instance Manager.
+When IMEE starts, it checks if any managed applications are already running. If so, they are **automatically terminated** and a notification lists the affected apps. This ensures all managed applications are only launched through IMEE.
 
 ---
 
@@ -169,7 +169,7 @@ Groups let you organize your applications logically — for example, by producti
 5. Once the process exits, the status changes to **Stopped** (black)
 6. The "Last Stop" timestamp is recorded
 
-Instance Manager attempts a graceful shutdown first. If the application doesn't close within 3 seconds, it is force-killed.
+IMEE attempts a graceful shutdown first. If the application doesn't close within 3 seconds, it is force-killed.
 
 ### Starting All Applications
 1. Select a group
@@ -232,7 +232,7 @@ You can configure this per-application via **Edit** → **Stable Run Period (sec
 
 ## Health Monitoring
 
-Instance Manager includes several health monitoring mechanisms that detect unhealthy applications beyond simple crash detection. All health monitoring features apply only to **Keep Open** applications and trigger the same auto-restart flow as a regular crash.
+IMEE includes several health monitoring mechanisms that detect unhealthy applications beyond simple crash detection. All health monitoring features apply only to **Keep Open** applications and trigger the same auto-restart flow as a regular crash.
 
 ### Not Responding Detection
 
@@ -322,7 +322,7 @@ This detection is **always active** — no configuration needed.
 
 ### Detection Coverage Summary
 
-The following table shows which types of application failures Instance Manager can detect and handle:
+The following table shows which types of application failures IMEE can detect and handle:
 
 | Failure Type | Example | Detection Method | Auto-Restart? |
 |---|---|---|---|
@@ -411,7 +411,7 @@ All settings are saved in `settings.json` and persist across restarts. Changes t
 
 ## Logs
 
-Instance Manager logs all operations to daily log files.
+IMEE logs all operations to daily log files.
 
 ### Viewing Logs
 - Click the **Logs** button to open the logs folder in File Explorer
@@ -444,10 +444,10 @@ Get-Content -Path "logs\2025-06-15.log" -Wait -Tail 20
 
 ## Security: Unauthorized Launch Prevention
 
-Instance Manager enforces that managed applications can **only** be launched through its interface.
+IMEE enforces that managed applications can **only** be launched through its interface.
 
 ### How It Works
-1. When you start an app through Instance Manager, it's added to an authorized list
+1. When you start an app through IMEE, it's added to an authorized list
 2. At each poll interval (default: 10 seconds, configurable in Settings), the watchdog checks all managed applications
 3. If a managed app is running but **not** in the authorized list, it was launched externally
 4. The unauthorized process is **killed immediately**
@@ -457,10 +457,10 @@ Instance Manager enforces that managed applications can **only** be launched thr
 
 | Scenario | What Happens |
 |----------|-------------|
-| User starts app via Instance Manager | ✅ Allowed — added to authorized list |
+| User starts app via IMEE | ✅ Allowed — added to authorized list |
 | User double-clicks the .exe directly | ❌ Killed within one poll interval + warning shown |
 | User opens app via shortcut | ❌ Killed within one poll interval + warning shown |
-| App was running before Instance Manager started | ❌ Terminated on startup + notification |
+| App was running before IMEE started | ❌ Terminated on startup + notification |
 | App crashes and auto-restarts (Keep Open) | ✅ Allowed — re-authorized automatically |
 | Same app running in another group | ⚠️ Shown as "Running (Other Group)" — must stop in the other group first |
 
@@ -474,22 +474,22 @@ Instance Manager enforces that managed applications can **only** be launched thr
 ## Frequently Asked Questions
 
 ### Can I manage applications that require Administrator privileges?
-No. Instance Manager runs at standard user level and cannot manage elevated processes. If your managed application requires elevation, Instance Manager won't be able to start or stop it.
+No. IMEE runs at standard user level and cannot manage elevated processes. If your managed application requires elevation, IMEE won't be able to start or stop it.
 
-### What happens if I close Instance Manager while applications are running?
-The managed applications **continue running** — Instance Manager does not stop them on exit. However, the watchdog will no longer monitor them. When you restart Instance Manager, any still-running managed apps will be terminated.
+### What happens if I close IMEE while applications are running?
+The managed applications **continue running** — IMEE does not stop them on exit. However, the watchdog will no longer monitor them. When you restart IMEE, any still-running managed apps will be terminated.
 
 ### Can I manage the same application in multiple groups?
-Yes, you can add the same executable to different groups. Each entry is tracked independently. However, you cannot run the same application simultaneously from multiple groups. If you try to start an application that is already running in another group, Instance Manager will show a warning telling you which group it's running in. You must stop it in the other group first before starting it in a new one. The status column will show **Running (Other Group)** in dark cyan for entries whose executable is running from a different group.
+Yes, you can add the same executable to different groups. Each entry is tracked independently. However, you cannot run the same application simultaneously from multiple groups. If you try to start an application that is already running in another group, IMEE will show a warning telling you which group it's running in. You must stop it in the other group first before starting it in a new one. The status column will show **Running (Other Group)** in dark cyan for entries whose executable is running from a different group.
 
-### Does Instance Manager modify my applications?
-No. Instance Manager only starts and stops processes. It never modifies any application files.
+### Does IMEE modify my applications?
+No. IMEE only starts and stops processes. It never modifies any application files.
 
 ### What if my application doesn't have a visible window?
-Instance Manager detects running applications by checking for a main window handle. Applications that run purely in the background (no window at all) may not be detected as "Running" and could be falsely treated as crashed.
+IMEE detects running applications by checking for a main window handle. Applications that run purely in the background (no window at all) may not be detected as "Running" and could be falsely treated as crashed.
 
 ### What if my application shows an error dialog (unhandled exception)?
-Instance Manager has multiple layers of detection for error dialogs:
+IMEE has multiple layers of detection for error dialogs:
 1. **Error Dialog Pattern Matching** — If the dialog's window title contains a known error keyword (e.g., "unhandled exception", "NullReferenceException", "fatal error"), it is detected automatically and the process is force-killed after 2 consecutive poll cycles.
 2. **Not Responding Detection** — If the error dialog blocks the UI thread and the window becomes unresponsive, it is detected via `Process.Responding` and force-killed after the configured timeout.
 3. **Title Change Detection** — If the error dialog's title doesn't match any known pattern (e.g., a WinForms `ThreadExceptionDialog` that uses the app's product name as its title), enable **Detect Title Change** in the Edit dialog. The watchdog will detect the title change and force-kill the process.
@@ -521,7 +521,7 @@ All data files are in the same folder as `IntelligentMutexExecutionEnvironment.e
 - `logs/` — daily log files
 
 ### How do I reset everything?
-Delete `applications.json`, `groups.json`, and `settings.json`, then restart Instance Manager.
+Delete `applications.json`, `groups.json`, and `settings.json`, then restart IMEE.
 
 ---
 
@@ -573,22 +573,22 @@ The application legitimately uses sustained high CPU (e.g., rendering, video enc
 - If this is a problem, increase the **Status Poll Interval** in Settings to give the detection more time between checks.
 
 ### Unauthorized Launch Warning Keeps Appearing
-This means someone (or something) keeps trying to launch the managed application outside of Instance Manager. Check for:
+This means someone (or something) keeps trying to launch the managed application outside of IMEE. Check for:
 - Scheduled tasks that launch the application
 - Startup items in Windows
 - Other users launching the application directly
 
 ### Logs Not Being Created
-1. Make sure Instance Manager has write permission in its directory
+1. Make sure IMEE has write permission in its directory
 2. Check if the `logs/` folder exists — if not, try creating it manually
-3. Restart Instance Manager
+3. Restart IMEE
 
 ### Data File Corruption
 If `applications.json` or `groups.json` becomes corrupted:
 1. Check for a `.bak` or `.tmp` backup file in the same directory
 2. Rename the backup file to replace the corrupted file
 3. If no backup exists, delete the corrupted file (you'll lose that data)
-4. Restart Instance Manager
+4. Restart IMEE
 
 ---
 

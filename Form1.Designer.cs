@@ -622,7 +622,7 @@
             // 
             this.notifyIcon.ContextMenuStrip = this.trayContextMenu;
             this.notifyIcon.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
-            this.notifyIcon.Text = "Instance Manager";
+            this.notifyIcon.Text = "IMEE";
             this.notifyIcon.Visible = false;
             this.notifyIcon.DoubleClick += new System.EventHandler(this.NotifyIcon_DoubleClick);
             this.HeaderPanel.ResumeLayout(false);
