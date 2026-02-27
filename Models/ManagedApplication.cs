@@ -35,18 +35,27 @@ namespace IntelligentMutexExecutionEnvironment.Models
         public int MemoryLimitMB { get; set; }
 
         /// <summary>
-        /// Stores the exit code of the last process termination.
-        /// Null if no exit has been recorded yet.
-        /// </summary>
-        public int? LastExitCode { get; set; }
-
-        /// <summary>
         /// When enabled, the watchdog tracks the application's initial window title
         /// and treats a sudden title change as a potential error dialog (e.g. WinForms
         /// ThreadExceptionDialog). Requires 2 consecutive detections to confirm.
         /// Default: false (disabled, since some apps legitimately change their title).
         /// </summary>
         public bool DetectTitleChange { get; set; }
+
+        /// <summary>
+        /// When true, health monitoring checks (not-responding, error dialogs, memory/CPU limits,
+        /// zombie/background processes, etc.) will actively be enforced (processes may be killed
+        /// and auto-restarted). If false, IMEE will only log and notify the user when issues are
+        /// detected but will not take corrective action automatically.
+        /// Default: false (disabled, opt-in is off).
+        /// </summary>
+        public bool HealthMonitoringEnabled { get; set; }
+
+        /// <summary>
+        /// Stores the exit code of the last process termination.
+        /// Null if no exit has been recorded yet.
+        /// </summary>
+        public int? LastExitCode { get; set; }
 
         public ManagedApplication()
         {
@@ -65,6 +74,7 @@ namespace IntelligentMutexExecutionEnvironment.Models
             MemoryLimitMB = 0;
             LastExitCode = null;
             DetectTitleChange = false;
+            HealthMonitoringEnabled = false; // default: disabled (opt-in is off)
         }
 
         public string GetLastStartDisplay()

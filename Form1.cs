@@ -24,6 +24,8 @@ namespace IntelligentMutexExecutionEnvironment
         private HashSet<int> _authorizedApps = new HashSet<int>();
         // Prevents duplicate notifications for the same unauthorized launch
         private HashSet<int> _notifiedUnauthorized = new HashSet<int>();
+        // Prevents duplicate health notifications when monitoring is disabled
+        private HashSet<int> _notifiedHealthIssues = new HashSet<int>();
         // Tracks apps that the user intentionally stopped via the Stop button
         // so the watchdog doesn't interfere during process shutdown
         private HashSet<int> _pendingStop = new HashSet<int>();
@@ -802,7 +804,14 @@ namespace IntelligentMutexExecutionEnvironment
                                 SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
                                     $"'{app.AppName}' is still not responding — force-killing for auto-restart");
 
-                                _processManager.StopApplication(app);
+                                if (app.HealthMonitoringEnabled)
+                                {
+                                    _processManager.StopApplication(app);
+                                }
+                                else
+                                {
+                                    NotifyHealthIssue(app, item, "UI Freeze / Not Responding");
+                                }
                             }
                         }
                         continue;
@@ -811,6 +820,7 @@ namespace IntelligentMutexExecutionEnvironment
                     {
                         // App is responding normally — clear any not-responding tracking
                         _notRespondingTracking.Remove(app.Index);
+                        _notifiedHealthIssues.Remove(app.Index);
                     }
 
                     // Detect error dialog windows (ghost windows that are "responding" but show
@@ -838,13 +848,21 @@ namespace IntelligentMutexExecutionEnvironment
                             SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
                                 $"'{app.AppName}' confirmed error dialog: \"{snapshot.ErrorDialogTitle}\" — force-killing for auto-restart");
 
-                            _processManager.StopApplication(app);
+                            if (app.HealthMonitoringEnabled)
+                            {
+                                _processManager.StopApplication(app);
+                            }
+                            else
+                            {
+                                NotifyHealthIssue(app, item, "Unhandled exception / Error dialog");
+                            }
                         }
                         continue;
                     }
                     else
                     {
                         _errorDialogTracking.Remove(app.Index);
+                        _notifiedHealthIssues.Remove(app.Index);
                     }
 
                     // Detect window title changes for KeepOpen apps with DetectTitleChange enabled.
@@ -888,7 +906,14 @@ namespace IntelligentMutexExecutionEnvironment
                                 SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
                                     $"'{app.AppName}' confirmed title change to \"{changedTitle}\" (was \"{knownTitle}\") — force-killing as suspected error dialog");
 
-                                _processManager.StopApplication(app);
+                                if (app.HealthMonitoringEnabled)
+                                {
+                                    _processManager.StopApplication(app);
+                                }
+                                else
+                                {
+                                    NotifyHealthIssue(app, item, "Window title change — possible error dialog");
+                                }
                                 continue;
                             }
                         }
@@ -902,6 +927,7 @@ namespace IntelligentMutexExecutionEnvironment
                     {
                         _knownWindowTitles.Remove(app.Index);
                         _titleChangeTracking.Remove(app.Index);
+                        _notifiedHealthIssues.Remove(app.Index);
                     }
 
                     // Detect memory limit breach for KeepOpen apps with a configured MemoryLimitMB.
@@ -920,7 +946,14 @@ namespace IntelligentMutexExecutionEnvironment
                             _cpuTimeSamples.Remove(app.Index);
                             _highCpuStreak.Remove(app.Index);
 
-                            _processManager.StopApplication(app);
+                            if (app.HealthMonitoringEnabled)
+                            {
+                                _processManager.StopApplication(app);
+                            }
+                            else
+                            {
+                                NotifyHealthIssue(app, item, "Memory limit exceeded / Possible memory leak");
+                            }
                             // The next tick will detect the app as stopped and trigger crash/restart logic
                             continue;
                         }
@@ -958,7 +991,14 @@ namespace IntelligentMutexExecutionEnvironment
                                         _cpuTimeSamples.Remove(app.Index);
                                         _stableRunCheck.Remove(app.Index);
 
-                                        _processManager.StopApplication(app);
+                                        if (app.HealthMonitoringEnabled)
+                                        {
+                                            _processManager.StopApplication(app);
+                                        }
+                                        else
+                                        {
+                                            NotifyHealthIssue(app, item, "CPU spin loop / High CPU usage");
+                                        }
                                         continue;
                                     }
                                     else
@@ -983,18 +1023,27 @@ namespace IntelligentMutexExecutionEnvironment
                         // Clean up CPU tracking for stopped apps
                         _cpuTimeSamples.Remove(app.Index);
                         _highCpuStreak.Remove(app.Index);
+                        _notifiedHealthIssues.Remove(app.Index);
                     }
 
                     // Detect background zombie processes (no window but process still alive)
                     // This handles apps like Excel that close their window but linger in the background
                     if (!isRunning && wasRunning && snapshot.HasBackgroundProcess)
                     {
-                        int killed = _processManager.KillBackgroundProcesses(app);
-                        SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                            $"'{app.AppName}' lost its window but had {killed} background process(es) - killed them");
+                        if (app.HealthMonitoringEnabled)
+                        {
+                            int killed = _processManager.KillBackgroundProcesses(app);
+                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                $"'{app.AppName}' lost its window but had {killed} background process(es) - killed them");
+                        }
+                        else
+                        {
+                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                $"'{app.AppName}' lost its window but has background process(es) - not killing because health monitoring is disabled");
+                            NotifyHealthIssue(app, item, "Zombie/background process(es) detected");
+                        }
 
-                        // After killing background processes, the state is definitively "not running"
-                        // No need to re-snapshot since we just killed all background processes
+                        // After killing background processes (or not), the state is considered not running — if we didn't kill, we still avoid further action here.
                     }
 
                     // Detect unauthorized external launch (or cross-group detection)
@@ -1088,40 +1137,63 @@ namespace IntelligentMutexExecutionEnvironment
                             }
                             else
                             {
-                                int delay = Math.Max(app.StartDelaySeconds, 1);
-                                _pendingRestart[app.Index] = DateTime.Now.AddSeconds(delay);
-
-                                // Start the 1-second countdown timer if not already running
-                                if (!_countdownTimer.Enabled)
+                                // Only auto-restart if health monitoring is enabled for this app
+                                if (app.HealthMonitoringEnabled)
                                 {
-                                    _countdownTimer.Start();
-                                }
+                                    int delay = Math.Max(app.StartDelaySeconds, 1);
+                                    _pendingRestart[app.Index] = DateTime.Now.AddSeconds(delay);
 
-                                SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                    $"'{app.AppName}' crashed (KeepOpen=Yes). Crash #{newCrashCount}, retry {newRetryCount}/{app.MaxRetries}, scheduling restart in {delay}s");
-
-                                _storageService.UpdateApplicationFields(app.Index, isRunning: false,
-                                    lastStop: stopTime, crashCount: newCrashCount, retryCount: newRetryCount,
-                                    lastExitCode: exitCode);
-
-                                if (item != null)
-                                {
-                                    item.SubItems[3].Text = $"Restarting ({delay}s)";
-                                    item.SubItems[5].Text = newCrashCount.ToString();
-                                    item.SubItems[6].Text = newRetryCount.ToString();
-                                    item.SubItems[8].Text = stopTime.ToString("yyyy-MM-dd HH:mm:ss");
-                                    item.SubItems[9].Text = exitCode.HasValue ? exitCode.Value.ToString() : "—";
-                                    item.ForeColor = Color.DarkOrange;
-
-                                    var tagApp = item.Tag as ManagedApplication;
-                                    if (tagApp != null)
+                                    // Start the 1-second countdown timer if not already running
+                                    if (!_countdownTimer.Enabled)
                                     {
-                                        tagApp.CrashCount = newCrashCount;
-                                        tagApp.RetryCount = newRetryCount;
-                                        tagApp.LastStop = stopTime;
-                                        tagApp.IsRunning = false;
-                                        if (exitCode.HasValue) tagApp.LastExitCode = exitCode.Value;
+                                        _countdownTimer.Start();
                                     }
+
+                                    SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                        $"'{app.AppName}' crashed (KeepOpen=Yes). Crash #{newCrashCount}, retry {newRetryCount}/{app.MaxRetries}, scheduling restart in {delay}s");
+
+                                    _storageService.UpdateApplicationFields(app.Index, isRunning: false,
+                                        lastStop: stopTime, crashCount: newCrashCount, retryCount: newRetryCount,
+                                        lastExitCode: exitCode);
+
+                                    if (item != null)
+                                    {
+                                        item.SubItems[3].Text = $"Restarting ({delay}s)";
+                                        item.SubItems[5].Text = newCrashCount.ToString();
+                                        item.SubItems[6].Text = newRetryCount.ToString();
+                                        item.SubItems[8].Text = stopTime.ToString("yyyy-MM-dd HH:mm:ss");
+                                        item.SubItems[9].Text = exitCode.HasValue ? exitCode.Value.ToString() : "—";
+                                        item.ForeColor = Color.DarkOrange;
+
+                                        var tagApp = item.Tag as ManagedApplication;
+                                        if (tagApp != null)
+                                        {
+                                            tagApp.CrashCount = newCrashCount;
+                                            tagApp.RetryCount = newRetryCount;
+                                            tagApp.LastStop = stopTime;
+                                            tagApp.IsRunning = false;
+                                            if (exitCode.HasValue) tagApp.LastExitCode = exitCode.Value;
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    // Health monitoring disabled: just notify and log
+                                    SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                        $"'{app.AppName}' crashed but health monitoring disabled — not scheduling auto-restart");
+                                    _storageService.UpdateApplicationFields(app.Index, isRunning: false,
+                                        lastStop: stopTime, crashCount: newCrashCount, retryCount: newRetryCount,
+                                        lastExitCode: exitCode);
+                                    if (item != null)
+                                    {
+                                        item.SubItems[3].Text = "Stopped (Issue Detected)";
+                                        item.SubItems[5].Text = newCrashCount.ToString();
+                                        item.SubItems[6].Text = newRetryCount.ToString();
+                                        item.SubItems[8].Text = stopTime.ToString("yyyy-MM-dd HH:mm:ss");
+                                        item.SubItems[9].Text = exitCode.HasValue ? exitCode.Value.ToString() : "—";
+                                        item.ForeColor = Color.DarkOrange;
+                                    }
+                                    NotifyHealthIssue(app, item, "Process crash / unexpected exit");
                                 }
                             }
                         }
@@ -1349,6 +1421,50 @@ namespace IntelligentMutexExecutionEnvironment
                 {
                     // Handle was not yet created or was destroyed - safe to ignore
                 }
+            }
+        }
+
+        /// <summary>
+        /// Notifies user and logs a detected health issue when HealthMonitoringEnabled is false.
+        /// Ensures notifications are not repeatedly shown for the same app until the issue is cleared.
+        /// </summary>
+        private void NotifyHealthIssue(ManagedApplication app, ListViewItem item, string issue)
+        {
+            SimpleLogger.Warn("HealthMonitor @ Form1.cs", $"Health issue detected for '{app.AppName}': {issue}");
+            if (item != null)
+            {
+                item.SubItems[3].Text = "Warning";
+                item.ForeColor = Color.DarkOrange;
+            }
+
+            if (!_notifiedHealthIssues.Contains(app.Index))
+            {
+                _notifiedHealthIssues.Add(app.Index);
+                try
+                {
+                    if (!_isClosing && IsHandleCreated)
+                    {
+                        this.BeginInvoke(new Action(() =>
+                        {
+                            try
+                            {
+                                if (_isClosing) return;
+
+                                MessageBoxHelper.ShowWarning(this,
+                                    $"'{app.AppName}' may be experiencing: {issue}.\n\nIMEE is configured to NOT take automatic corrective action for this application.");
+
+                                SimpleLogger.Warn("NotifyHealthIssue @ Form1.cs",
+                                    $"User notified about health issue for '{app.AppName}': {issue}");
+                            }
+                            catch (Exception ex)
+                            {
+                                SimpleLogger.Error("NotifyHealthIssue @ Form1.cs", $"Error showing health notification: {ex.Message}");
+                            }
+                        }));
+                    }
+                }
+                catch (ObjectDisposedException) { }
+                catch (InvalidOperationException) { }
             }
         }
 
