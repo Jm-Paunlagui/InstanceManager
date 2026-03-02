@@ -7,6 +7,12 @@
         /// </summary>
         private System.ComponentModel.IContainer components = null;
 
+        // Tray icon and context menu
+        private System.Windows.Forms.NotifyIcon notifyIcon;
+        private System.Windows.Forms.ContextMenuStrip trayContextMenu;
+        private System.Windows.Forms.ToolStripMenuItem trayRestoreMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem trayExitMenuItem;
+
         /// <summary>
         /// Clean up any resources being used.
         /// </summary>
@@ -28,7 +34,12 @@
         /// </summary>
         private void InitializeComponent()
         {
+            this.components = new System.ComponentModel.Container();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Main));
+            this.trayContextMenu = new System.Windows.Forms.ContextMenuStrip(this.components);
+            this.trayRestoreMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.trayExitMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.notifyIcon = new System.Windows.Forms.NotifyIcon(this.components);
             this.HeaderPanel = new System.Windows.Forms.Panel();
             this.UserGuideButton = new System.Windows.Forms.Button();
             this.SettingsButton = new System.Windows.Forms.Button();
@@ -584,6 +595,36 @@
             this.StartPosition = System.Windows.Forms.FormStartPosition.Manual;
             this.Text = "Local Manufacturing Application";
             this.Load += new System.EventHandler(this.Main_Load);
+            // 
+            // trayContextMenu
+            // 
+            this.trayContextMenu.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.trayRestoreMenuItem,
+            this.trayExitMenuItem});
+            this.trayContextMenu.Name = "trayContextMenu";
+            this.trayContextMenu.Size = new System.Drawing.Size(117, 48);
+            // 
+            // trayRestoreMenuItem
+            // 
+            this.trayRestoreMenuItem.Name = "trayRestoreMenuItem";
+            this.trayRestoreMenuItem.Size = new System.Drawing.Size(116, 22);
+            this.trayRestoreMenuItem.Text = "Restore";
+            this.trayRestoreMenuItem.Click += new System.EventHandler(this.TrayRestoreMenuItem_Click);
+            // 
+            // trayExitMenuItem
+            // 
+            this.trayExitMenuItem.Name = "trayExitMenuItem";
+            this.trayExitMenuItem.Size = new System.Drawing.Size(116, 22);
+            this.trayExitMenuItem.Text = "Exit";
+            this.trayExitMenuItem.Click += new System.EventHandler(this.TrayExitMenuItem_Click);
+            // 
+            // notifyIcon
+            // 
+            this.notifyIcon.ContextMenuStrip = this.trayContextMenu;
+            this.notifyIcon.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
+            this.notifyIcon.Text = "IMEE";
+            this.notifyIcon.Visible = false;
+            this.notifyIcon.DoubleClick += new System.EventHandler(this.NotifyIcon_DoubleClick);
             this.HeaderPanel.ResumeLayout(false);
             this.HeaderPanel.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.LogoPictureBox)).EndInit();
@@ -643,6 +684,8 @@
         private System.Windows.Forms.Button RefreshButton;
         private System.Windows.Forms.Label AppSubtitle;
         private System.Windows.Forms.Button UserGuideButton;
-    }
-}
+        
+        // Tray items
+     }
+ }
 

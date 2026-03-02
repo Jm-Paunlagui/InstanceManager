@@ -21,6 +21,7 @@ namespace IntelligentMutexExecutionEnvironment
         private NumericUpDown _notRespondingTimeoutNumeric;
         private NumericUpDown _memoryLimitNumeric;
         private CheckBox _detectTitleChangeCheckBox;
+        private CheckBox _healthMonitoringCheckBox;
         private Button _resetCrashButton;
         private Button _resetRetryButton;
         private Label _crashCountLabel;
@@ -54,7 +55,7 @@ namespace IntelligentMutexExecutionEnvironment
         private void InitializeControls()
         {
             this.Text = $"Edit - {_app.AppName}";
-            this.Size = new Size(500, 705);
+            this.Size = new Size(600, 705);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
@@ -82,13 +83,15 @@ namespace IntelligentMutexExecutionEnvironment
             {
                 Text = _app.Directory ?? "",
                 Location = new Point(labelX, y),
-                Size = new Size(280, 23),
+                // Wider textbox to use dialog width better
+                Size = new Size(controlX + 220, 23),
                 Font = _normalFont
             };
             _browseButton = new Button
             {
                 Text = "Browse",
-                Location = new Point(308, y - 1),
+                // position buttons to the right of the widened textbox
+                Location = new Point(labelX + (controlX + 220) + 10, y - 1),
                 Size = new Size(75, 25),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(52, 152, 219),
@@ -99,7 +102,7 @@ namespace IntelligentMutexExecutionEnvironment
             _openPathButton = new Button
             {
                 Text = "Open",
-                Location = new Point(388, y - 1),
+                Location = new Point(labelX + (controlX + 220) + 95, y - 1),
                 Size = new Size(75, 25),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(155, 89, 182),
@@ -269,6 +272,40 @@ namespace IntelligentMutexExecutionEnvironment
             this.Controls.Add(healthSectionLabel);
 
             y += 22;
+
+            var healthHint = new Label
+            {
+                Text = "When disabled, IMEE will only log and notify issues but not take automatic action. Even if Keep Alive is enabled, automatic recovery actions will be skipped.",
+                Location = new Point(labelX, y),
+                AutoSize = true,
+                ForeColor = Color.Gray,
+                Font = _normalFont,
+                // Allow wrapping to multiple lines to avoid overlap with other controls
+                MaximumSize = new Size(this.ClientSize.Width - (labelX * 2), 0)
+            };
+            this.Controls.Add(healthHint);
+
+            // Advance 'y' by the rendered height of the hint plus a small gap
+            y += healthHint.PreferredSize.Height + 8;
+
+            var healthEnabledLabel = new Label
+            {
+                Text = "Enable Health Monitoring:",
+                Location = new Point(labelX, y + 2),
+                AutoSize = true
+            };
+            _healthMonitoringCheckBox = new CheckBox
+            {
+                Checked = _app.HealthMonitoringEnabled,
+                Location = new Point(controlX + 8, y),
+                AutoSize = true,
+                Text = _app.HealthMonitoringEnabled ? "Yes" : "No"
+            };
+            _healthMonitoringCheckBox.CheckedChanged += (s, e) => { _healthMonitoringCheckBox.Text = _healthMonitoringCheckBox.Checked ? "Yes" : "No"; };
+            this.Controls.Add(healthEnabledLabel);
+            this.Controls.Add(_healthMonitoringCheckBox);
+
+            y += rowHeight;
 
             // Not Responding Timeout
             var nrtLabel = new Label
@@ -484,15 +521,22 @@ namespace IntelligentMutexExecutionEnvironment
             y += rowHeight + 15;
 
             // OK / Cancel buttons
+            // Place OK/Cancel on the right edge
+            int btnWidth = 80;
+            int btnHeight = 30;
+            int btnSpacing = 10;
+            int rightMargin = 20;
+
             _okButton = new Button
             {
                 Text = "OK",
-                Location = new Point(290, y),
-                Size = new Size(80, 30),
+                Location = new Point(this.ClientSize.Width - rightMargin - btnWidth * 2 - btnSpacing, y - 8),
+                Size = new Size(btnWidth, btnHeight),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(46, 204, 113),
                 ForeColor = Color.White,
-                Font = _buttonFont
+                Font = _buttonFont,
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
             };
             _okButton.Click += OkButton_Click;
 
@@ -500,12 +544,13 @@ namespace IntelligentMutexExecutionEnvironment
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(380, y),
-                Size = new Size(80, 30),
+                Location = new Point(this.ClientSize.Width - rightMargin - btnWidth, y - 8),
+                Size = new Size(btnWidth, btnHeight),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(192, 57, 43),
                 ForeColor = Color.White,
-                Font = _buttonFont
+                Font = _buttonFont,
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right
             };
 
             this.Controls.Add(_okButton);
@@ -592,6 +637,7 @@ namespace IntelligentMutexExecutionEnvironment
             }
 
             _app.KeepOpen = _keepOpenCheckBox.Checked;
+            _app.HealthMonitoringEnabled = _healthMonitoringCheckBox.Checked;
             _app.MaxRetries = (int)_maxRetriesNumeric.Value;
             _app.StartDelaySeconds = (int)_startDelayNumeric.Value;
             _app.StartupDelaySeconds = (int)_startupDelayNumeric.Value;

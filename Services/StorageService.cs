@@ -172,6 +172,8 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     existingApp.StableRunPeriodSeconds != app.StableRunPeriodSeconds ||
                     existingApp.NotRespondingTimeoutSeconds != app.NotRespondingTimeoutSeconds ||
                     existingApp.MemoryLimitMB != app.MemoryLimitMB ||
+                    existingApp.DetectTitleChange != app.DetectTitleChange ||
+                    existingApp.HealthMonitoringEnabled != app.HealthMonitoringEnabled ||
                     existingApp.LastExitCode != app.LastExitCode ||
                     existingApp.DetectTitleChange != app.DetectTitleChange ||
                     existingApp.LastStart != app.LastStart ||
@@ -192,8 +194,9 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 existingApp.StableRunPeriodSeconds = app.StableRunPeriodSeconds;
                 existingApp.NotRespondingTimeoutSeconds = app.NotRespondingTimeoutSeconds;
                 existingApp.MemoryLimitMB = app.MemoryLimitMB;
-                existingApp.LastExitCode = app.LastExitCode;
                 existingApp.DetectTitleChange = app.DetectTitleChange;
+                existingApp.HealthMonitoringEnabled = app.HealthMonitoringEnabled;
+                existingApp.LastExitCode = app.LastExitCode;
 
                 if (persistentChanged)
                 {
@@ -588,6 +591,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 sb.AppendLine($"    \"NotRespondingTimeoutSeconds\": {app.NotRespondingTimeoutSeconds},");
                 sb.AppendLine($"    \"MemoryLimitMB\": {app.MemoryLimitMB},");
                 sb.AppendLine($"    \"DetectTitleChange\": {app.DetectTitleChange.ToString().ToLower()},");
+                sb.AppendLine($"    \"HealthMonitoringEnabled\": {app.HealthMonitoringEnabled.ToString().ToLower()},");
                 sb.AppendLine($"    \"LastExitCode\": {app.LastExitCode}");
                 sb.Append("  }");
                 if (i < apps.Count - 1) sb.AppendLine(",");
@@ -729,6 +733,9 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         break;
                     case "DetectTitleChange":
                         app.DetectTitleChange = value.ToLower() == "true";
+                        break;
+                    case "HealthMonitoringEnabled":
+                        app.HealthMonitoringEnabled = value.ToLower() == "true";
                         break;
                     case "LastExitCode":
                         int lastExitCode;

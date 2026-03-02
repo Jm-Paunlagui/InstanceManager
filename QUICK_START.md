@@ -1,4 +1,4 @@
-﻿# Instance Manager — Quick Start Guide
+﻿# IMEE — Quick Start Guide
 
 ## First Time Setup
 
@@ -156,16 +156,16 @@ All health monitoring features apply only to **Keep Open** apps and trigger auto
 
 ## Unauthorized Launch Detection
 
-Instance Manager enforces that managed applications must be started through its interface:
+IMEE enforces that managed applications must be started through its interface:
 
-1. Add an application to Instance Manager
+1. Add an application to IMEE
 2. If someone launches that `.exe` directly (double-click, shortcut, etc.)
-3. Within one poll interval (default: 10 seconds, configurable in Settings), Instance Manager:
+3. Within one poll interval (default: 10 seconds, configurable in Settings), IMEE:
    - **Kills** the unauthorized process
    - Shows a warning notification
 4. The status remains **Stopped**
 
-> **Note:** Applications already running when Instance Manager starts are **terminated** with a notification listing all affected apps.
+> **Note:** Applications already running when IMEE starts are **terminated** with a notification listing all affected apps.
 
 > **Cross-Group:** If the same executable is added to multiple groups and started from one group, other groups show **Running (Other Group)** in dark cyan instead of treating it as unauthorized.
 
@@ -185,7 +185,7 @@ Instance Manager enforces that managed applications must be started through its 
 ### Watchdog Tests
 - [ ] Launch a managed app externally → verify it gets killed
 - [ ] Close a running app via Task Manager → verify status updates to "Stopped"
-- [ ] Start Instance Manager while a managed app is already running → verify it gets terminated
+- [ ] Start IMEE while a managed app is already running → verify it gets terminated
 - [ ] Add same app to two groups, start in one → verify "Running (Other Group)" in the other
 
 ### Keep Open Tests

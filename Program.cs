@@ -17,7 +17,7 @@ namespace IntelligentMutexExecutionEnvironment
         [STAThread]
         static void Main()
         {
-            // Ensure only one instance of Instance Manager is running
+            // Ensure only one instance of IMEE is running
             bool createdNew;
             _mutex = new Mutex(true, "Global\\IntelligentMutexExecutionEnvironment_SingleInstance_Mutex", out createdNew);
             if (!createdNew)
