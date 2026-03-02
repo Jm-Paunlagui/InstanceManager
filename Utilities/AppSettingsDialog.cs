@@ -21,7 +21,6 @@ namespace IntelligentMutexExecutionEnvironment
         private NumericUpDown _notRespondingTimeoutNumeric;
         private NumericUpDown _memoryLimitNumeric;
         private CheckBox _detectTitleChangeCheckBox;
-        private CheckBox _healthMonitoringCheckBox;
         private Button _resetCrashButton;
         private Button _resetRetryButton;
         private Label _crashCountLabel;
@@ -157,10 +156,10 @@ namespace IntelligentMutexExecutionEnvironment
 
             y += rowHeight + 10;
 
-            // --- Crash Recovery Settings Section ---
+            // --- Crash Recovery & Health Monitoring Section ---
             var settingsSectionLabel = new Label
             {
-                Text = "Crash Recovery Settings",
+                Text = "Crash Recovery and Health Monitoring",
                 Location = new Point(labelX, y),
                 AutoSize = true,
                 Font = _boldFont
@@ -168,6 +167,20 @@ namespace IntelligentMutexExecutionEnvironment
             this.Controls.Add(settingsSectionLabel);
 
             y += 22;
+
+            // Hint text for the section
+            var sectionHint = new Label
+            {
+                Text = "When disabled, IMEE will only log and notify issues but not take automatic action.",
+                Location = new Point(labelX, y),
+                AutoSize = true,
+                ForeColor = Color.Gray,
+                Font = _normalFont,
+                MaximumSize = new Size(this.ClientSize.Width - (labelX * 2), 0)
+            };
+            this.Controls.Add(sectionHint);
+
+            y += sectionHint.PreferredSize.Height + 8;
 
             // Keep Open
             var keepOpenLabel = new Label
@@ -182,10 +195,6 @@ namespace IntelligentMutexExecutionEnvironment
                 Location = new Point(controlX + 8, y),
                 AutoSize = true,
                 Text = _app.KeepOpen ? "Yes" : "No"
-            };
-            _keepOpenCheckBox.CheckedChanged += (s, e) =>
-            {
-                _keepOpenCheckBox.Text = _keepOpenCheckBox.Checked ? "Yes" : "No";
             };
             this.Controls.Add(keepOpenLabel);
             this.Controls.Add(_keepOpenCheckBox);
@@ -258,52 +267,6 @@ namespace IntelligentMutexExecutionEnvironment
             this.Controls.Add(stableRunLabel);
             this.Controls.Add(_stableRunNumeric);
             this.Controls.Add(stableRunHint);
-
-            y += rowHeight + 10;
-
-            // --- Health Monitoring Section ---
-            var healthSectionLabel = new Label
-            {
-                Text = "Health Monitoring",
-                Location = new Point(labelX, y),
-                AutoSize = true,
-                Font = _boldFont
-            };
-            this.Controls.Add(healthSectionLabel);
-
-            y += 22;
-
-            var healthHint = new Label
-            {
-                Text = "When disabled, IMEE will only log and notify issues but not take automatic action. Even if Keep Alive is enabled, automatic recovery actions will be skipped.",
-                Location = new Point(labelX, y),
-                AutoSize = true,
-                ForeColor = Color.Gray,
-                Font = _normalFont,
-                // Allow wrapping to multiple lines to avoid overlap with other controls
-                MaximumSize = new Size(this.ClientSize.Width - (labelX * 2), 0)
-            };
-            this.Controls.Add(healthHint);
-
-            // Advance 'y' by the rendered height of the hint plus a small gap
-            y += healthHint.PreferredSize.Height + 8;
-
-            var healthEnabledLabel = new Label
-            {
-                Text = "Enable Health Monitoring:",
-                Location = new Point(labelX, y + 2),
-                AutoSize = true
-            };
-            _healthMonitoringCheckBox = new CheckBox
-            {
-                Checked = _app.HealthMonitoringEnabled,
-                Location = new Point(controlX + 8, y),
-                AutoSize = true,
-                Text = _app.HealthMonitoringEnabled ? "Yes" : "No"
-            };
-            _healthMonitoringCheckBox.CheckedChanged += (s, e) => { _healthMonitoringCheckBox.Text = _healthMonitoringCheckBox.Checked ? "Yes" : "No"; };
-            this.Controls.Add(healthEnabledLabel);
-            this.Controls.Add(_healthMonitoringCheckBox);
 
             y += rowHeight;
 
@@ -396,6 +359,16 @@ namespace IntelligentMutexExecutionEnvironment
             this.Controls.Add(dtcHint);
 
             y += rowHeight + 10;
+
+            // Set initial enabled state for sub-controls based on Keep Open
+            UpdateKeepOpenDependentControls(_keepOpenCheckBox.Checked);
+
+            // Wire up Keep Open checkbox to toggle dependent controls
+            _keepOpenCheckBox.CheckedChanged += (s, e) =>
+            {
+                _keepOpenCheckBox.Text = _keepOpenCheckBox.Checked ? "Yes" : "No";
+                UpdateKeepOpenDependentControls(_keepOpenCheckBox.Checked);
+            };
 
             // --- Statistics Section ---
             var statsSectionLabel = new Label
@@ -560,6 +533,19 @@ namespace IntelligentMutexExecutionEnvironment
             this.CancelButton = _cancelButton;
         }
 
+        /// <summary>
+        /// Enables or disables all controls that depend on Keep Open being active.
+        /// </summary>
+        private void UpdateKeepOpenDependentControls(bool enabled)
+        {
+            _maxRetriesNumeric.Enabled = enabled;
+            _startDelayNumeric.Enabled = enabled;
+            _stableRunNumeric.Enabled = enabled;
+            _notRespondingTimeoutNumeric.Enabled = enabled;
+            _memoryLimitNumeric.Enabled = enabled;
+            _detectTitleChangeCheckBox.Enabled = enabled;
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)
@@ -637,7 +623,7 @@ namespace IntelligentMutexExecutionEnvironment
             }
 
             _app.KeepOpen = _keepOpenCheckBox.Checked;
-            _app.HealthMonitoringEnabled = _healthMonitoringCheckBox.Checked;
+            _app.HealthMonitoringEnabled = _keepOpenCheckBox.Checked;
             _app.MaxRetries = (int)_maxRetriesNumeric.Value;
             _app.StartDelaySeconds = (int)_startDelayNumeric.Value;
             _app.StartupDelaySeconds = (int)_startupDelayNumeric.Value;
