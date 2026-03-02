@@ -19,6 +19,34 @@ namespace IntelligentMutexExecutionEnvironment.Models
         public int MaxRetries { get; set; }
         public int StartDelaySeconds { get; set; }
         public int StartupDelaySeconds { get; set; }
+        public int StableRunPeriodSeconds { get; set; }
+
+        /// <summary>
+        /// How long (in seconds) a process can remain in a "not responding" state
+        /// before being force-killed for auto-restart. 0 = use default (2 poll cycles).
+        /// </summary>
+        public int NotRespondingTimeoutSeconds { get; set; }
+
+        /// <summary>
+        /// Optional memory limit in megabytes. If a process exceeds this working set size,
+        /// it is considered unhealthy and will be force-killed for auto-restart (KeepOpen only).
+        /// 0 = no limit (disabled).
+        /// </summary>
+        public int MemoryLimitMB { get; set; }
+
+        /// <summary>
+        /// Stores the exit code of the last process termination.
+        /// Null if no exit has been recorded yet.
+        /// </summary>
+        public int? LastExitCode { get; set; }
+
+        /// <summary>
+        /// When enabled, the watchdog tracks the application's initial window title
+        /// and treats a sudden title change as a potential error dialog (e.g. WinForms
+        /// ThreadExceptionDialog). Requires 2 consecutive detections to confirm.
+        /// Default: false (disabled, since some apps legitimately change their title).
+        /// </summary>
+        public bool DetectTitleChange { get; set; }
 
         public ManagedApplication()
         {
@@ -32,6 +60,11 @@ namespace IntelligentMutexExecutionEnvironment.Models
             MaxRetries = 3;
             StartDelaySeconds = 5;
             StartupDelaySeconds = 0;
+            StableRunPeriodSeconds = 30;
+            NotRespondingTimeoutSeconds = 0;
+            MemoryLimitMB = 0;
+            LastExitCode = null;
+            DetectTitleChange = false;
         }
 
         public string GetLastStartDisplay()

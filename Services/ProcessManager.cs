@@ -18,7 +18,196 @@ namespace IntelligentMutexExecutionEnvironment.Services
         {
             public bool HasWindowedProcess;
             public bool HasBackgroundProcess;
+            public bool HasNotRespondingProcess;
             public int TotalCount;
+            /// <summary>
+            /// Total processor time across all matching windowed processes at the time of snapshot.
+            /// Used by the caller to detect CPU-hung processes by comparing across ticks.
+            /// TimeSpan.Zero if no windowed process exists.
+            /// </summary>
+            public TimeSpan TotalCpuTime;
+            /// <summary>
+            /// Peak working set (bytes) across all matching windowed processes.
+            /// Used to detect runaway memory consumption.
+            /// </summary>
+            public long PeakWorkingSetBytes;
+            /// <summary>
+            /// True if any windowed process has a main window title matching common
+            /// error/crash dialog patterns (e.g. "Error", "Exception", ".NET", "has stopped").
+            /// This detects ghost windows that are technically "responding" but show an error dialog.
+            /// </summary>
+            public bool HasErrorDialogWindow;
+            /// <summary>
+            /// The window title that triggered HasErrorDialogWindow, for diagnostic logging.
+            /// </summary>
+            public string ErrorDialogTitle;
+            /// <summary>
+            /// The current main window title of the first windowed process found.
+            /// Used to detect when a window title changes unexpectedly (e.g. exception dialog overlay).
+            /// Null if no windowed process exists.
+            /// </summary>
+            public string MainWindowTitle;
+        }
+
+        /// <summary>
+        /// Tracks a launched process PID so we can retrieve its exit code after termination.
+        /// </summary>
+        private readonly Dictionary<int, int> _appPidMap = new Dictionary<int, int>();
+
+        /// <summary>
+        /// Keeps the Process handle alive so we can read ExitCode after the process terminates.
+        /// On .NET Framework 4.0, the exit code is only available while the Process handle is open.
+        /// Key: app Index, Value: the Process object from Process.Start().
+        /// </summary>
+        private readonly Dictionary<int, Process> _appProcessHandles = new Dictionary<int, Process>();
+
+        // Reusable collections to avoid per-tick allocations in GetBatchProcessSnapshot
+        private readonly Dictionary<string, List<int>> _nameToAppsCache = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<int, ProcessSnapshot> _snapshotResultsCache = new Dictionary<int, ProcessSnapshot>();
+
+        // Error dialog detection patterns (checked case-insensitively against window titles)
+        private static readonly string[] ErrorDialogPatterns = new string[]
+        {
+            "has stopped working",
+            "not responding",
+            "has encountered a problem",
+            "unhandled exception",
+            "application error",
+            "runtime error",
+            "fatal error",
+            "clr error",
+            ".net framework",
+            "just-in-time debugging",
+            "assertion failed",
+            "access violation",
+            "stack overflow",
+            "nullreferenceexception",
+            "dividebyzeroexception",
+            "outofmemoryexception",
+            "stackoverflowexception",
+            "accessviolationexception",
+            "invalidoperationexception",
+            "argumentexception",
+            "indexoutofrangeexception",
+            "objectdisposedexception",
+            "system.exception",
+            "system.componentmodel.win32exception",
+            "an error occurred",
+            "error in application",
+            "stopped unexpectedly"
+        };
+
+        /// <summary>
+        /// Records the PID for a launched application so we can track it for exit code retrieval.
+        /// </summary>
+        public void TrackLaunchedPid(int appIndex, int pid)
+        {
+            _appPidMap[appIndex] = pid;
+        }
+
+        /// <summary>
+        /// Records the Process handle for a launched application so we can read its ExitCode later.
+        /// The Process object is kept alive (not disposed) until explicitly untracked or replaced.
+        /// </summary>
+        public void TrackLaunchedProcess(int appIndex, Process process)
+        {
+            // Dispose any previously tracked handle for this app
+            Process oldProc;
+            if (_appProcessHandles.TryGetValue(appIndex, out oldProc))
+            {
+                try { oldProc.Dispose(); } catch { }
+            }
+            _appProcessHandles[appIndex] = process;
+        }
+
+        /// <summary>
+        /// Removes PID tracking for an application (e.g. after intentional stop).
+        /// Also disposes the kept-alive Process handle.
+        /// </summary>
+        public void UntrackPid(int appIndex)
+        {
+            _appPidMap.Remove(appIndex);
+
+            Process proc;
+            if (_appProcessHandles.TryGetValue(appIndex, out proc))
+            {
+                _appProcessHandles.Remove(appIndex);
+                try { proc.Dispose(); } catch { }
+            }
+        }
+
+        /// <summary>
+        /// Attempts to retrieve the exit code of the last tracked process for the given app.
+        /// Returns null if the PID was not tracked, the process is still running, or the exit code
+        /// cannot be retrieved (access denied, already cleaned up, etc.).
+        /// </summary>
+        public int? GetTrackedExitCode(int appIndex)
+        {
+            // First try the kept-alive Process handle (reliable on .NET 4.0)
+            Process proc;
+            if (_appProcessHandles.TryGetValue(appIndex, out proc))
+            {
+                try
+                {
+                    if (proc.HasExited)
+                    {
+                        return proc.ExitCode;
+                    }
+                    // Still running — no exit code yet
+                    return null;
+                }
+                catch (InvalidOperationException)
+                {
+                    // Handle was invalidated
+                }
+                catch (System.ComponentModel.Win32Exception)
+                {
+                    // Access denied
+                }
+                catch (Exception)
+                {
+                    // Unexpected error
+                }
+            }
+
+            // Fallback to PID-based lookup (unlikely to work on .NET 4.0 after handle disposal)
+            int pid;
+            if (!_appPidMap.TryGetValue(appIndex, out pid))
+                return null;
+
+            try
+            {
+                Process procById = null;
+                try
+                {
+                    procById = Process.GetProcessById(pid);
+                    // Process is still alive — no exit code yet
+                    return null;
+                }
+                catch (ArgumentException)
+                {
+                    // Process has exited — cannot retrieve exit code without the original handle
+                    return null;
+                }
+                finally
+                {
+                    if (procById != null)
+                        procById.Dispose();
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Gets the tracked PID for an app index, or -1 if not tracked.
+        /// </summary>
+        public int GetTrackedPid(int appIndex)
+        {
+            int pid;
+            return _appPidMap.TryGetValue(appIndex, out pid) ? pid : -1;
         }
 
         /// <summary>
@@ -29,14 +218,21 @@ namespace IntelligentMutexExecutionEnvironment.Services
         /// </summary>
         public Dictionary<int, ProcessSnapshot> GetBatchProcessSnapshot(IList<ManagedApplication> apps)
         {
-            var results = new Dictionary<int, ProcessSnapshot>();
+            // Reuse cached collections to avoid allocations on every tick
+            var results = _snapshotResultsCache;
+            results.Clear();
 
             if (apps == null || apps.Count == 0)
                 return results;
 
             // Build a lookup of process name -> list of app indices that use that name
-            // (multiple apps could theoretically have the same exe name)
-            var nameToApps = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+            // Clear reused lists instead of creating new ones
+            var nameToApps = _nameToAppsCache;
+            foreach (var kvp in nameToApps)
+            {
+                kvp.Value.Clear();
+            }
+
             for (int i = 0; i < apps.Count; i++)
             {
                 var app = apps[i];
@@ -69,39 +265,116 @@ namespace IntelligentMutexExecutionEnvironment.Services
 
                 for (int i = 0; i < allProcesses.Length; i++)
                 {
+                    string pName;
                     try
                     {
-                        string pName = allProcesses[i].ProcessName;
+                        pName = allProcesses[i].ProcessName;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        continue; // Process exited
+                    }
 
-                        List<int> appIndices;
-                        if (!nameToApps.TryGetValue(pName, out appIndices))
-                            continue;
+                    List<int> appIndices;
+                    if (!nameToApps.TryGetValue(pName, out appIndices))
+                        continue;
 
-                        bool hasWindow;
+                    bool hasWindow;
+                    try
+                    {
+                        hasWindow = allProcesses[i].MainWindowHandle != IntPtr.Zero;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        continue; // Process exited
+                    }
+
+                    bool responding = true;
+                    TimeSpan cpuTime = TimeSpan.Zero;
+                    long workingSet = 0;
+                    string windowTitle = null;
+                    bool isErrorDialog = false;
+
+                    if (hasWindow)
+                    {
                         try
                         {
-                            hasWindow = allProcesses[i].MainWindowHandle != IntPtr.Zero;
+                            responding = allProcesses[i].Responding;
                         }
                         catch (InvalidOperationException)
                         {
                             continue; // Process exited
                         }
 
-                        for (int j = 0; j < appIndices.Count; j++)
+                        // Gather CPU time (lightweight kernel query, no perf counter overhead)
+                        try
                         {
-                            int idx = appIndices[j];
-                            var snap = results[idx];
-                            snap.TotalCount++;
-                            if (hasWindow)
-                                snap.HasWindowedProcess = true;
-                            else
-                                snap.HasBackgroundProcess = true;
-                            results[idx] = snap;
+                            cpuTime = allProcesses[i].TotalProcessorTime;
+                        }
+                        catch (InvalidOperationException) { }
+                        catch (System.ComponentModel.Win32Exception) { }
+
+                        // Gather working set
+                        try
+                        {
+                            // .NET 4.0: WorkingSet64 is available
+                            workingSet = allProcesses[i].WorkingSet64;
+                        }
+                        catch (InvalidOperationException) { }
+                        catch (System.ComponentModel.Win32Exception) { }
+
+                        // Check window title for error dialog patterns
+                        // Only if the window is responding (error dialogs pump messages)
+                        if (responding)
+                        {
+                            try
+                            {
+                                windowTitle = allProcesses[i].MainWindowTitle;
+                                if (!string.IsNullOrEmpty(windowTitle))
+                                {
+                                    string titleLower = windowTitle.ToLowerInvariant();
+                                    for (int p = 0; p < ErrorDialogPatterns.Length; p++)
+                                    {
+                                        if (titleLower.Contains(ErrorDialogPatterns[p]))
+                                        {
+                                            isErrorDialog = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            catch (InvalidOperationException) { }
                         }
                     }
-                    catch (InvalidOperationException)
+
+                    for (int j = 0; j < appIndices.Count; j++)
                     {
-                        // Process exited between enumeration and property access
+                        int idx = appIndices[j];
+                        var snap = results[idx];
+                        snap.TotalCount++;
+                        if (hasWindow)
+                        {
+                            snap.HasWindowedProcess = true;
+                            if (!responding)
+                                snap.HasNotRespondingProcess = true;
+                            // Accumulate CPU time across all windowed processes for this app
+                            snap.TotalCpuTime = snap.TotalCpuTime.Add(cpuTime);
+                            // Track peak working set
+                            if (workingSet > snap.PeakWorkingSetBytes)
+                                snap.PeakWorkingSetBytes = workingSet;
+                            if (isErrorDialog)
+                            {
+                                snap.HasErrorDialogWindow = true;
+                                if (snap.ErrorDialogTitle == null)
+                                    snap.ErrorDialogTitle = windowTitle;
+                            }
+                            // Capture window title for title-change detection
+                            if (snap.MainWindowTitle == null && windowTitle != null)
+                                snap.MainWindowTitle = windowTitle;
+                        }
+                        else
+                            snap.HasBackgroundProcess = true;
+                        results[idx] = snap;
                     }
                 }
             }
@@ -153,6 +426,61 @@ namespace IntelligentMutexExecutionEnvironment.Services
                             if (processes[i].MainWindowHandle != IntPtr.Zero)
                             {
                                 snapshot.HasWindowedProcess = true;
+                                try
+                                {
+                                    if (!processes[i].Responding)
+                                        snapshot.HasNotRespondingProcess = true;
+                                }
+                                catch (InvalidOperationException)
+                                {
+                                    // Process already exited
+                                }
+
+                                // CPU time
+                                try
+                                {
+                                    snapshot.TotalCpuTime = snapshot.TotalCpuTime.Add(processes[i].TotalProcessorTime);
+                                }
+                                catch (InvalidOperationException) { }
+                                catch (System.ComponentModel.Win32Exception) { }
+
+                                // Working set
+                                try
+                                {
+                                    long ws = processes[i].WorkingSet64;
+                                    if (ws > snapshot.PeakWorkingSetBytes)
+                                        snapshot.PeakWorkingSetBytes = ws;
+                                }
+                                catch (InvalidOperationException) { }
+                                catch (System.ComponentModel.Win32Exception) { }
+
+                                // Error dialog title check
+                                try
+                                {
+                                    string title = processes[i].MainWindowTitle;
+                                    if (!string.IsNullOrEmpty(title))
+                                    {
+                                        // Capture for title-change detection
+                                        if (snapshot.MainWindowTitle == null)
+                                            snapshot.MainWindowTitle = title;
+
+                                        string titleLower = title.ToLowerInvariant();
+                                        for (int p = 0; p < ErrorDialogPatterns.Length; p++)
+                                        {
+                                            if (titleLower.Contains(ErrorDialogPatterns[p]))
+                                            {
+                                                snapshot.HasErrorDialogWindow = true;
+                                                if (snapshot.ErrorDialogTitle == null)
+                                                    snapshot.ErrorDialogTitle = title;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                catch (InvalidOperationException) { }
+
+                                // Track the main window title (for detecting title changes)
+                                snapshot.MainWindowTitle = processes[i].MainWindowTitle;
                             }
                             else
                             {
@@ -305,31 +633,26 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     WorkingDirectory = Path.GetDirectoryName(app.Directory)
                 };
 
-                Process process = null;
-                try
-                {
-                    process = Process.Start(startInfo);
+                Process process = Process.Start(startInfo);
 
-                    if (process != null)
-                    {
-                        try
-                        {
-                            int pid = process.Id;
-                            SimpleLogger.Info("StartApplication @ ProcessManager.cs", $"Successfully started {app.AppName} (PID: {pid})");
-                        }
-                        catch (InvalidOperationException)
-                        {
-                            SimpleLogger.Info("StartApplication @ ProcessManager.cs", $"Successfully started {app.AppName} (PID unavailable - process may have exited quickly)");
-                        }
-                        return true;
-                    }
-                }
-                finally
+                if (process != null)
                 {
-                    if (process != null)
+                    try
                     {
-                        process.Dispose();
+                        int pid = process.Id;
+                        // Track the PID for identification
+                        TrackLaunchedPid(app.Index, pid);
+                        // Keep the Process handle alive so we can read ExitCode later
+                        TrackLaunchedProcess(app.Index, process);
+                        SimpleLogger.Info("StartApplication @ ProcessManager.cs", $"Successfully started {app.AppName} (PID: {pid})");
                     }
+                    catch (InvalidOperationException)
+                    {
+                        // PID unavailable but process started — still keep the handle
+                        TrackLaunchedProcess(app.Index, process);
+                        SimpleLogger.Info("StartApplication @ ProcessManager.cs", $"Successfully started {app.AppName} (PID unavailable - process may have exited quickly)");
+                    }
+                    return true;
                 }
 
                 SimpleLogger.Error("StartApplication @ ProcessManager.cs", $"Failed to start {app.AppName}");
@@ -358,6 +681,9 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     SimpleLogger.Warn("StopApplication @ ProcessManager.cs", $"Cannot stop {app.AppName}: Unable to determine process name");
                     return false;
                 }
+
+                // Clear PID tracking since we're intentionally stopping
+                UntrackPid(app.Index);
 
                 Process[] processes = null;
                 try
@@ -441,6 +767,40 @@ namespace IntelligentMutexExecutionEnvironment.Services
             }
         }
 
+        /// <summary>
+        /// Attempts to retrieve the exit code from a process by PID.
+        /// The process must have already exited. Returns null on failure.
+        /// Uses OpenProcess + GetExitCodeProcess via the Process class.
+        /// </summary>
+        public int? TryGetExitCode(int pid)
+        {
+            try
+            {
+                Process proc = null;
+                try
+                {
+                    proc = Process.GetProcessById(pid);
+                    // Still running — no exit code available
+                    return null;
+                }
+                catch (ArgumentException)
+                {
+                    // Process does not exist (already exited) — we cannot retrieve exit code
+                    // from a disposed handle on .NET 4.0 without keeping the Process object alive.
+                    return null;
+                }
+                finally
+                {
+                    if (proc != null)
+                        proc.Dispose();
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         public int GetRunningInstanceCount(ManagedApplication app)
         {
             try
@@ -473,6 +833,19 @@ namespace IntelligentMutexExecutionEnvironment.Services
             {
                 return 0;
             }
+        }
+
+        /// <summary>
+        /// Disposes all tracked Process handles. Call on application shutdown.
+        /// </summary>
+        public void DisposeAllTrackedHandles()
+        {
+            foreach (var kvp in _appProcessHandles)
+            {
+                try { kvp.Value.Dispose(); } catch { }
+            }
+            _appProcessHandles.Clear();
+            _appPidMap.Clear();
         }
     }
 }

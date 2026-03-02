@@ -16,9 +16,9 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
         private static string _currentLogFile;
         private static DateTime _lastFlush = DateTime.MinValue;
         private static DateTime _lastCleanup = DateTime.MinValue;
-        private const int FlushIntervalSeconds = 5;
-        private const int MaxBufferSize = 50;
-        private const int MaxLogAgeDays = 30;
+        private static int _flushIntervalSeconds = 10;
+        private static int _maxBufferSize = 100;
+        private static int _maxLogAgeDays = 7;
 
         static SimpleLogger()
         {
@@ -45,6 +45,19 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             }
         }
 
+        /// <summary>
+        /// Updates the logger configuration at runtime. Thread-safe.
+        /// </summary>
+        public static void Configure(int flushIntervalSeconds, int maxBufferSize, int maxLogAgeDays)
+        {
+            lock (_lockObject)
+            {
+                _flushIntervalSeconds = Math.Max(1, flushIntervalSeconds);
+                _maxBufferSize = Math.Max(10, maxBufferSize);
+                _maxLogAgeDays = Math.Max(1, maxLogAgeDays);
+            }
+        }
+
         public static void Log(string level, string location, string message)
         {
             if (!_isInitialized) return;
@@ -66,18 +79,18 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
 
                     _logBuffer.Add(logEntry);
 
-                    bool shouldFlush = _logBuffer.Count >= MaxBufferSize
+                    bool shouldFlush = _logBuffer.Count >= _maxBufferSize
                         || level == "FATAL"
                         || level == "ERROR"
-                        || (DateTime.Now - _lastFlush).TotalSeconds >= FlushIntervalSeconds;
+                        || (DateTime.Now - _lastFlush).TotalSeconds >= _flushIntervalSeconds;
 
                     if (shouldFlush)
                     {
                         FlushBufferUnsafe(logFile);
                     }
 
-                    // Periodic cleanup of old log files (check once per hour)
-                    if ((DateTime.Now - _lastCleanup).TotalHours >= 1)
+                    // Periodic cleanup of old log files (check once per day)
+                    if ((DateTime.Now - _lastCleanup).TotalHours >= 24)
                     {
                         _lastCleanup = DateTime.Now;
                         CleanupOldLogsUnsafe();
@@ -133,7 +146,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             catch
             {
                 // If we can't write, discard buffer to prevent unbounded memory growth
-                if (_logBuffer.Count > MaxBufferSize * 2)
+                if (_logBuffer.Count > _maxBufferSize * 2)
                 {
                     _logBuffer.Clear();
                 }
@@ -141,13 +154,13 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
         }
 
         /// <summary>
-        /// Deletes log files older than MaxLogAgeDays. Must be called while holding _lockObject.
+        /// Deletes log files older than _maxLogAgeDays. Must be called while holding _lockObject.
         /// </summary>
         private static void CleanupOldLogsUnsafe()
         {
             try
             {
-                DateTime cutoff = DateTime.Now.AddDays(-MaxLogAgeDays);
+                DateTime cutoff = DateTime.Now.AddDays(-_maxLogAgeDays);
                 string[] files = Directory.GetFiles(_logDirectory, "*.log");
                 for (int i = 0; i < files.Length; i++)
                 {

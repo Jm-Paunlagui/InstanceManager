@@ -182,5 +182,19 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
                 return msgBox.Result;
             }
         }
+
+        private void InitializeComponent()
+        {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(CustomMessageBox));
+            this.SuspendLayout();
+            // 
+            // CustomMessageBox
+            // 
+            this.ClientSize = new System.Drawing.Size(284, 261);
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
+            this.Name = "CustomMessageBox";
+            this.ResumeLayout(false);
+
+        }
     }
 }

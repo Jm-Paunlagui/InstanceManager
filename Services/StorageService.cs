@@ -20,7 +20,15 @@ namespace IntelligentMutexExecutionEnvironment.Services
         private bool _groupsDirty;
         private DateTime _lastAppSave = DateTime.MinValue;
         private DateTime _lastGroupSave = DateTime.MinValue;
-        private const int MinSaveIntervalSeconds = 10;
+        private int _minSaveIntervalSeconds = 30;
+
+        /// <summary>
+        /// Updates the minimum save interval for throttled writes at runtime.
+        /// </summary>
+        public void SetSaveInterval(int seconds)
+        {
+            _minSaveIntervalSeconds = Math.Max(5, seconds);
+        }
 
         public StorageService()
         {
@@ -161,6 +169,11 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     existingApp.MaxRetries != app.MaxRetries ||
                     existingApp.StartDelaySeconds != app.StartDelaySeconds ||
                     existingApp.StartupDelaySeconds != app.StartupDelaySeconds ||
+                    existingApp.StableRunPeriodSeconds != app.StableRunPeriodSeconds ||
+                    existingApp.NotRespondingTimeoutSeconds != app.NotRespondingTimeoutSeconds ||
+                    existingApp.MemoryLimitMB != app.MemoryLimitMB ||
+                    existingApp.LastExitCode != app.LastExitCode ||
+                    existingApp.DetectTitleChange != app.DetectTitleChange ||
                     existingApp.LastStart != app.LastStart ||
                     existingApp.LastStop != app.LastStop;
 
@@ -176,6 +189,11 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 existingApp.MaxRetries = app.MaxRetries;
                 existingApp.StartDelaySeconds = app.StartDelaySeconds;
                 existingApp.StartupDelaySeconds = app.StartupDelaySeconds;
+                existingApp.StableRunPeriodSeconds = app.StableRunPeriodSeconds;
+                existingApp.NotRespondingTimeoutSeconds = app.NotRespondingTimeoutSeconds;
+                existingApp.MemoryLimitMB = app.MemoryLimitMB;
+                existingApp.LastExitCode = app.LastExitCode;
+                existingApp.DetectTitleChange = app.DetectTitleChange;
 
                 if (persistentChanged)
                 {
@@ -188,7 +206,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 {
                     SaveApplications();
                 }
-                else if (_appsDirty && (DateTime.Now - _lastAppSave).TotalSeconds >= MinSaveIntervalSeconds)
+                else if (_appsDirty && (DateTime.Now - _lastAppSave).TotalSeconds >= _minSaveIntervalSeconds)
                 {
                     SaveApplications();
                 }
@@ -207,7 +225,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
         /// Only non-null parameters are applied.
         /// </summary>
         public void UpdateApplicationFields(int appIndex, bool? isRunning = null, DateTime? lastStart = null,
-            DateTime? lastStop = null, int? crashCount = null, int? retryCount = null)
+            DateTime? lastStop = null, int? crashCount = null, int? retryCount = null, int? lastExitCode = null)
         {
             var existingApp = _applications.FirstOrDefault(a => a.Index == appIndex);
             if (existingApp == null) return;
@@ -238,6 +256,11 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 if (existingApp.RetryCount != retryCount.Value) persistentChanged = true;
                 existingApp.RetryCount = retryCount.Value;
             }
+            if (lastExitCode.HasValue)
+            {
+                if (existingApp.LastExitCode != lastExitCode.Value) persistentChanged = true;
+                existingApp.LastExitCode = lastExitCode.Value;
+            }
 
             if (persistentChanged)
             {
@@ -245,7 +268,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
             }
 
             // Throttled save for timer-tick updates
-            if (_appsDirty && (DateTime.Now - _lastAppSave).TotalSeconds >= MinSaveIntervalSeconds)
+            if (_appsDirty && (DateTime.Now - _lastAppSave).TotalSeconds >= _minSaveIntervalSeconds)
             {
                 SaveApplications();
             }
@@ -298,6 +321,63 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 app.GroupId == groupId &&
                 !string.IsNullOrEmpty(app.Directory) &&
                 app.Directory.ToLowerInvariant().Replace("/", "\\") == normalizedPath);
+        }
+
+        /// <summary>
+        /// Finds all other application entries that share the same executable path
+        /// but have a different Index. Used to detect cross-group duplicates.
+        /// </summary>
+        public List<ManagedApplication> FindOtherEntriesWithSamePath(string directory, int excludeIndex)
+        {
+            var result = new List<ManagedApplication>();
+            if (string.IsNullOrEmpty(directory))
+                return result;
+
+            string normalizedPath = directory.ToLowerInvariant().Replace("/", "\\");
+
+            foreach (var app in _applications)
+            {
+                if (app.Index == excludeIndex)
+                    continue;
+                if (string.IsNullOrEmpty(app.Directory))
+                    continue;
+                if (app.Directory.ToLowerInvariant().Replace("/", "\\") == normalizedPath)
+                {
+                    result.Add(app);
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Checks whether any other application entry with the same executable path
+        /// exists in the authorized set. Returns the first matching authorized sibling,
+        /// or null if none found. This avoids allocating a List for the common case
+        /// in the timer tick where we only need to know if a cross-group match exists.
+        /// </summary>
+        public ManagedApplication FindAuthorizedSibling(string directory, int excludeIndex, HashSet<int> authorizedApps)
+        {
+            if (string.IsNullOrEmpty(directory) || authorizedApps.Count == 0)
+                return null;
+
+            string normalizedPath = directory.ToLowerInvariant().Replace("/", "\\");
+
+            foreach (var app in _applications)
+            {
+                if (app.Index == excludeIndex)
+                    continue;
+                if (!authorizedApps.Contains(app.Index))
+                    continue;
+                if (string.IsNullOrEmpty(app.Directory))
+                    continue;
+                if (app.Directory.ToLowerInvariant().Replace("/", "\\") == normalizedPath)
+                {
+                    return app;
+                }
+            }
+
+            return null;
         }
 
         // ===== Load/Save Groups =====
@@ -503,7 +583,12 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 sb.AppendLine($"    \"RetryCount\": {app.RetryCount},");
                 sb.AppendLine($"    \"MaxRetries\": {app.MaxRetries},");
                 sb.AppendLine($"    \"StartDelaySeconds\": {app.StartDelaySeconds},");
-                sb.AppendLine($"    \"StartupDelaySeconds\": {app.StartupDelaySeconds}");
+                sb.AppendLine($"    \"StartupDelaySeconds\": {app.StartupDelaySeconds},");
+                sb.AppendLine($"    \"StableRunPeriodSeconds\": {app.StableRunPeriodSeconds},");
+                sb.AppendLine($"    \"NotRespondingTimeoutSeconds\": {app.NotRespondingTimeoutSeconds},");
+                sb.AppendLine($"    \"MemoryLimitMB\": {app.MemoryLimitMB},");
+                sb.AppendLine($"    \"DetectTitleChange\": {app.DetectTitleChange.ToString().ToLower()},");
+                sb.AppendLine($"    \"LastExitCode\": {app.LastExitCode}");
                 sb.Append("  }");
                 if (i < apps.Count - 1) sb.AppendLine(",");
                 else sb.AppendLine();
@@ -530,36 +615,13 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     var app = ParseApplicationObject(objStr);
                     if (app != null) apps.Add(app);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    SimpleLogger.Error("DeserializeApplications", $"Error parsing application object: {ex.Message} | {objStr}");
+                }
             }
 
             return apps;
-        }
-
-        private List<string> SplitJsonObjects(string content)
-        {
-            List<string> objects = new List<string>();
-            int braceCount = 0;
-            int startIndex = 0;
-
-            for (int i = 0; i < content.Length; i++)
-            {
-                if (content[i] == '{')
-                {
-                    if (braceCount == 0) startIndex = i;
-                    braceCount++;
-                }
-                else if (content[i] == '}')
-                {
-                    braceCount--;
-                    if (braceCount == 0)
-                    {
-                        objects.Add(content.Substring(startIndex, i - startIndex + 1));
-                    }
-                }
-            }
-
-            return objects;
         }
 
         private ManagedApplication ParseApplicationObject(string objStr)
@@ -567,7 +629,6 @@ namespace IntelligentMutexExecutionEnvironment.Services
             ManagedApplication app = new ManagedApplication();
 
             objStr = objStr.Trim().Trim('{', '}');
-
             var properties = SplitPropertyValues(objStr);
 
             foreach (var prop in properties)
@@ -578,19 +639,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 string key = prop.Substring(0, colonIndex).Trim().Trim('"');
                 string rawValue = prop.Substring(colonIndex + 1).Trim();
 
-                if (rawValue == "null")
-                {
-                    switch (key)
-                    {
-                        case "LastStart":
-                            app.LastStart = null;
-                            break;
-                        case "LastStop":
-                            app.LastStop = null;
-                            break;
-                    }
-                    continue;
-                }
+                if (rawValue == "null") continue;
 
                 if (rawValue.StartsWith("\"") && rawValue.EndsWith("\""))
                 {
@@ -602,14 +651,14 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 switch (key)
                 {
                     case "Index":
-                        int idx;
-                        if (int.TryParse(value, out idx))
-                            app.Index = idx;
+                        int index;
+                        if (int.TryParse(value, out index))
+                            app.Index = index;
                         break;
                     case "GroupId":
-                        int gid;
-                        if (int.TryParse(value, out gid))
-                            app.GroupId = gid;
+                        int groupId;
+                        if (int.TryParse(value, out groupId))
+                            app.GroupId = groupId;
                         break;
                     case "AppName":
                         app.AppName = value;
@@ -618,9 +667,9 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         app.Directory = value;
                         break;
                     case "AddedDate":
-                        DateTime dt;
-                        if (DateTime.TryParse(value, out dt))
-                            app.AddedDate = dt;
+                        DateTime addedDate;
+                        if (DateTime.TryParse(value, out addedDate))
+                            app.AddedDate = addedDate;
                         break;
                     case "IsRunning":
                         app.IsRunning = value.ToLower() == "true";
@@ -639,29 +688,52 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         app.KeepOpen = value.ToLower() == "true";
                         break;
                     case "CrashCount":
-                        int cc;
-                        if (int.TryParse(value, out cc))
-                            app.CrashCount = cc;
+                        int crashCount;
+                        if (int.TryParse(value, out crashCount))
+                            app.CrashCount = crashCount;
                         break;
                     case "RetryCount":
-                        int rc;
-                        if (int.TryParse(value, out rc))
-                            app.RetryCount = rc;
+                        int retryCount;
+                        if (int.TryParse(value, out retryCount))
+                            app.RetryCount = retryCount;
                         break;
                     case "MaxRetries":
-                        int mr;
-                        if (int.TryParse(value, out mr))
-                            app.MaxRetries = mr;
+                        int maxRetries;
+                        if (int.TryParse(value, out maxRetries))
+                            app.MaxRetries = maxRetries;
                         break;
                     case "StartDelaySeconds":
-                        int sd;
-                        if (int.TryParse(value, out sd))
-                            app.StartDelaySeconds = sd;
+                        int startDelay;
+                        if (int.TryParse(value, out startDelay))
+                            app.StartDelaySeconds = startDelay;
                         break;
                     case "StartupDelaySeconds":
-                        int sud;
-                        if (int.TryParse(value, out sud))
-                            app.StartupDelaySeconds = sud;
+                        int startupDelay;
+                        if (int.TryParse(value, out startupDelay))
+                            app.StartupDelaySeconds = startupDelay;
+                        break;
+                    case "StableRunPeriodSeconds":
+                        int stableRunPeriod;
+                        if (int.TryParse(value, out stableRunPeriod))
+                            app.StableRunPeriodSeconds = stableRunPeriod;
+                        break;
+                    case "NotRespondingTimeoutSeconds":
+                        int notRespondingTimeout;
+                        if (int.TryParse(value, out notRespondingTimeout))
+                            app.NotRespondingTimeoutSeconds = notRespondingTimeout;
+                        break;
+                    case "MemoryLimitMB":
+                        int memoryLimit;
+                        if (int.TryParse(value, out memoryLimit))
+                            app.MemoryLimitMB = memoryLimit;
+                        break;
+                    case "DetectTitleChange":
+                        app.DetectTitleChange = value.ToLower() == "true";
+                        break;
+                    case "LastExitCode":
+                        int lastExitCode;
+                        if (int.TryParse(value, out lastExitCode))
+                            app.LastExitCode = lastExitCode;
                         break;
                 }
             }
@@ -669,153 +741,120 @@ namespace IntelligentMutexExecutionEnvironment.Services
             return app;
         }
 
-        private List<string> SplitPropertyValues(string content)
+        private string ReadFileWithFallback(string path)
         {
-            List<string> properties = new List<string>();
-            StringBuilder currentProp = new StringBuilder();
-            bool inQuotes = false;
-
-            for (int i = 0; i < content.Length; i++)
+            try
             {
-                char c = content[i];
-
-                if (c == '"' && (i == 0 || content[i - 1] != '\\'))
+                if (File.Exists(path))
                 {
-                    inQuotes = !inQuotes;
-                    currentProp.Append(c);
+                    return File.ReadAllText(path);
                 }
-                else if (c == ',' && !inQuotes)
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("ReadFileWithFallback", $"Error reading file {path}: {ex.Message}");
+            }
+
+            return null;
+        }
+
+        private void WriteFileAtomically(string path, string content)
+        {
+            string tempPath = path + ".tmp";
+            try
+            {
+                File.WriteAllText(tempPath, content);
+
+                if (File.Exists(path))
                 {
-                    if (currentProp.Length > 0)
-                    {
-                        properties.Add(currentProp.ToString());
-                        currentProp.Clear();
-                    }
+                    // Atomic replace: swap temp file into place
+                    File.Replace(tempPath, path, null);
                 }
                 else
                 {
-                    currentProp.Append(c);
+                    // First write: destination doesn't exist yet, just move
+                    File.Move(tempPath, path);
+                }
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("WriteFileAtomically", $"Error writing file {path}: {ex.Message}");
+
+                // Clean up orphaned temp file
+                try
+                {
+                    if (File.Exists(tempPath))
+                    {
+                        File.Delete(tempPath);
+                    }
+                }
+                catch { }
+            }
+        }
+
+        private List<string> SplitJsonObjects(string json)
+        {
+            List<string> objects = new List<string>();
+
+            int bracketDepth = 0;
+            int startIndex = 0;
+
+            for (int i = 0; i < json.Length; i++)
+            {
+                char c = json[i];
+
+                if (c == '{') {
+                    if (bracketDepth == 0) startIndex = i;
+                    bracketDepth++;
+                }
+                else if (c == '}') {
+                    bracketDepth--;
+                    if (bracketDepth == 0) {
+                        objects.Add(json.Substring(startIndex, i - startIndex + 1));
+                    }
                 }
             }
 
-            if (currentProp.Length > 0)
+            return objects;
+        }
+
+        private List<string> SplitPropertyValues(string objStr)
+        {
+            List<string> properties = new List<string>();
+
+            int braceDepth = 0;
+            int startIndex = 0;
+
+            for (int i = 0; i < objStr.Length; i++)
             {
-                properties.Add(currentProp.ToString());
+                char c = objStr[i];
+
+                if (c == '{') braceDepth++;
+                else if (c == '}') braceDepth--;
+                else if (c == ',' && braceDepth == 0)
+                {
+                    properties.Add(objStr.Substring(startIndex, i - startIndex));
+                    startIndex = i + 1;
+                }
+            }
+
+            // Add the last property if not empty
+            if (startIndex < objStr.Length)
+            {
+                properties.Add(objStr.Substring(startIndex));
             }
 
             return properties;
         }
 
-        private string EscapeJson(string value)
+        private string EscapeJson(string input)
         {
-            if (string.IsNullOrEmpty(value)) return "";
-            return value.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r");
+            return input.Replace("\"", "\\\"");
         }
 
-        private string UnescapeJson(string value)
+        private string UnescapeJson(string input)
         {
-            if (string.IsNullOrEmpty(value)) return "";
-            return value.Replace("\\\\", "\x00")
-                        .Replace("\\\"", "\"")
-                        .Replace("\\n", "\n")
-                        .Replace("\\r", "\r")
-                        .Replace("\x00", "\\");
-        }
-
-        /// <summary>
-        /// Writes content to a file atomically by writing to a temp file first,
-        /// then replacing the target. This prevents data loss on power failure or crash.
-        /// </summary>
-        private void WriteFileAtomically(string targetPath, string content)
-        {
-            string tempPath = targetPath + ".tmp";
-            string backupPath = targetPath + ".bak";
-
-            // Write new content to temp file
-            File.WriteAllText(tempPath, content, Encoding.UTF8);
-
-            if (File.Exists(targetPath))
-            {
-                // Create backup of current file
-                if (File.Exists(backupPath))
-                {
-                    try { File.Delete(backupPath); }
-                    catch { /* non-critical */ }
-                }
-
-                try
-                {
-                    File.Copy(targetPath, backupPath, true);
-                }
-                catch (Exception ex)
-                {
-                    SimpleLogger.Warn("WriteFileAtomically @ StorageService.cs",
-                        $"Could not create backup for {targetPath}: {ex.Message}");
-                }
-
-                // Delete the original and move temp into place
-                File.Delete(targetPath);
-            }
-
-            File.Move(tempPath, targetPath);
-
-            // Clean up backup on success
-            if (File.Exists(backupPath))
-            {
-                try { File.Delete(backupPath); }
-                catch { /* non-critical */ }
-            }
-        }
-
-        /// <summary>
-        /// Reads a file, falling back to .bak if the primary file is missing or corrupted (empty/invalid).
-        /// </summary>
-        private string ReadFileWithFallback(string path)
-        {
-            // Try primary file first
-            if (File.Exists(path))
-            {
-                string content = File.ReadAllText(path);
-                if (!string.IsNullOrEmpty(content) && content.Trim().Length > 2)
-                {
-                    return content;
-                }
-                SimpleLogger.Warn("ReadFileWithFallback @ StorageService.cs",
-                    $"Primary file is empty or corrupted: {path}");
-            }
-
-            // Try backup file
-            string backupPath = path + ".bak";
-            if (File.Exists(backupPath))
-            {
-                string content = File.ReadAllText(backupPath);
-                if (!string.IsNullOrEmpty(content) && content.Trim().Length > 2)
-                {
-                    SimpleLogger.Warn("ReadFileWithFallback @ StorageService.cs",
-                        $"Recovered from backup file: {backupPath}");
-                    // Restore backup as primary
-                    try { File.Copy(backupPath, path, true); }
-                    catch { /* non-critical */ }
-                    return content;
-                }
-            }
-
-            // Try temp file (write was interrupted before move)
-            string tempPath = path + ".tmp";
-            if (File.Exists(tempPath))
-            {
-                string content = File.ReadAllText(tempPath);
-                if (!string.IsNullOrEmpty(content) && content.Trim().Length > 2)
-                {
-                    SimpleLogger.Warn("ReadFileWithFallback @ StorageService.cs",
-                        $"Recovered from temp file: {tempPath}");
-                    try { File.Copy(tempPath, path, true); }
-                    catch { /* non-critical */ }
-                    return content;
-                }
-            }
-
-            return null;
+            return input.Replace("\\\"", "\"");
         }
     }
 }

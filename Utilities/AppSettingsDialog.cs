@@ -17,10 +17,16 @@ namespace IntelligentMutexExecutionEnvironment
         private NumericUpDown _startDelayNumeric;
         private NumericUpDown _maxRetriesNumeric;
         private NumericUpDown _startupDelayNumeric;
+        private NumericUpDown _stableRunNumeric;
+        private NumericUpDown _notRespondingTimeoutNumeric;
+        private NumericUpDown _memoryLimitNumeric;
+        private CheckBox _detectTitleChangeCheckBox;
         private Button _resetCrashButton;
         private Button _resetRetryButton;
         private Label _crashCountLabel;
         private Label _retryCountLabel;
+        private Label _lastExitCodeLabel;
+        private Button _copyExitCodeButton;
         private Button _okButton;
         private Button _cancelButton;
 
@@ -48,7 +54,7 @@ namespace IntelligentMutexExecutionEnvironment
         private void InitializeControls()
         {
             this.Text = $"Edit - {_app.AppName}";
-            this.Size = new Size(500, 500);
+            this.Size = new Size(500, 705);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
@@ -122,7 +128,7 @@ namespace IntelligentMutexExecutionEnvironment
             // Startup Delay
             var startupDelayLabel = new Label
             {
-                Text = "Startup Delay (seconds):",
+                Text = "Startup Delay (sec):",
                 Location = new Point(labelX, y + 2),
                 AutoSize = true
             };
@@ -206,7 +212,7 @@ namespace IntelligentMutexExecutionEnvironment
             // Start Delay
             var startDelayLabel = new Label
             {
-                Text = "Restart Delay (seconds):",
+                Text = "Restart Delay (sec):",
                 Location = new Point(labelX, y + 2),
                 AutoSize = true
             };
@@ -220,6 +226,137 @@ namespace IntelligentMutexExecutionEnvironment
             };
             this.Controls.Add(startDelayLabel);
             this.Controls.Add(_startDelayNumeric);
+
+            y += rowHeight;
+
+            // Stable Run Period
+            var stableRunLabel = new Label
+            {
+                Text = "Stable Run Period (sec):",
+                Location = new Point(labelX, y + 2),
+                AutoSize = true
+            };
+            _stableRunNumeric = new NumericUpDown
+            {
+                Minimum = 5,
+                Maximum = 600,
+                Value = Math.Max(5, _app.StableRunPeriodSeconds),
+                Location = new Point(controlX, y),
+                Size = new Size(80, 23)
+            };
+            var stableRunHint = new Label
+            {
+                Text = "Run time before retry count resets",
+                Location = new Point(controlX + 85, y + 2),
+                AutoSize = true,
+                ForeColor = Color.Gray,
+                Font = _normalFont
+            };
+            this.Controls.Add(stableRunLabel);
+            this.Controls.Add(_stableRunNumeric);
+            this.Controls.Add(stableRunHint);
+
+            y += rowHeight + 10;
+
+            // --- Health Monitoring Section ---
+            var healthSectionLabel = new Label
+            {
+                Text = "Health Monitoring",
+                Location = new Point(labelX, y),
+                AutoSize = true,
+                Font = _boldFont
+            };
+            this.Controls.Add(healthSectionLabel);
+
+            y += 22;
+
+            // Not Responding Timeout
+            var nrtLabel = new Label
+            {
+                Text = "Not Responding (sec):",
+                Location = new Point(labelX, y + 2),
+                AutoSize = true
+            };
+            _notRespondingTimeoutNumeric = new NumericUpDown
+            {
+                Minimum = 0,
+                Maximum = 600,
+                Value = Math.Max(0, Math.Min(600, _app.NotRespondingTimeoutSeconds)),
+                Location = new Point(controlX, y),
+                Size = new Size(80, 23)
+            };
+            var nrtHint = new Label
+            {
+                Text = "0 = default (2 poll cycles)",
+                Location = new Point(controlX + 85, y + 2),
+                AutoSize = true,
+                ForeColor = Color.Gray,
+                Font = _normalFont
+            };
+            this.Controls.Add(nrtLabel);
+            this.Controls.Add(_notRespondingTimeoutNumeric);
+            this.Controls.Add(nrtHint);
+
+            y += rowHeight;
+
+            // Memory Limit
+            var memLabel = new Label
+            {
+                Text = "Memory Limit (MB):",
+                Location = new Point(labelX, y + 2),
+                AutoSize = true
+            };
+            _memoryLimitNumeric = new NumericUpDown
+            {
+                Minimum = 0,
+                Maximum = 65536,
+                Value = Math.Max(0, Math.Min(65536, _app.MemoryLimitMB)),
+                Location = new Point(controlX, y),
+                Size = new Size(80, 23)
+            };
+            var memHint = new Label
+            {
+                Text = "0 = no limit (disabled)",
+                Location = new Point(controlX + 85, y + 2),
+                AutoSize = true,
+                ForeColor = Color.Gray,
+                Font = _normalFont
+            };
+            this.Controls.Add(memLabel);
+            this.Controls.Add(_memoryLimitNumeric);
+            this.Controls.Add(memHint);
+
+            y += rowHeight;
+
+            // Detect Title Change
+            var dtcLabel = new Label
+            {
+                Text = "Detect Title Change:",
+                Location = new Point(labelX, y + 2),
+                AutoSize = true
+            };
+            _detectTitleChangeCheckBox = new CheckBox
+            {
+                Checked = _app.DetectTitleChange,
+                Location = new Point(controlX + 8, y),
+                AutoSize = true,
+                Text = _app.DetectTitleChange ? "Yes" : "No"
+            };
+            _detectTitleChangeCheckBox.CheckedChanged += (s, e) =>
+            {
+                _detectTitleChangeCheckBox.Text = _detectTitleChangeCheckBox.Checked ? "Yes" : "No";
+            };
+            var dtcHint = new Label
+            {
+                Text = "Kill if window title changes",
+                Location = new Point(controlX + 85, y + 2),
+                AutoSize = true,
+                ForeColor = Color.Gray,
+                Font = _normalFont
+            };
+            this.Controls.Add(dtcLabel);
+            this.Controls.Add(_detectTitleChangeCheckBox);
+            this.Controls.Add(dtcHint);
 
             y += rowHeight + 10;
 
@@ -302,6 +439,47 @@ namespace IntelligentMutexExecutionEnvironment
             this.Controls.Add(retryLabel);
             this.Controls.Add(_retryCountLabel);
             this.Controls.Add(_resetRetryButton);
+
+            y += rowHeight;
+
+            // Last Exit Code
+            var exitCodeLabel = new Label
+            {
+                Text = "Last Exit Code:",
+                Location = new Point(labelX, y + 2),
+                AutoSize = true
+            };
+            string exitCodeText = _app.LastExitCode.HasValue ? _app.LastExitCode.Value.ToString() : "N/A";
+
+            _lastExitCodeLabel = new Label
+            {
+                Text = exitCodeText,
+                Location = new Point(controlX, y + 2),
+                AutoSize = true,
+                Font = _boldFont,
+                ForeColor = (_app.LastExitCode.HasValue && _app.LastExitCode.Value != 0) ? Color.Red : Color.Black
+            };
+            _copyExitCodeButton = new Button
+            {
+                Text = "Copy",
+                Location = new Point(controlX + 100, y),
+                Size = new Size(60, 23),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(52, 152, 219),
+                ForeColor = Color.White,
+                Font = _smallBoldFont,
+                Visible = _app.LastExitCode.HasValue
+            };
+            _copyExitCodeButton.Click += (s, ev) =>
+            {
+                if (_app.LastExitCode.HasValue)
+                {
+                    Clipboard.SetText(_app.LastExitCode.Value.ToString());
+                }
+            };
+            this.Controls.Add(exitCodeLabel);
+            this.Controls.Add(_lastExitCodeLabel);
+            this.Controls.Add(_copyExitCodeButton);
 
             y += rowHeight + 15;
 
@@ -417,8 +595,26 @@ namespace IntelligentMutexExecutionEnvironment
             _app.MaxRetries = (int)_maxRetriesNumeric.Value;
             _app.StartDelaySeconds = (int)_startDelayNumeric.Value;
             _app.StartupDelaySeconds = (int)_startupDelayNumeric.Value;
+            _app.StableRunPeriodSeconds = (int)_stableRunNumeric.Value;
+            _app.NotRespondingTimeoutSeconds = (int)_notRespondingTimeoutNumeric.Value;
+            _app.MemoryLimitMB = (int)_memoryLimitNumeric.Value;
+            _app.DetectTitleChange = _detectTitleChangeCheckBox.Checked;
             this.DialogResult = DialogResult.OK;
             this.Close();
+        }
+
+        private void InitializeComponent()
+        {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(EditAppDialog));
+            this.SuspendLayout();
+            // 
+            // EditAppDialog
+            // 
+            this.ClientSize = new System.Drawing.Size(284, 261);
+            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
+            this.Name = "EditAppDialog";
+            this.ResumeLayout(false);
+
         }
     }
 }
