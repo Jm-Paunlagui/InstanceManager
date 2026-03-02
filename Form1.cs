@@ -490,6 +490,7 @@ namespace IntelligentMutexExecutionEnvironment
                         }
                         _authorizedApps.Remove(app.Index);
                         _notifiedUnauthorized.Remove(app.Index);
+                        _notifiedHealthIssues.Remove(app.Index);
                         _pendingStop.Remove(app.Index);
                         _pendingRestart.Remove(app.Index);
                         _failedApps.Remove(app.Index);
@@ -768,8 +769,13 @@ namespace IntelligentMutexExecutionEnvironment
                         {
                             _notRespondingTracking[app.Index] = DateTime.Now;
 
-                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                $"'{app.AppName}' is not responding — monitoring for timeout");
+                            // Only log once per issue — _notifiedHealthIssues prevents re-logging
+                            // when the not-responding state persists after NotifyHealthIssue was called
+                            if (!_notifiedHealthIssues.Contains(app.Index))
+                            {
+                                SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                    $"'{app.AppName}' is not responding — monitoring for timeout");
+                            }
                         }
                         else
                         {
@@ -784,8 +790,12 @@ namespace IntelligentMutexExecutionEnvironment
 
                                 if (!shouldKill)
                                 {
-                                    SimpleLogger.Debug("UpdateApplicationStatuses @ Form1.cs",
-                                        $"'{app.AppName}' still not responding ({(int)elapsed}/{timeoutSeconds}s)");
+                                    // Throttle debug log: only log every 5 seconds to avoid flooding
+                                    if ((int)elapsed % 5 == 0)
+                                    {
+                                        SimpleLogger.Debug("UpdateApplicationStatuses @ Form1.cs",
+                                            $"'{app.AppName}' still not responding ({(int)elapsed}/{timeoutSeconds}s)");
+                                    }
                                 }
                             }
                             else
@@ -796,20 +806,23 @@ namespace IntelligentMutexExecutionEnvironment
 
                             if (shouldKill)
                             {
-                                _notRespondingTracking.Remove(app.Index);
-                                _stableRunCheck.Remove(app.Index);
-                                _cpuTimeSamples.Remove(app.Index);
-                                _highCpuStreak.Remove(app.Index);
-
-                                SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                    $"'{app.AppName}' is still not responding — force-killing for auto-restart");
-
                                 if (app.HealthMonitoringEnabled)
                                 {
+                                    _notRespondingTracking.Remove(app.Index);
+                                    _stableRunCheck.Remove(app.Index);
+                                    _cpuTimeSamples.Remove(app.Index);
+                                    _highCpuStreak.Remove(app.Index);
+
+                                    SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                        $"'{app.AppName}' is still not responding — force-killing for auto-restart");
+
                                     _processManager.StopApplication(app);
                                 }
                                 else
                                 {
+                                    // Do NOT remove _notRespondingTracking here — the process is not being killed,
+                                    // so it will still be not-responding on the next tick. Keeping the tracking
+                                    // entry prevents re-entering the first-detection branch and re-logging.
                                     NotifyHealthIssue(app, item, "UI Freeze / Not Responding");
                                 }
                             }
@@ -820,7 +833,6 @@ namespace IntelligentMutexExecutionEnvironment
                     {
                         // App is responding normally — clear any not-responding tracking
                         _notRespondingTracking.Remove(app.Index);
-                        _notifiedHealthIssues.Remove(app.Index);
                     }
 
                     // Detect error dialog windows (ghost windows that are "responding" but show
@@ -834,26 +846,32 @@ namespace IntelligentMutexExecutionEnvironment
                             // First detection — wait one more poll cycle to confirm
                             _errorDialogTracking[app.Index] = DateTime.Now;
 
-                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                $"'{app.AppName}' appears to have an error dialog: \"{snapshot.ErrorDialogTitle}\" — confirming on next check");
+                            if (!_notifiedHealthIssues.Contains(app.Index))
+                            {
+                                SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                    $"'{app.AppName}' appears to have an error dialog: \"{snapshot.ErrorDialogTitle}\" — confirming on next check");
+                            }
                         }
                         else
                         {
                             // Second consecutive detection — force-kill
-                            _errorDialogTracking.Remove(app.Index);
-                            _stableRunCheck.Remove(app.Index);
-                            _cpuTimeSamples.Remove(app.Index);
-                            _highCpuStreak.Remove(app.Index);
-
-                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                $"'{app.AppName}' confirmed error dialog: \"{snapshot.ErrorDialogTitle}\" — force-killing for auto-restart");
-
                             if (app.HealthMonitoringEnabled)
                             {
+                                _errorDialogTracking.Remove(app.Index);
+                                _stableRunCheck.Remove(app.Index);
+                                _cpuTimeSamples.Remove(app.Index);
+                                _highCpuStreak.Remove(app.Index);
+
+                                SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                    $"'{app.AppName}' confirmed error dialog: \"{snapshot.ErrorDialogTitle}\" — force-killing for auto-restart");
+
                                 _processManager.StopApplication(app);
                             }
                             else
                             {
+                                // Do NOT remove _errorDialogTracking here — the process is not being killed,
+                                // so the error dialog will still be present on the next tick. Keeping the tracking
+                                // entry prevents re-entering the first-detection branch and re-logging.
                                 NotifyHealthIssue(app, item, "Unhandled exception / Error dialog");
                             }
                         }
@@ -862,7 +880,6 @@ namespace IntelligentMutexExecutionEnvironment
                     else
                     {
                         _errorDialogTracking.Remove(app.Index);
-                        _notifiedHealthIssues.Remove(app.Index);
                     }
 
                     // Detect window title changes for KeepOpen apps with DetectTitleChange enabled.
@@ -890,28 +907,34 @@ namespace IntelligentMutexExecutionEnvironment
                             {
                                 _titleChangeTracking[app.Index] = DateTime.Now;
 
-                                SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                    $"'{app.AppName}' window title changed: \"{knownTitle}\" → \"{snapshot.MainWindowTitle}\" — confirming on next check");
+                                if (!_notifiedHealthIssues.Contains(app.Index))
+                                {
+                                    SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                        $"'{app.AppName}' window title changed: \"{knownTitle}\" → \"{snapshot.MainWindowTitle}\" — confirming on next check");
+                                }
                             }
                             else
                             {
                                 // Second consecutive detection — treat as error dialog
                                 string changedTitle = snapshot.MainWindowTitle;
-                                _titleChangeTracking.Remove(app.Index);
-                                _knownWindowTitles.Remove(app.Index);
-                                _stableRunCheck.Remove(app.Index);
-                                _cpuTimeSamples.Remove(app.Index);
-                                _highCpuStreak.Remove(app.Index);
-
-                                SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                    $"'{app.AppName}' confirmed title change to \"{changedTitle}\" (was \"{knownTitle}\") — force-killing as suspected error dialog");
 
                                 if (app.HealthMonitoringEnabled)
                                 {
+                                    _titleChangeTracking.Remove(app.Index);
+                                    _knownWindowTitles.Remove(app.Index);
+                                    _stableRunCheck.Remove(app.Index);
+                                    _cpuTimeSamples.Remove(app.Index);
+                                    _highCpuStreak.Remove(app.Index);
+
+                                    SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                        $"'{app.AppName}' confirmed title change to \"{changedTitle}\" (was \"{knownTitle}\") — force-killing as suspected error dialog");
+
                                     _processManager.StopApplication(app);
                                 }
                                 else
                                 {
+                                    // Do NOT remove tracking here — the process is not being killed,
+                                    // so the title change will still be present on the next tick.
                                     NotifyHealthIssue(app, item, "Window title change — possible error dialog");
                                 }
                                 continue;
@@ -927,7 +950,6 @@ namespace IntelligentMutexExecutionEnvironment
                     {
                         _knownWindowTitles.Remove(app.Index);
                         _titleChangeTracking.Remove(app.Index);
-                        _notifiedHealthIssues.Remove(app.Index);
                     }
 
                     // Detect memory limit breach for KeepOpen apps with a configured MemoryLimitMB.
@@ -939,15 +961,15 @@ namespace IntelligentMutexExecutionEnvironment
                         {
                             long usedMB = snapshot.PeakWorkingSetBytes / (1024L * 1024L);
 
-                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                $"'{app.AppName}' exceeded memory limit ({usedMB}MB / {app.MemoryLimitMB}MB) — force-killing for auto-restart");
-
                             _stableRunCheck.Remove(app.Index);
                             _cpuTimeSamples.Remove(app.Index);
                             _highCpuStreak.Remove(app.Index);
 
                             if (app.HealthMonitoringEnabled)
                             {
+                                SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                    $"'{app.AppName}' exceeded memory limit ({usedMB}MB / {app.MemoryLimitMB}MB) — force-killing for auto-restart");
+
                                 _processManager.StopApplication(app);
                             }
                             else
@@ -984,27 +1006,34 @@ namespace IntelligentMutexExecutionEnvironment
 
                                     if (streak >= HighCpuStreakThreshold)
                                     {
-                                        SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                            $"'{app.AppName}' has been at {(cpuUsage * 100):F0}% CPU for {streak} consecutive checks — force-killing as CPU-hung");
-
-                                        _highCpuStreak.Remove(app.Index);
-                                        _cpuTimeSamples.Remove(app.Index);
-                                        _stableRunCheck.Remove(app.Index);
-
                                         if (app.HealthMonitoringEnabled)
                                         {
+                                            _highCpuStreak.Remove(app.Index);
+                                            _cpuTimeSamples.Remove(app.Index);
+                                            _stableRunCheck.Remove(app.Index);
+
+                                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                                $"'{app.AppName}' has been at {(cpuUsage * 100):F0}% CPU for {streak} consecutive checks — force-killing as CPU-hung");
+
                                             _processManager.StopApplication(app);
                                         }
                                         else
                                         {
+                                            // Reset streak so it can re-detect if the issue persists,
+                                            // but NotifyHealthIssue ensures only one notification per issue.
+                                            _highCpuStreak.Remove(app.Index);
                                             NotifyHealthIssue(app, item, "CPU spin loop / High CPU usage");
                                         }
                                         continue;
                                     }
                                     else
                                     {
-                                        SimpleLogger.Debug("UpdateApplicationStatuses @ Form1.cs",
-                                            $"'{app.AppName}' high CPU: {(cpuUsage * 100):F0}% (streak {streak}/{HighCpuStreakThreshold})");
+                                        // Only log the building streak if not already notified
+                                        if (!_notifiedHealthIssues.Contains(app.Index))
+                                        {
+                                            SimpleLogger.Debug("UpdateApplicationStatuses @ Form1.cs",
+                                                $"'{app.AppName}' high CPU: {(cpuUsage * 100):F0}% (streak {streak}/{HighCpuStreakThreshold})");
+                                        }
                                     }
                                 }
                                 else
@@ -1023,7 +1052,6 @@ namespace IntelligentMutexExecutionEnvironment
                         // Clean up CPU tracking for stopped apps
                         _cpuTimeSamples.Remove(app.Index);
                         _highCpuStreak.Remove(app.Index);
-                        _notifiedHealthIssues.Remove(app.Index);
                     }
 
                     // Detect background zombie processes (no window but process still alive)
@@ -1038,8 +1066,6 @@ namespace IntelligentMutexExecutionEnvironment
                         }
                         else
                         {
-                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                $"'{app.AppName}' lost its window but has background process(es) - not killing because health monitoring is disabled");
                             NotifyHealthIssue(app, item, "Zombie/background process(es) detected");
                         }
 
@@ -1085,6 +1111,7 @@ namespace IntelligentMutexExecutionEnvironment
                     {
                         _authorizedApps.Remove(app.Index);
                         _notifiedUnauthorized.Remove(app.Index);
+                        _notifiedHealthIssues.Remove(app.Index);
                         _stableRunCheck.Remove(app.Index);
 
                         DateTime stopTime = DateTime.Now;
@@ -1287,6 +1314,9 @@ namespace IntelligentMutexExecutionEnvironment
                 {
                     _authorizedApps.Add(app.Index);
                     _notifiedUnauthorized.Remove(app.Index);
+                    _notifiedHealthIssues.Remove(app.Index);
+                    _pendingStop.Remove(app.Index);
+                    _failedApps.Remove(app.Index);
 
                     // Grant a grace period so the watchdog doesn't treat the app as crashed
                     // before its main window has had time to appear
@@ -1426,46 +1456,56 @@ namespace IntelligentMutexExecutionEnvironment
 
         /// <summary>
         /// Notifies user and logs a detected health issue when HealthMonitoringEnabled is false.
-        /// Ensures notifications are not repeatedly shown for the same app until the issue is cleared.
+        /// Ensures notifications and log messages are not repeatedly shown/written for the same app
+        /// until the issue is cleared by a user action (start, stop, delete).
         /// </summary>
         private void NotifyHealthIssue(ManagedApplication app, ListViewItem item, string issue)
         {
-            SimpleLogger.Warn("HealthMonitor @ Form1.cs", $"Health issue detected for '{app.AppName}': {issue}");
             if (item != null)
             {
                 item.SubItems[3].Text = "Warning";
                 item.ForeColor = Color.DarkOrange;
             }
 
-            if (!_notifiedHealthIssues.Contains(app.Index))
+            // Only log and notify once per health issue — prevents log flooding
+            if (_notifiedHealthIssues.Contains(app.Index))
+                return;
+
+            _notifiedHealthIssues.Add(app.Index);
+
+            SimpleLogger.Warn("HealthMonitor @ Form1.cs",
+                $"Health issue detected for '{app.AppName}': {issue}. " +
+                "Automatic corrective action is DISABLED for this application (HealthMonitoringEnabled=false). " +
+                "IMEE will not kill or restart this process. User acknowledgement required.");
+
+            try
             {
-                _notifiedHealthIssues.Add(app.Index);
-                try
+                if (!_isClosing && IsHandleCreated)
                 {
-                    if (!_isClosing && IsHandleCreated)
+                    string appName = app.AppName;
+                    string issueCopy = issue;
+                    this.BeginInvoke(new Action(() =>
                     {
-                        this.BeginInvoke(new Action(() =>
+                        try
                         {
-                            try
-                            {
-                                if (_isClosing) return;
+                            if (_isClosing) return;
 
-                                MessageBoxHelper.ShowWarning(this,
-                                    $"'{app.AppName}' may be experiencing: {issue}.\n\nIMEE is configured to NOT take automatic corrective action for this application.");
+                            MessageBoxHelper.ShowWarning(this,
+                                $"'{appName}' may be experiencing: {issueCopy}.\n\nIMEE is configured to NOT take automatic corrective action for this application.");
 
-                                SimpleLogger.Warn("NotifyHealthIssue @ Form1.cs",
-                                    $"User notified about health issue for '{app.AppName}': {issue}");
-                            }
-                            catch (Exception ex)
-                            {
-                                SimpleLogger.Error("NotifyHealthIssue @ Form1.cs", $"Error showing health notification: {ex.Message}");
-                            }
-                        }));
-                    }
+                            SimpleLogger.Info("HealthMonitor @ Form1.cs",
+                                $"User acknowledged health issue for '{appName}': {issueCopy}. " +
+                                "No further notifications will be shown for this issue until the user takes action (start, stop, or delete).");
+                        }
+                        catch (Exception ex)
+                        {
+                            SimpleLogger.Error("NotifyHealthIssue @ Form1.cs", $"Error showing health notification: {ex.Message}");
+                        }
+                    }));
                 }
-                catch (ObjectDisposedException) { }
-                catch (InvalidOperationException) { }
             }
+            catch (ObjectDisposedException) { }
+            catch (InvalidOperationException) { }
         }
 
         private void AddButton_Click(object sender, EventArgs e)
@@ -1627,6 +1667,7 @@ namespace IntelligentMutexExecutionEnvironment
                 {
                     _authorizedApps.Remove(app.Index);
                     _notifiedUnauthorized.Remove(app.Index);
+                    _notifiedHealthIssues.Remove(app.Index);
                     _pendingStop.Remove(app.Index);
                     _pendingRestart.Remove(app.Index);
                     _failedApps.Remove(app.Index);
@@ -1693,7 +1734,7 @@ namespace IntelligentMutexExecutionEnvironment
 
             if (_processManager.IsApplicationRunning(app))
             {
-                // Check if the process is running because another group entry started it
+                // Check if the process is running because another group started it
                 var siblings = _storageService.FindOtherEntriesWithSamePath(app.Directory, app.Index);
                 foreach (var sibling in siblings)
                 {
@@ -1716,6 +1757,7 @@ namespace IntelligentMutexExecutionEnvironment
             {
                 _authorizedApps.Add(app.Index);
                 _notifiedUnauthorized.Remove(app.Index);
+                _notifiedHealthIssues.Remove(app.Index);
                 _pendingStop.Remove(app.Index);
                 _failedApps.Remove(app.Index);
 
@@ -1801,6 +1843,7 @@ namespace IntelligentMutexExecutionEnvironment
         {
             _authorizedApps.Remove(app.Index);
             _notifiedUnauthorized.Remove(app.Index);
+            _notifiedHealthIssues.Remove(app.Index);
             _startGracePeriod.Remove(app.Index);
             _stableRunCheck.Remove(app.Index);
             _notRespondingTracking.Remove(app.Index);
@@ -2132,13 +2175,13 @@ namespace IntelligentMutexExecutionEnvironment
 
                 int stopped = 0;
                 int failed = 0;
-                int notRunning = 0;
+                int notRunning =  0;
 
                 for (int i = AppListView.Items.Count - 1; i >= 0; i--)
                 {
                     ListViewItem item = AppListView.Items[i];
                     var app = item.Tag as ManagedApplication;
-                    if (app == null) continue;
+                    if ( app == null) continue;
 
                     // Cancel any pending restart since user is intentionally stopping all
                     _pendingRestart.Remove(app.Index);
@@ -2342,7 +2385,7 @@ namespace IntelligentMutexExecutionEnvironment
                 // Only show once per session unless user explicitly chooses Close
                 var promptMsg = "Do you want to minimize IMEE to the system tray or close the application?\n\n" +
                                 "Choose 'Yes' to keep it running in the background.\n" +
-                                "Choose 'No' to exit and stop monitoring applications.";
+                                "Choose 'No' to exit and stop monitoring.";
 
                 // Build a custom dialog using MessageBox buttons — map to choices
                 var choice = MessageBox.Show(this, promptMsg, "Close Application?", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
