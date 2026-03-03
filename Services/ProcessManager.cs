@@ -61,6 +61,12 @@ namespace IntelligentMutexExecutionEnvironment.Services
             /// Null if no windowed process exists.
             /// </summary>
             public string MainWindowTitle;
+            /// <summary>
+            /// The PID of the first windowed (or tray) process found for this app.
+            /// 0 if no windowed process exists. Used for logging the actual application PID,
+            /// especially when a launcher script was used to start the app.
+            /// </summary>
+            public int FirstWindowedPid;
         }
 
         /// <summary>
@@ -414,6 +420,11 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         if (hasWindow || isTrayApp)
                         {
                             snap.HasWindowedProcess = true;
+                            if (snap.FirstWindowedPid == 0)
+                            {
+                                try { snap.FirstWindowedPid = allProcesses[i].Id; }
+                                catch (InvalidOperationException) { }
+                            }
                             if (!responding)
                                 snap.HasNotRespondingProcess = true;
                             // Accumulate CPU time across all windowed processes for this app
@@ -501,6 +512,11 @@ namespace IntelligentMutexExecutionEnvironment.Services
                             if (hasVisibleWindow || isTrayApp)
                             {
                                 snapshot.HasWindowedProcess = true;
+                                if (snapshot.FirstWindowedPid == 0)
+                                {
+                                    try { snapshot.FirstWindowedPid = processes[i].Id; }
+                                    catch (InvalidOperationException) { }
+                                }
 
                                 if (hasVisibleWindow)
                                 {
@@ -754,8 +770,53 @@ namespace IntelligentMutexExecutionEnvironment.Services
 
                         if (useLauncher)
                         {
+                            // The PID here belongs to the launcher process (e.g. cmd.exe, powershell.exe, cscript.exe),
+                            // not the actual application. Log both for clarity.
+                            string monitoredProcessName = Path.GetFileNameWithoutExtension(app.Directory);
                             SimpleLogger.Info("StartApplication @ ProcessManager.cs",
-                                $"Successfully started {app.AppName} via launcher '{Path.GetFileName(app.LauncherPath)}' (PID: {pid}), monitoring process: {Path.GetFileNameWithoutExtension(app.Directory)}");
+                                $"Successfully started {app.AppName} via launcher '{Path.GetFileName(app.LauncherPath)}' (Launcher PID: {pid}), monitoring process: {monitoredProcessName}");
+
+                            // Attempt to find the actual application PID after launcher starts it
+                            try
+                            {
+                                Process[] appProcesses = null;
+                                try
+                                {
+                                    appProcesses = Process.GetProcessesByName(monitoredProcessName);
+                                    if (appProcesses.Length > 0)
+                                    {
+                                        // Log all found PIDs for the monitored process
+                                        string[] pids = new string[appProcesses.Length];
+                                        for (int i = 0; i < appProcesses.Length; i++)
+                                        {
+                                            try { pids[i] = appProcesses[i].Id.ToString(); }
+                                            catch (InvalidOperationException) { pids[i] = "?"; }
+                                        }
+                                        SimpleLogger.Info("StartApplication @ ProcessManager.cs",
+                                            $"Found {appProcesses.Length} '{monitoredProcessName}' process(es) — App PID(s): {string.Join(", ", pids)}");
+                                    }
+                                    else
+                                    {
+                                        SimpleLogger.Info("StartApplication @ ProcessManager.cs",
+                                            $"No '{monitoredProcessName}' process found yet — it may still be starting via the launcher");
+                                    }
+                                }
+                                finally
+                                {
+                                    if (appProcesses != null)
+                                    {
+                                        for (int i = 0; i < appProcesses.Length; i++)
+                                        {
+                                            appProcesses[i].Dispose();
+                                        }
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                SimpleLogger.Debug("StartApplication @ ProcessManager.cs",
+                                    $"Could not enumerate '{monitoredProcessName}' processes: {ex.Message}");
+                            }
                         }
                         else
                         {

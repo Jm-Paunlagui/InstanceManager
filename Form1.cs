@@ -706,6 +706,12 @@ namespace IntelligentMutexExecutionEnvironment
                     {
                         if (DateTime.Now >= _startGracePeriod[app.Index])
                         {
+                            // Grace period expired — log PID if the app is now running
+                            if (isRunning && snapshot.FirstWindowedPid > 0)
+                            {
+                                SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
+                                    $"'{app.AppName}' is now running (App PID: {snapshot.FirstWindowedPid})");
+                            }
                             _startGracePeriod.Remove(app.Index);
                         }
                         else
@@ -714,6 +720,15 @@ namespace IntelligentMutexExecutionEnvironment
                             {
                                 if (isRunning)
                                 {
+                                    // Grace period still active but window appeared — log the app PID
+                                    _startGracePeriod.Remove(app.Index);
+
+                                    if (snapshot.FirstWindowedPid > 0)
+                                    {
+                                        SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
+                                            $"'{app.AppName}' is now running (App PID: {snapshot.FirstWindowedPid})");
+                                    }
+
                                     item.SubItems[3].Text = "Running";
                                     item.ForeColor = Color.Green;
                                 }
