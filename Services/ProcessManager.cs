@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.IO;
+using System.Runtime.InteropServices;
 using IntelligentMutexExecutionEnvironment.Models;
 using IntelligentMutexExecutionEnvironment.Utilities;
 
@@ -10,6 +11,19 @@ namespace IntelligentMutexExecutionEnvironment.Services
 {
     public class ProcessManager
     {
+        // Win32 API imports for detecting hidden/tray windows
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
         /// <summary>
         /// Holds the result of a single GetProcessesByName snapshot to avoid
         /// calling it multiple times per app per timer tick.
@@ -61,7 +75,9 @@ namespace IntelligentMutexExecutionEnvironment.Services
         /// </summary>
         private readonly Dictionary<int, Process> _appProcessHandles = new Dictionary<int, Process>();
 
-        // Reusable collections to avoid per-tick allocations in GetBatchProcessSnapshot
+        /// <summary>
+        /// Reusable collections to avoid per-tick allocations in GetBatchProcessSnapshot
+        /// </summary>
         private readonly Dictionary<string, List<int>> _nameToAppsCache = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<int, ProcessSnapshot> _snapshotResultsCache = new Dictionary<int, ProcessSnapshot>();
 
@@ -211,6 +227,32 @@ namespace IntelligentMutexExecutionEnvironment.Services
         }
 
         /// <summary>
+        /// Checks whether a process owns any top-level window (visible or hidden).
+        /// Apps minimized to the system tray close their main window but still own
+        /// hidden top-level windows. Process.MainWindowHandle returns IntPtr.Zero
+        /// in that case, but EnumWindows will find the hidden windows.
+        /// </summary>
+        private static bool HasAnyTopLevelWindow(int processId)
+        {
+            bool found = false;
+            uint targetPid = (uint)processId;
+
+            EnumWindows(delegate(IntPtr hWnd, IntPtr lParam)
+            {
+                uint windowPid;
+                GetWindowThreadProcessId(hWnd, out windowPid);
+                if (windowPid == targetPid)
+                {
+                    found = true;
+                    return false; // stop enumerating
+                }
+                return true; // continue
+            }, IntPtr.Zero);
+
+            return found;
+        }
+
+        /// <summary>
         /// Takes a single system-wide process snapshot and returns per-app results.
         /// This is dramatically more efficient than calling GetProcessesByName per app,
         /// because each GetProcessesByName call internally enumerates ALL system processes.
@@ -289,13 +331,30 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         continue; // Process exited
                     }
 
+                    // If no visible main window, check for hidden top-level windows (system tray apps).
+                    // Apps minimized to the system tray have MainWindowHandle == IntPtr.Zero but still
+                    // own hidden top-level windows. Without this check, tray apps are falsely classified
+                    // as background/zombie processes and may be killed.
+                    bool isTrayApp = false;
+                    if (!hasWindow)
+                    {
+                        try
+                        {
+                            isTrayApp = HasAnyTopLevelWindow(allProcesses[i].Id);
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            continue; // Process exited
+                        }
+                    }
+
                     bool responding = true;
                     TimeSpan cpuTime = TimeSpan.Zero;
                     long workingSet = 0;
                     string windowTitle = null;
                     bool isErrorDialog = false;
 
-                    if (hasWindow)
+                    if (hasWindow || isTrayApp)
                     {
                         try
                         {
@@ -352,7 +411,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         int idx = appIndices[j];
                         var snap = results[idx];
                         snap.TotalCount++;
-                        if (hasWindow)
+                        if (hasWindow || isTrayApp)
                         {
                             snap.HasWindowedProcess = true;
                             if (!responding)
@@ -423,17 +482,37 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     {
                         try
                         {
-                            if (processes[i].MainWindowHandle != IntPtr.Zero)
+                            bool hasVisibleWindow = processes[i].MainWindowHandle != IntPtr.Zero;
+
+                            // If no visible main window, check for hidden top-level windows (system tray apps).
+                            bool isTrayApp = false;
+                            if (!hasVisibleWindow)
                             {
-                                snapshot.HasWindowedProcess = true;
                                 try
                                 {
-                                    if (!processes[i].Responding)
-                                        snapshot.HasNotRespondingProcess = true;
+                                    isTrayApp = HasAnyTopLevelWindow(processes[i].Id);
                                 }
                                 catch (InvalidOperationException)
                                 {
-                                    // Process already exited
+                                    continue; // Process exited
+                                }
+                            }
+
+                            if (hasVisibleWindow || isTrayApp)
+                            {
+                                snapshot.HasWindowedProcess = true;
+
+                                if (hasVisibleWindow)
+                                {
+                                    try
+                                    {
+                                        if (!processes[i].Responding)
+                                            snapshot.HasNotRespondingProcess = true;
+                                    }
+                                    catch (InvalidOperationException)
+                                    {
+                                        // Process already exited
+                                    }
                                 }
 
                                 // CPU time
@@ -454,33 +533,36 @@ namespace IntelligentMutexExecutionEnvironment.Services
                                 catch (InvalidOperationException) { }
                                 catch (System.ComponentModel.Win32Exception) { }
 
-                                // Error dialog title check
-                                try
+                                // Error dialog title check (only meaningful if there is a visible window)
+                                if (hasVisibleWindow)
                                 {
-                                    string title = processes[i].MainWindowTitle;
-                                    if (!string.IsNullOrEmpty(title))
+                                    try
                                     {
-                                        // Capture for title-change detection
-                                        if (snapshot.MainWindowTitle == null)
-                                            snapshot.MainWindowTitle = title;
-
-                                        string titleLower = title.ToLowerInvariant();
-                                        for (int p = 0; p < ErrorDialogPatterns.Length; p++)
+                                        string title = processes[i].MainWindowTitle;
+                                        if (!string.IsNullOrEmpty(title))
                                         {
-                                            if (titleLower.Contains(ErrorDialogPatterns[p]))
+                                            // Capture for title-change detection
+                                            if (snapshot.MainWindowTitle == null)
+                                                snapshot.MainWindowTitle = title;
+
+                                            string titleLower = title.ToLowerInvariant();
+                                            for (int p = 0; p < ErrorDialogPatterns.Length; p++)
                                             {
-                                                snapshot.HasErrorDialogWindow = true;
-                                                if (snapshot.ErrorDialogTitle == null)
-                                                    snapshot.ErrorDialogTitle = title;
-                                                break;
+                                                if (titleLower.Contains(ErrorDialogPatterns[p]))
+                                                {
+                                                    snapshot.HasErrorDialogWindow = true;
+                                                    if (snapshot.ErrorDialogTitle == null)
+                                                        snapshot.ErrorDialogTitle = title;
+                                                    break;
+                                                }
                                             }
                                         }
                                     }
-                                }
-                                catch (InvalidOperationException) { }
+                                    catch (InvalidOperationException) { }
 
-                                // Track the main window title (for detecting title changes)
-                                snapshot.MainWindowTitle = processes[i].MainWindowTitle;
+                                    // Track the main window title (for detecting title changes)
+                                    snapshot.MainWindowTitle = processes[i].MainWindowTitle;
+                                }
                             }
                             else
                             {
@@ -529,6 +611,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
 
         /// <summary>
         /// Kills any background (windowless) processes matching the app's name.
+        /// Processes that have hidden top-level windows (e.g. system tray apps) are not killed.
         /// Returns the number of processes killed.
         /// </summary>
         public int KillBackgroundProcesses(ManagedApplication app)
@@ -554,7 +637,17 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         {
                             if (processes[i].MainWindowHandle == IntPtr.Zero)
                             {
+                                // Check for hidden top-level windows before killing.
+                                // Apps minimized to the system tray have no MainWindowHandle
+                                // but still own hidden top-level windows — these are not zombies.
                                 int pid = processes[i].Id;
+                                if (HasAnyTopLevelWindow(pid))
+                                {
+                                    SimpleLogger.Info("KillBackgroundProcesses @ ProcessManager.cs",
+                                        $"Skipping tray/hidden-window process for {app.AppName} (PID: {pid})");
+                                    continue;
+                                }
+
                                 processes[i].Kill();
                                 killed++;
                                 SimpleLogger.Warn("KillBackgroundProcesses @ ProcessManager.cs",
