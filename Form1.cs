@@ -1297,10 +1297,25 @@ namespace IntelligentMutexExecutionEnvironment
                     return;
                 }
 
+                // Validate primary exe (needed for process detection)
                 if (string.IsNullOrEmpty(app.Directory) || !File.Exists(app.Directory))
                 {
                     SimpleLogger.Error("AttemptAutoRestart @ Form1.cs",
                         $"Cannot auto-restart '{app.AppName}': file not found at {app.Directory ?? "(empty)"}");
+                    _failedApps.Add(app.Index);
+                    if (item != null)
+                    {
+                        item.SubItems[3].Text = "Failed";
+                        item.ForeColor = Color.Red;
+                    }
+                    return;
+                }
+
+                // Validate launcher if configured
+                if (!string.IsNullOrEmpty(app.LauncherPath) && !File.Exists(app.LauncherPath))
+                {
+                    SimpleLogger.Error("AttemptAutoRestart @ Form1.cs",
+                        $"Cannot auto-restart '{app.AppName}': launcher not found at {app.LauncherPath}");
                     _failedApps.Add(app.Index);
                     if (item != null)
                     {
@@ -1583,6 +1598,7 @@ namespace IntelligentMutexExecutionEnvironment
                     if (editForm.ShowDialog(this) == DialogResult.OK)
                     {
                         string newPath = editForm.NewDirectory;
+                        string newLauncherPath = editForm.NewLauncherPath;
 
                         // Check if directory changed and if the new path already exists in this group
                         if (newPath != app.Directory)
@@ -1604,6 +1620,15 @@ namespace IntelligentMutexExecutionEnvironment
                             selectedItem.SubItems[2].Text = app.Directory;
 
                             SimpleLogger.Info("EditButton_Click @ Form1.cs", $"Edited application path: {oldName} -> {app.AppName}");
+                        }
+
+                        // Update launcher path
+                        string oldLauncher = app.LauncherPath;
+                        app.LauncherPath = string.IsNullOrEmpty(newLauncherPath) ? null : newLauncherPath;
+                        if (oldLauncher != app.LauncherPath)
+                        {
+                            SimpleLogger.Info("EditButton_Click @ Form1.cs",
+                                $"Updated '{app.AppName}' launcher: {(string.IsNullOrEmpty(oldLauncher) ? "(none)" : Path.GetFileName(oldLauncher))} -> {(string.IsNullOrEmpty(app.LauncherPath) ? "(none)" : Path.GetFileName(app.LauncherPath))}");
                         }
 
                         // If KeepOpen was turned off, cancel any pending restart
@@ -1628,7 +1653,7 @@ namespace IntelligentMutexExecutionEnvironment
 
                         SimpleLogger.Info("EditButton_Click @ Form1.cs",
                             $"Updated '{app.AppName}': KeepOpen={app.KeepOpen}, StartDelay={app.StartDelaySeconds}s, " +
-                            $"StartupDelay={app.StartupDelaySeconds}s");
+                            $"StartupDelay={app.StartupDelaySeconds}s, Launcher={(!string.IsNullOrEmpty(app.LauncherPath) ? Path.GetFileName(app.LauncherPath) : "(none)")}");
                         MessageBoxHelper.ShowSuccess(this, "Application updated successfully!");
                     }
                 }
@@ -1726,9 +1751,17 @@ namespace IntelligentMutexExecutionEnvironment
 
         private bool StartSingleApplication(ManagedApplication app, ListViewItem item)
         {
+            // Validate the primary exe path always exists (needed for process detection)
             if (string.IsNullOrEmpty(app.Directory) || !File.Exists(app.Directory))
             {
                 MessageBoxHelper.ShowError(this, $"Application file not found: {app.Directory ?? "(empty)"}");
+                return false;
+            }
+
+            // If a launcher is configured, validate it exists too
+            if (!string.IsNullOrEmpty(app.LauncherPath) && !File.Exists(app.LauncherPath))
+            {
+                MessageBoxHelper.ShowError(this, $"Launcher file not found: {app.LauncherPath}");
                 return false;
             }
 

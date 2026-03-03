@@ -13,6 +13,10 @@ namespace IntelligentMutexExecutionEnvironment
         private TextBox _directoryTextBox;
         private Button _browseButton;
         private Button _openPathButton;
+        private TextBox _launcherTextBox;
+        private Button _launcherBrowseButton;
+        private Button _launcherClearButton;
+        private Button _launcherOpenButton;
         private CheckBox _keepOpenCheckBox;
         private NumericUpDown _startDelayNumeric;
         private NumericUpDown _maxRetriesNumeric;
@@ -37,6 +41,7 @@ namespace IntelligentMutexExecutionEnvironment
         private Font _buttonFont;
 
         public string NewDirectory { get { return _directoryTextBox.Text.Trim(); } }
+        public string NewLauncherPath { get { return _launcherTextBox.Text.Trim(); } }
 
         public EditAppDialog(ManagedApplication app)
         {
@@ -54,7 +59,7 @@ namespace IntelligentMutexExecutionEnvironment
         private void InitializeControls()
         {
             this.Text = $"Edit - {_app.AppName}";
-            this.Size = new Size(600, 705);
+            this.Size = new Size(600, 790);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
@@ -112,6 +117,78 @@ namespace IntelligentMutexExecutionEnvironment
             this.Controls.Add(_directoryTextBox);
             this.Controls.Add(_browseButton);
             this.Controls.Add(_openPathButton);
+
+            y += rowHeight + 10;
+
+            // --- Launcher Script/Exe Section ---
+            var launcherSectionLabel = new Label
+            {
+                Text = "Launcher Script / Exe (Optional)",
+                Location = new Point(labelX, y),
+                AutoSize = true,
+                Font = _boldFont
+            };
+            this.Controls.Add(launcherSectionLabel);
+
+            y += 22;
+
+            var launcherHint = new Label
+            {
+                Text = "If set, IMEE will launch via this script/exe instead of the application path directly. Process detection still uses the application path above.",
+                Location = new Point(labelX, y),
+                AutoSize = true,
+                ForeColor = Color.Gray,
+                Font = _normalFont,
+                MaximumSize = new Size(this.ClientSize.Width - (labelX * 2), 0)
+            };
+            this.Controls.Add(launcherHint);
+
+            y += launcherHint.PreferredSize.Height + 6;
+
+            _launcherTextBox = new TextBox
+            {
+                Text = _app.LauncherPath ?? "",
+                Location = new Point(labelX, y),
+                Size = new Size(controlX + 220, 23),
+                Font = _normalFont
+            };
+            _launcherBrowseButton = new Button
+            {
+                Text = "Browse",
+                Location = new Point(labelX + (controlX + 220) + 10, y - 1),
+                Size = new Size(55, 25),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(52, 152, 219),
+                ForeColor = Color.White,
+                Font = _smallBoldFont
+            };
+            _launcherBrowseButton.Click += LauncherBrowseButton_Click;
+            _launcherOpenButton = new Button
+            {
+                Text = "Open",
+                Location = new Point(labelX + (controlX + 220) + 70, y - 1),
+                Size = new Size(50, 25),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(155, 89, 182),
+                ForeColor = Color.White,
+                Font = _smallBoldFont
+            };
+            _launcherOpenButton.Click += LauncherOpenButton_Click;
+            _launcherClearButton = new Button
+            {
+                Text = "Clear",
+                Location = new Point(labelX + (controlX + 220) + 125, y - 1),
+                Size = new Size(50, 25),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(192, 57, 43),
+                ForeColor = Color.White,
+                Font = _smallBoldFont
+            };
+            _launcherClearButton.Click += (s, ev) => { _launcherTextBox.Text = ""; };
+            this.Controls.Add(_launcherTextBox);
+            this.Controls.Add(_launcherBrowseButton);
+            this.Controls.Add(_launcherOpenButton);
+            this.Controls.Add(_launcherClearButton);
 
             y += rowHeight + 10;
 
@@ -576,6 +653,24 @@ namespace IntelligentMutexExecutionEnvironment
             }
         }
 
+        private void LauncherBrowseButton_Click(object sender, EventArgs e)
+        {
+            using (OpenFileDialog dialog = new OpenFileDialog())
+            {
+                dialog.Filter = "Launcher Files (*.exe;*.bat;*.cmd;*.vbs;*.ps1)|*.exe;*.bat;*.cmd;*.vbs;*.ps1|Executable Files (*.exe)|*.exe|Batch Files (*.bat;*.cmd)|*.bat;*.cmd|VBScript Files (*.vbs)|*.vbs|PowerShell Scripts (*.ps1)|*.ps1|All Files (*.*)|*.*";
+                dialog.Title = "Select Launcher Script or Executable";
+                if (!string.IsNullOrEmpty(_launcherTextBox.Text) && File.Exists(_launcherTextBox.Text))
+                {
+                    dialog.FileName = _launcherTextBox.Text;
+                }
+
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    _launcherTextBox.Text = dialog.FileName;
+                }
+            }
+        }
+
         private void OpenPathButton_Click(object sender, EventArgs e)
         {
             try
@@ -584,6 +679,43 @@ namespace IntelligentMutexExecutionEnvironment
                 if (string.IsNullOrEmpty(path))
                 {
                     MessageBox.Show(this, "Application path is empty.", "Open Path",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                if (File.Exists(path))
+                {
+                    Process.Start("explorer.exe", "/select, \"" + path + "\"");
+                }
+                else
+                {
+                    string dir = Path.GetDirectoryName(path);
+                    if (!string.IsNullOrEmpty(dir) && System.IO.Directory.Exists(dir))
+                    {
+                        Process.Start("explorer.exe", "\"" + dir + "\"");
+                    }
+                    else
+                    {
+                        MessageBox.Show(this, "The specified path does not exist.", "Open Path",
+                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Error opening path: {ex.Message}", "Open Path",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void LauncherOpenButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                string path = _launcherTextBox.Text.Trim();
+                if (string.IsNullOrEmpty(path))
+                {
+                    MessageBox.Show(this, "Launcher path is empty.", "Open Path",
                         MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
@@ -622,6 +754,15 @@ namespace IntelligentMutexExecutionEnvironment
                 return;
             }
 
+            // Validate launcher path if set
+            string launcherPath = _launcherTextBox.Text.Trim();
+            if (!string.IsNullOrEmpty(launcherPath) && !File.Exists(launcherPath))
+            {
+                MessageBox.Show(this, "Launcher path does not exist:\n\n" + launcherPath, "Validation",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             _app.KeepOpen = _keepOpenCheckBox.Checked;
             _app.HealthMonitoringEnabled = _keepOpenCheckBox.Checked;
             _app.MaxRetries = (int)_maxRetriesNumeric.Value;
@@ -631,6 +772,7 @@ namespace IntelligentMutexExecutionEnvironment
             _app.NotRespondingTimeoutSeconds = (int)_notRespondingTimeoutNumeric.Value;
             _app.MemoryLimitMB = (int)_memoryLimitNumeric.Value;
             _app.DetectTitleChange = _detectTitleChangeCheckBox.Checked;
+            _app.LauncherPath = string.IsNullOrEmpty(launcherPath) ? null : launcherPath;
             this.DialogResult = DialogResult.OK;
             this.Close();
         }

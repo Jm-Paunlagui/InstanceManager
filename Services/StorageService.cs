@@ -162,6 +162,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 bool persistentChanged =
                     existingApp.AppName != app.AppName ||
                     existingApp.Directory != app.Directory ||
+                    existingApp.LauncherPath != app.LauncherPath ||
                     existingApp.GroupId != app.GroupId ||
                     existingApp.KeepOpen != app.KeepOpen ||
                     existingApp.CrashCount != app.CrashCount ||
@@ -181,6 +182,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
 
                 existingApp.AppName = app.AppName;
                 existingApp.Directory = app.Directory;
+                existingApp.LauncherPath = app.LauncherPath;
                 existingApp.IsRunning = app.IsRunning;
                 existingApp.LastStart = app.LastStart;
                 existingApp.LastStop = app.LastStop;
@@ -300,9 +302,9 @@ namespace IntelligentMutexExecutionEnvironment.Services
 
             // Normalize paths for comparison (case-insensitive on Windows)
             string normalizedPath = directory.ToLowerInvariant().Replace("/", "\\");
-            
-            bool exists = _applications.Any(app => 
-                !string.IsNullOrEmpty(app.Directory) && 
+
+            bool exists = _applications.Any(app =>
+                !string.IsNullOrEmpty(app.Directory) &&
                 app.Directory.ToLowerInvariant().Replace("/", "\\") == normalizedPath);
 
             if (exists)
@@ -577,6 +579,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 sb.AppendLine($"    \"GroupId\": {app.GroupId},");
                 sb.AppendLine($"    \"AppName\": \"{EscapeJson(app.AppName)}\",");
                 sb.AppendLine($"    \"Directory\": \"{EscapeJson(app.Directory)}\",");
+                sb.AppendLine($"    \"LauncherPath\": {(string.IsNullOrEmpty(app.LauncherPath) ? "null" : $"\"{EscapeJson(app.LauncherPath)}\"")},");
                 sb.AppendLine($"    \"AddedDate\": \"{app.AddedDate:yyyy-MM-ddTHH:mm:ss}\",");
                 sb.AppendLine($"    \"IsRunning\": {app.IsRunning.ToString().ToLower()},");
                 sb.AppendLine($"    \"LastStart\": {(app.LastStart.HasValue ? $"\"{app.LastStart.Value:yyyy-MM-ddTHH:mm:ss}\"" : "null")},");
@@ -669,6 +672,9 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         break;
                     case "Directory":
                         app.Directory = value;
+                        break;
+                    case "LauncherPath":
+                        app.LauncherPath = value;
                         break;
                     case "AddedDate":
                         DateTime addedDate;

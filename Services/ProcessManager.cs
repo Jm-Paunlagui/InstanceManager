@@ -620,18 +620,32 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         $"Cleaned up {bgKilled} background process(es) for {app.AppName} before starting");
                 }
 
-                if (!File.Exists(app.Directory))
+                // Determine what to launch: launcher script/exe (if configured) or the primary exe
+                string launchPath;
+                bool useLauncher = !string.IsNullOrEmpty(app.LauncherPath);
+
+                if (useLauncher)
                 {
-                    SimpleLogger.Error("StartApplication @ ProcessManager.cs", $"Cannot start {app.AppName}: File not found at {app.Directory}");
-                    return false;
+                    launchPath = app.LauncherPath;
+                    if (!File.Exists(launchPath))
+                    {
+                        SimpleLogger.Error("StartApplication @ ProcessManager.cs",
+                            $"Cannot start {app.AppName}: Launcher not found at {launchPath}");
+                        return false;
+                    }
+                }
+                else
+                {
+                    launchPath = app.Directory;
+                    if (!File.Exists(launchPath))
+                    {
+                        SimpleLogger.Error("StartApplication @ ProcessManager.cs",
+                            $"Cannot start {app.AppName}: File not found at {launchPath}");
+                        return false;
+                    }
                 }
 
-                ProcessStartInfo startInfo = new ProcessStartInfo
-                {
-                    FileName = app.Directory,
-                    UseShellExecute = true,
-                    WorkingDirectory = Path.GetDirectoryName(app.Directory)
-                };
+                ProcessStartInfo startInfo = BuildStartInfo(launchPath);
 
                 Process process = Process.Start(startInfo);
 
@@ -644,13 +658,24 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         TrackLaunchedPid(app.Index, pid);
                         // Keep the Process handle alive so we can read ExitCode later
                         TrackLaunchedProcess(app.Index, process);
-                        SimpleLogger.Info("StartApplication @ ProcessManager.cs", $"Successfully started {app.AppName} (PID: {pid})");
+
+                        if (useLauncher)
+                        {
+                            SimpleLogger.Info("StartApplication @ ProcessManager.cs",
+                                $"Successfully started {app.AppName} via launcher '{Path.GetFileName(app.LauncherPath)}' (PID: {pid}), monitoring process: {Path.GetFileNameWithoutExtension(app.Directory)}");
+                        }
+                        else
+                        {
+                            SimpleLogger.Info("StartApplication @ ProcessManager.cs",
+                                $"Successfully started {app.AppName} (PID: {pid})");
+                        }
                     }
                     catch (InvalidOperationException)
                     {
                         // PID unavailable but process started — still keep the handle
                         TrackLaunchedProcess(app.Index, process);
-                        SimpleLogger.Info("StartApplication @ ProcessManager.cs", $"Successfully started {app.AppName} (PID unavailable - process may have exited quickly)");
+                        SimpleLogger.Info("StartApplication @ ProcessManager.cs",
+                            $"Successfully started {app.AppName} (PID unavailable - process may have exited quickly)");
                     }
                     return true;
                 }
@@ -665,6 +690,63 @@ namespace IntelligentMutexExecutionEnvironment.Services
             }
         }
 
+        /// <summary>
+        /// Builds the appropriate ProcessStartInfo for the given file path.
+        /// Script files (.ps1, .bat, .cmd, .vbs) are launched via their interpreter
+        /// so they execute rather than opening in a text editor.
+        /// Executable files (.exe and everything else) use shell execute directly.
+        /// </summary>
+        private static ProcessStartInfo BuildStartInfo(string filePath)
+        {
+            string ext = Path.GetExtension(filePath).ToLowerInvariant();
+            string workingDir = Path.GetDirectoryName(filePath);
+
+            switch (ext)
+            {
+                case ".ps1":
+                    return new ProcessStartInfo
+                    {
+                        FileName = "powershell.exe",
+                        Arguments = "-ExecutionPolicy Bypass -NoProfile -File \"" + filePath + "\"",
+                        UseShellExecute = false,
+                        WorkingDirectory = workingDir
+                    };
+
+                case ".vbs":
+                    return new ProcessStartInfo
+                    {
+                        FileName = "cscript.exe",
+                        Arguments = "//NoLogo \"" + filePath + "\"",
+                        UseShellExecute = false,
+                        WorkingDirectory = workingDir
+                    };
+
+                case ".bat":
+                case ".cmd":
+                    return new ProcessStartInfo
+                    {
+                        FileName = "cmd.exe",
+                        Arguments = "/C \"" + filePath + "\"",
+                        UseShellExecute = false,
+                        WorkingDirectory = workingDir
+                    };
+
+                default:
+                    // .exe or any other file type — use shell execute
+                    return new ProcessStartInfo
+                    {
+                        FileName = filePath,
+                        UseShellExecute = true,
+                        WorkingDirectory = workingDir
+                    };
+            }
+        }
+
+        /// <summary>
+        /// Stops the specified application by closing its main window, if any.
+        /// If the application does not respond to a graceful close, it will be
+        /// forcefully terminated.
+        /// </summary>
         public bool StopApplication(ManagedApplication app)
         {
             try
