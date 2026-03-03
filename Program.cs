@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
 using IntelligentMutexExecutionEnvironment.Utilities;
@@ -10,6 +12,13 @@ namespace IntelligentMutexExecutionEnvironment
     internal static class Program
     {
         private static Mutex _mutex;
+
+        /// <summary>
+        /// Custom registered Windows message used to signal the first instance
+        /// to restore its window when a second instance is launched.
+        /// </summary>
+        public static readonly int WM_SHOWFIRSTINSTANCE =
+            NativeMethods.RegisterWindowMessage("WM_SHOWFIRSTINSTANCE_IMEE_{B5F0E7A2-4C3D-4F8E-9A1B-2D6E8F3C7A50}");
 
         /// <summary>
         /// The main entry point for the application.
@@ -22,9 +31,12 @@ namespace IntelligentMutexExecutionEnvironment
             _mutex = new Mutex(true, "Global\\IntelligentMutexExecutionEnvironment_SingleInstance_Mutex", out createdNew);
             if (!createdNew)
             {
-                MessageBox.Show("Intelligent Mutex Execution Environment is already running.",
-                    "Intelligent Mutex Execution Environment",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                // Another instance is already running — signal it to restore its window
+                NativeMethods.PostMessage(
+                    (IntPtr)NativeMethods.HWND_BROADCAST,
+                    WM_SHOWFIRSTINSTANCE,
+                    IntPtr.Zero,
+                    IntPtr.Zero);
                 return;
             }
 
@@ -85,5 +97,30 @@ namespace IntelligentMutexExecutionEnvironment
                 $"A fatal error occurred:\n\n{message}\n\nThe application will close.",
                 "Fatal Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    /// <summary>
+    /// Native Win32 methods for single-instance window activation.
+    /// </summary>
+    internal static class NativeMethods
+    {
+        public const int HWND_BROADCAST = 0xFFFF;
+        public const int SW_SHOW = 5;
+        public const int SW_RESTORE = 9;
+
+        [DllImport("user32.dll")]
+        public static extern bool PostMessage(IntPtr hwnd, int msg, IntPtr wparam, IntPtr lparam);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        public static extern int RegisterWindowMessage(string message);
+
+        [DllImport("user32.dll")]
+        public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll")]
+        public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        public static extern bool IsIconic(IntPtr hWnd);
     }
 }

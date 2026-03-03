@@ -12,11 +12,18 @@ namespace IntelligentMutexExecutionEnvironment.Services
 
         // === General Settings ===
         private string _stationName;
+        private bool _runOnStartup;
 
         public string StationName
         {
             get { return _stationName ?? ""; }
             set { _stationName = value ?? ""; Save(); }
+        }
+
+        public bool RunOnStartup
+        {
+            get { return _runOnStartup; }
+            set { _runOnStartup = value; Save(); }
         }
 
         // === Performance Settings ===
@@ -113,6 +120,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
         private void SetDefaults()
         {
             _stationName = "";
+            _runOnStartup = false;
             _statusPollIntervalMs = DefaultStatusPollIntervalMs;
             _startGracePeriodSeconds = DefaultStartGracePeriodSeconds;
             _gcCollectIntervalMinutes = DefaultGcCollectIntervalMinutes;
@@ -126,11 +134,12 @@ namespace IntelligentMutexExecutionEnvironment.Services
         /// Saves all settings without triggering individual property Save() calls.
         /// Use this when updating multiple settings at once from a dialog.
         /// </summary>
-        public void SaveAll(string stationName, int statusPollIntervalMs, int startGracePeriodSeconds,
+        public void SaveAll(string stationName, bool runOnStartup, int statusPollIntervalMs, int startGracePeriodSeconds,
             int gcCollectIntervalMinutes, int storageSaveIntervalSeconds,
             int logFlushIntervalSeconds, int logBufferSize, int logRetentionDays)
         {
             _stationName = stationName ?? "";
+            _runOnStartup = runOnStartup;
             _statusPollIntervalMs = Clamp(statusPollIntervalMs, 1000, 60000);
             _startGracePeriodSeconds = Clamp(startGracePeriodSeconds, 1, 120);
             _gcCollectIntervalMinutes = Clamp(gcCollectIntervalMinutes, 5, 1440);
@@ -198,6 +207,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 StringBuilder sb = new StringBuilder();
                 sb.AppendLine("{");
                 sb.AppendLine($"  \"StationName\": \"{EscapeJson(_stationName)}\",");
+                sb.AppendLine($"  \"RunOnStartup\": {(_runOnStartup ? "true" : "false")},");
                 sb.AppendLine($"  \"StatusPollIntervalMs\": {_statusPollIntervalMs},");
                 sb.AppendLine($"  \"StartGracePeriodSeconds\": {_startGracePeriodSeconds},");
                 sb.AppendLine($"  \"GcCollectIntervalMinutes\": {_gcCollectIntervalMinutes},");
@@ -260,6 +270,9 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 {
                     case "StationName":
                         _stationName = value;
+                        break;
+                    case "RunOnStartup":
+                        _runOnStartup = value.Equals("true", StringComparison.OrdinalIgnoreCase);
                         break;
                     case "StatusPollIntervalMs":
                         int spim;

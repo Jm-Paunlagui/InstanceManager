@@ -150,6 +150,9 @@ namespace IntelligentMutexExecutionEnvironment
                 _settingsService.LogFlushIntervalSeconds,
                 _settingsService.LogBufferSize,
                 _settingsService.LogRetentionDays);
+
+            // Sync the Windows startup registry entry with the current setting
+            StartupManager.SetRunOnStartup(_settingsService.RunOnStartup);
         }
 
         /// <summary>
@@ -1312,7 +1315,7 @@ namespace IntelligentMutexExecutionEnvironment
                     return;
                 }
 
-                // Validate primary exe (needed for process detection)
+                // Validate the primary exe (needed for process detection)
                 if (string.IsNullOrEmpty(app.Directory) || !File.Exists(app.Directory))
                 {
                     SimpleLogger.Error("AttemptAutoRestart @ Form1.cs",
@@ -2321,6 +2324,7 @@ namespace IntelligentMutexExecutionEnvironment
                     {
                         _settingsService.SaveAll(
                             dialog.StationName,
+                            dialog.RunOnStartup,
                             dialog.StatusPollIntervalMs,
                             dialog.StartGracePeriodSeconds,
                             dialog.GcCollectIntervalMinutes,
@@ -2812,6 +2816,22 @@ namespace IntelligentMutexExecutionEnvironment
             {
                 SimpleLogger.Error("OnResize @ Form1.cs", $"Error handling resize: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Intercepts the custom WM_SHOWFIRSTINSTANCE message broadcast by a second instance
+        /// and restores this window to the foreground. Handles all cases: minimized to tray,
+        /// minimized to taskbar, or simply behind other windows.
+        /// </summary>
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == Program.WM_SHOWFIRSTINSTANCE)
+            {
+                SimpleLogger.Info("WndProc @ Form1.cs", "Received show request from second instance — restoring window");
+                RestoreFromTray();
+                return;
+            }
+            base.WndProc(ref m);
         }
     }
 }
