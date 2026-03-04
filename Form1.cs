@@ -42,6 +42,8 @@ namespace IntelligentMutexExecutionEnvironment
         // Tracks apps that are pending sequential startup launch (Start All with delays)
         // so the status update timer doesn't overwrite their countdown text
         private HashSet<int> _pendingSequentialStart = new HashSet<int>();
+        // Tracks the sequential launch timer so it can be disposed on form close
+        private Timer _sequentialLaunchTimer;
         // Tracks apps that were recently started and are in a grace period
         // to allow the process window to appear before watchdog monitoring begins
         private Dictionary<int, DateTime> _startGracePeriod = new Dictionary<int, DateTime>();
@@ -79,6 +81,19 @@ namespace IntelligentMutexExecutionEnvironment
         // Tracks apps whose window title changed unexpectedly (possible error dialog).
         // Key: app Index, Value: DateTime when first detected (requires 2 consecutive ticks)
         private Dictionary<int, DateTime> _titleChangeTracking = new Dictionary<int, DateTime>();
+        // Cached StringFormat objects for owner-drawn GroupListBox to avoid per-draw GDI allocations
+        private readonly StringFormat _groupNameFormat = new StringFormat
+        {
+            LineAlignment = StringAlignment.Center,
+            FormatFlags = StringFormatFlags.NoWrap,
+            Trimming = StringTrimming.EllipsisCharacter
+        };
+        private readonly StringFormat _groupSuffixFormat = new StringFormat
+        {
+            LineAlignment = StringAlignment.Center,
+            Alignment = StringAlignment.Far,
+            FormatFlags = StringFormatFlags.NoWrap
+        };
 
         /// <summary>
         /// Cached rendering state for a single group row in the GroupListBox.
@@ -284,17 +299,25 @@ namespace IntelligentMutexExecutionEnvironment
                     RebuildListViewIndex(listViewIndex);
                 }
 
-                foreach (var kvp in _pendingRestart)
+                // Snapshot the keys to avoid modifying the dictionary during iteration.
+                // _pendingRestart is typically small (crashed apps only), so this is cheap.
+                var keys = new List<int>(_pendingRestart.Keys);
+                for (int i = 0; i < keys.Count; i++)
                 {
+                    int appIndex = keys[i];
+                    DateTime restartTime;
+                    if (!_pendingRestart.TryGetValue(appIndex, out restartTime))
+                        continue;
+
                     ListViewItem item = null;
                     if (listViewIndex != null)
                     {
-                        listViewIndex.TryGetValue(kvp.Key, out item);
+                        listViewIndex.TryGetValue(appIndex, out item);
                     }
 
                     if (item != null)
                     {
-                        int secondsLeft = (int)Math.Ceiling((kvp.Value - DateTime.Now).TotalSeconds);
+                        int secondsLeft = (int)Math.Ceiling((restartTime - DateTime.Now).TotalSeconds);
                         if (secondsLeft <= 0)
                         {
                             item.SubItems[3].Text = "Starting...";
@@ -436,13 +459,22 @@ namespace IntelligentMutexExecutionEnvironment
                         return;
                     }
 
+                    string oldName = selectedGroup.GroupName;
+
+                    // Check if the name actually changed
+                    if (oldName == newName)
+                    {
+                        SimpleLogger.Info("EditGroupButton_Click @ Form1.cs",
+                            $"Group edit dialog closed with OK — no name change for '{oldName}' (GroupId: {selectedGroup.GroupId})");
+                        return;
+                    }
+
                     if (_storageService.GroupNameExists(newName, selectedGroup.GroupId))
                     {
                         MessageBoxHelper.ShowWarning(this, $"A group named '{newName}' already exists.");
                         return;
                     }
 
-                    string oldName = selectedGroup.GroupName;
                     selectedGroup.GroupName = newName;
                     _storageService.UpdateGroup(selectedGroup);
 
@@ -451,7 +483,8 @@ namespace IntelligentMutexExecutionEnvironment
                     GroupListBox.Items[idx] = selectedGroup;
                     SelectedGroupLabel.Text = $"Group: {selectedGroup.GroupName}";
 
-                    SimpleLogger.Info("EditGroupButton_Click @ Form1.cs", $"Renamed group: {oldName} -> {newName}");
+                    SimpleLogger.Info("GroupRenamed @ Form1.cs",
+                        $"Group renamed: \"{oldName}\" to \"{newName}\" (GroupId: {selectedGroup.GroupId})");
                     MessageBoxHelper.ShowSuccess(this, $"Group renamed to '{newName}' successfully!");
                 }
             }
@@ -928,7 +961,7 @@ namespace IntelligentMutexExecutionEnvironment
                                 if (!_notifiedHealthIssues.Contains(app.Index))
                                 {
                                     SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                        $"'{app.AppName}' window title changed: \"{knownTitle}\" → \"{snapshot.MainWindowTitle}\" — confirming on next check");
+                                        $"'{app.AppName}' window title changed: \"{knownTitle}\" to \"{snapshot.MainWindowTitle}\" — confirming on next check");
                                 }
                             }
                             else
@@ -1864,6 +1897,23 @@ namespace IntelligentMutexExecutionEnvironment
                     return;
                 }
 
+                // Check if this app is running from another group (not authorized in this group)
+                if (!_authorizedApps.Contains(app.Index))
+                {
+                    var authorizedSibling = _storageService.FindAuthorizedSibling(app.Directory, app.Index, _authorizedApps);
+                    if (authorizedSibling != null)
+                    {
+                        var siblingGroup = _storageService.GetGroup(authorizedSibling.GroupId);
+                        string originGroupName = siblingGroup != null ? siblingGroup.GroupName : $"Group {authorizedSibling.GroupId}";
+                        MessageBoxHelper.ShowWarning(this,
+                            $"'{app.AppName}' was started from group '{originGroupName}'.\n\n" +
+                            "Please stop it from its origin group.");
+                        SimpleLogger.Info("StopButton_Click @ Form1.cs",
+                            $"Blocked stop of '{app.AppName}' — running from group '{originGroupName}'");
+                        return;
+                    }
+                }
+
                 // Mark as pending stop BEFORE showing confirmation dialog
                 // This prevents the watchdog from interfering while the dialog is open
                 _pendingStop.Add(app.Index);
@@ -2066,7 +2116,6 @@ namespace IntelligentMutexExecutionEnvironment
             int currentIndex = 0;
             int started = 0;
             int failed = 0;
-            Timer sequentialTimer = null;
 
             // Mark all apps in the queue so the status update timer doesn't overwrite their countdown
             foreach (var kvp in appsToStart)
@@ -2080,11 +2129,12 @@ namespace IntelligentMutexExecutionEnvironment
 
             Action finalize = () =>
             {
-                if (sequentialTimer != null)
+                // Dispose and clear the tracked sequential timer
+                if (_sequentialLaunchTimer != null)
                 {
-                    sequentialTimer.Stop();
-                    sequentialTimer.Dispose();
-                    sequentialTimer = null;
+                    _sequentialLaunchTimer.Stop();
+                    _sequentialLaunchTimer.Dispose();
+                    _sequentialLaunchTimer = null;
                 }
 
                 // Clear all sequential start markers
@@ -2161,22 +2211,22 @@ namespace IntelligentMutexExecutionEnvironment
                         int secondsLeft = nextDelay;
 
                         // Dispose previous timer if any
-                        if (sequentialTimer != null)
+                        if (_sequentialLaunchTimer != null)
                         {
-                            sequentialTimer.Stop();
-                            sequentialTimer.Dispose();
+                            _sequentialLaunchTimer.Stop();
+                            _sequentialLaunchTimer.Dispose();
                         }
 
-                        sequentialTimer = new Timer();
-                        sequentialTimer.Interval = 1000;
-                        sequentialTimer.Tick += (s, ev) =>
+                        _sequentialLaunchTimer = new Timer();
+                        _sequentialLaunchTimer.Interval = 1000;
+                        _sequentialLaunchTimer.Tick += (s, ev) =>
                         {
                             secondsLeft--;
                             if (secondsLeft <= 0 || _isClosing)
                             {
-                                if (sequentialTimer != null)
+                                if (_sequentialLaunchTimer != null)
                                 {
-                                    sequentialTimer.Stop();
+                                    _sequentialLaunchTimer.Stop();
                                 }
                                 launchNext();
                             }
@@ -2185,7 +2235,7 @@ namespace IntelligentMutexExecutionEnvironment
                                 nextItem.SubItems[3].Text = $"Waiting ({secondsLeft}s)";
                             }
                         };
-                        sequentialTimer.Start();
+                        _sequentialLaunchTimer.Start();
                     }
                     else
                     {
@@ -2226,13 +2276,14 @@ namespace IntelligentMutexExecutionEnvironment
 
                 int stopped = 0;
                 int failed = 0;
-                int notRunning =  0;
+                int notRunning = 0;
+                int skippedCrossGroup = 0;
 
                 for (int i = AppListView.Items.Count - 1; i >= 0; i--)
                 {
                     ListViewItem item = AppListView.Items[i];
                     var app = item.Tag as ManagedApplication;
-                    if ( app == null) continue;
+                    if (app == null) continue;
 
                     // Cancel any pending restart since user is intentionally stopping all
                     _pendingRestart.Remove(app.Index);
@@ -2242,6 +2293,19 @@ namespace IntelligentMutexExecutionEnvironment
 
                     if (_processManager.IsApplicationRunning(app))
                     {
+                        // Skip apps that are running from another group
+                        if (!_authorizedApps.Contains(app.Index))
+                        {
+                            var authorizedSibling = _storageService.FindAuthorizedSibling(app.Directory, app.Index, _authorizedApps);
+                            if (authorizedSibling != null)
+                            {
+                                skippedCrossGroup++;
+                                SimpleLogger.Info("StopAllButton_Click @ Form1.cs",
+                                    $"Skipped '{app.AppName}' — running from another group");
+                                continue;
+                            }
+                        }
+
                         if (StopSingleApplication(app, item))
                         {
                             stopped++;
@@ -2259,6 +2323,7 @@ namespace IntelligentMutexExecutionEnvironment
 
                 string msg = $"Stopped: {stopped}";
                 if (notRunning > 0) msg += $", Not running: {notRunning}";
+                if (skippedCrossGroup > 0) msg += $", Skipped (other group): {skippedCrossGroup}";
                 if (failed > 0) msg += $", Failed: {failed}";
 
                 SimpleLogger.Info("StopAllButton_Click @ Form1.cs", $"Stop All for group {_selectedGroupId}: {msg}");
@@ -2457,6 +2522,7 @@ namespace IntelligentMutexExecutionEnvironment
                 // else: DialogResult.No => proceed with close
             }
 
+            // Set _isClosing immediately to prevent all timers from firing during teardown
             _isClosing = true;
 
             if (_statusUpdateTimer != null)
@@ -2471,6 +2537,13 @@ namespace IntelligentMutexExecutionEnvironment
                 _countdownTimer.Stop();
                 _countdownTimer.Dispose();
                 _countdownTimer = null;
+            }
+
+            if (_sequentialLaunchTimer != null)
+            {
+                _sequentialLaunchTimer.Stop();
+                _sequentialLaunchTimer.Dispose();
+                _sequentialLaunchTimer = null;
             }
 
             // Flush any pending data before closing
@@ -2501,7 +2574,7 @@ namespace IntelligentMutexExecutionEnvironment
         /// </summary>
         private void GroupListBox_DrawItem(object sender, DrawItemEventArgs e)
         {
-            if (e.Index < 0) return;
+            if (e.Index < 0 || e.Index >= GroupListBox.Items.Count) return;
 
             var group = GroupListBox.Items[e.Index] as ApplicationGroup;
             if (group == null) return;
@@ -2555,15 +2628,9 @@ namespace IntelligentMutexExecutionEnvironment
             Color textColor = isSelected ? SystemColors.HighlightText : e.ForeColor;
 
             using (var textBrush = new SolidBrush(textColor))
-            using (var sf = new StringFormat
-            {
-                LineAlignment = StringAlignment.Center,
-                FormatFlags = StringFormatFlags.NoWrap,
-                Trimming = StringTrimming.EllipsisCharacter
-            })
             {
                 var nameRect = new RectangleF(textX, e.Bounds.Top, Math.Max(textAvailableWidth, 0), e.Bounds.Height);
-                e.Graphics.DrawString(group.GroupName ?? "(unnamed)", e.Font, textBrush, nameRect, sf);
+                e.Graphics.DrawString(group.GroupName ?? "(unnamed)", e.Font, textBrush, nameRect, _groupNameFormat);
             }
 
             // Draw suffix text (right-aligned)
@@ -2571,15 +2638,9 @@ namespace IntelligentMutexExecutionEnvironment
             {
                 Color suffixColor = isSelected ? SystemColors.HighlightText : Color.FromArgb(120, 120, 120);
                 using (var suffixBrush = new SolidBrush(suffixColor))
-                using (var sfRight = new StringFormat
-                {
-                    LineAlignment = StringAlignment.Center,
-                    Alignment = StringAlignment.Far,
-                    FormatFlags = StringFormatFlags.NoWrap
-                })
                 {
                     var suffixRect = new RectangleF(e.Bounds.Right - suffixWidth, e.Bounds.Top, suffixWidth, e.Bounds.Height);
-                    e.Graphics.DrawString(status.Suffix, e.Font, suffixBrush, suffixRect, sfRight);
+                    e.Graphics.DrawString(status.Suffix, e.Font, suffixBrush, suffixRect, _groupSuffixFormat);
                 }
             }
 
@@ -2735,7 +2796,6 @@ namespace IntelligentMutexExecutionEnvironment
         }
 
         // User preference: show minimize to tray prompt on close only once per session
-        private bool _closePromptShown = false;
 
         /// <summary>
         /// Restores the main window from tray.

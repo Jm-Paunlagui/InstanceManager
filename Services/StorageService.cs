@@ -155,7 +155,15 @@ namespace IntelligentMutexExecutionEnvironment.Services
 
         private void UpdateApplicationInternal(ManagedApplication app, bool forceSave)
         {
-            var existingApp = _applications.FirstOrDefault(a => a.Index == app.Index);
+            ManagedApplication existingApp = null;
+            for (int i = 0; i < _applications.Count; i++)
+            {
+                if (_applications[i].Index == app.Index)
+                {
+                    existingApp = _applications[i];
+                    break;
+                }
+            }
             if (existingApp != null)
             {
                 // Track whether any persistent (non-transient) field actually changed
@@ -232,7 +240,15 @@ namespace IntelligentMutexExecutionEnvironment.Services
         public void UpdateApplicationFields(int appIndex, bool? isRunning = null, DateTime? lastStart = null,
             DateTime? lastStop = null, int? crashCount = null, int? retryCount = null, int? lastExitCode = null)
         {
-            var existingApp = _applications.FirstOrDefault(a => a.Index == appIndex);
+            ManagedApplication existingApp = null;
+            for (int i = 0; i < _applications.Count; i++)
+            {
+                if (_applications[i].Index == appIndex)
+                {
+                    existingApp = _applications[i];
+                    break;
+                }
+            }
             if (existingApp == null) return;
 
             bool persistentChanged = false;
@@ -295,17 +311,33 @@ namespace IntelligentMutexExecutionEnvironment.Services
             }
         }
 
+        /// <summary>
+        /// Normalizes a file path for case-insensitive comparison on Windows.
+        /// Cached by callers to avoid repeated allocations in hot paths.
+        /// </summary>
+        private static string NormalizePath(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return "";
+            return path.ToLowerInvariant().Replace("/", "\\");
+        }
+
         public bool ApplicationExists(string directory)
         {
             if (string.IsNullOrEmpty(directory))
                 return false;
 
-            // Normalize paths for comparison (case-insensitive on Windows)
-            string normalizedPath = directory.ToLowerInvariant().Replace("/", "\\");
+            string normalizedPath = NormalizePath(directory);
 
-            bool exists = _applications.Any(app =>
-                !string.IsNullOrEmpty(app.Directory) &&
-                app.Directory.ToLowerInvariant().Replace("/", "\\") == normalizedPath);
+            bool exists = false;
+            for (int i = 0; i < _applications.Count; i++)
+            {
+                if (!string.IsNullOrEmpty(_applications[i].Directory) &&
+                    NormalizePath(_applications[i].Directory) == normalizedPath)
+                {
+                    exists = true;
+                    break;
+                }
+            }
 
             if (exists)
             {
@@ -320,12 +352,19 @@ namespace IntelligentMutexExecutionEnvironment.Services
             if (string.IsNullOrEmpty(directory))
                 return false;
 
-            string normalizedPath = directory.ToLowerInvariant().Replace("/", "\\");
+            string normalizedPath = NormalizePath(directory);
 
-            return _applications.Any(app =>
-                app.GroupId == groupId &&
-                !string.IsNullOrEmpty(app.Directory) &&
-                app.Directory.ToLowerInvariant().Replace("/", "\\") == normalizedPath);
+            for (int i = 0; i < _applications.Count; i++)
+            {
+                var app = _applications[i];
+                if (app.GroupId == groupId &&
+                    !string.IsNullOrEmpty(app.Directory) &&
+                    NormalizePath(app.Directory) == normalizedPath)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>
@@ -338,15 +377,16 @@ namespace IntelligentMutexExecutionEnvironment.Services
             if (string.IsNullOrEmpty(directory))
                 return result;
 
-            string normalizedPath = directory.ToLowerInvariant().Replace("/", "\\");
+            string normalizedPath = NormalizePath(directory);
 
-            foreach (var app in _applications)
+            for (int i = 0; i < _applications.Count; i++)
             {
+                var app = _applications[i];
                 if (app.Index == excludeIndex)
                     continue;
                 if (string.IsNullOrEmpty(app.Directory))
                     continue;
-                if (app.Directory.ToLowerInvariant().Replace("/", "\\") == normalizedPath)
+                if (NormalizePath(app.Directory) == normalizedPath)
                 {
                     result.Add(app);
                 }
@@ -366,17 +406,18 @@ namespace IntelligentMutexExecutionEnvironment.Services
             if (string.IsNullOrEmpty(directory) || authorizedApps.Count == 0)
                 return null;
 
-            string normalizedPath = directory.ToLowerInvariant().Replace("/", "\\");
+            string normalizedPath = NormalizePath(directory);
 
-            foreach (var app in _applications)
+            for (int i = 0; i < _applications.Count; i++)
             {
+                var app = _applications[i];
                 if (app.Index == excludeIndex)
                     continue;
                 if (!authorizedApps.Contains(app.Index))
                     continue;
                 if (string.IsNullOrEmpty(app.Directory))
                     continue;
-                if (app.Directory.ToLowerInvariant().Replace("/", "\\") == normalizedPath)
+                if (NormalizePath(app.Directory) == normalizedPath)
                 {
                     return app;
                 }
@@ -595,7 +636,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 sb.AppendLine($"    \"MemoryLimitMB\": {app.MemoryLimitMB},");
                 sb.AppendLine($"    \"DetectTitleChange\": {app.DetectTitleChange.ToString().ToLower()},");
                 sb.AppendLine($"    \"HealthMonitoringEnabled\": {app.HealthMonitoringEnabled.ToString().ToLower()},");
-                sb.AppendLine($"    \"LastExitCode\": {app.LastExitCode}");
+                sb.AppendLine($"    \"LastExitCode\": {(app.LastExitCode.HasValue ? app.LastExitCode.Value.ToString() : "null")}");
                 sb.Append("  }");
                 if (i < apps.Count - 1) sb.AppendLine(",");
                 else sb.AppendLine();
@@ -862,12 +903,60 @@ namespace IntelligentMutexExecutionEnvironment.Services
 
         private string EscapeJson(string input)
         {
-            return input.Replace("\"", "\\\"");
+            if (string.IsNullOrEmpty(input)) return "";
+            return input
+                .Replace("\\", "\\\\")
+                .Replace("\"", "\\\"")
+                .Replace("\n", "\\n")
+                .Replace("\r", "\\r");
         }
 
         private string UnescapeJson(string input)
         {
-            return input.Replace("\\\"", "\"");
+            if (string.IsNullOrEmpty(input)) return "";
+
+            // Character-by-character unescape to correctly handle both old data
+            // (raw backslashes like D:\path) and new data (escaped like D:\\path).
+            // The old Replace-chain approach was dangerous because it would turn
+            // literal \n in paths (e.g., C:\new_folder) into newline characters.
+            StringBuilder sb = new StringBuilder(input.Length);
+            for (int i = 0; i < input.Length; i++)
+            {
+                if (input[i] == '\\' && i + 1 < input.Length)
+                {
+                    char next = input[i + 1];
+                    switch (next)
+                    {
+                        case '\\':
+                            sb.Append('\\');
+                            i++; // skip next
+                            break;
+                        case '"':
+                            sb.Append('"');
+                            i++;
+                            break;
+                        case 'n':
+                            sb.Append('\n');
+                            i++;
+                            break;
+                        case 'r':
+                            sb.Append('\r');
+                            i++;
+                            break;
+                        default:
+                            // Not a recognized escape sequence — keep the backslash as-is.
+                            // This handles old data where backslashes were stored raw
+                            // (e.g., D:\Projects instead of D:\\Projects).
+                            sb.Append('\\');
+                            break;
+                    }
+                }
+                else
+                {
+                    sb.Append(input[i]);
+                }
+            }
+            return sb.ToString();
         }
     }
 }

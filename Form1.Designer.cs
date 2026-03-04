@@ -19,9 +19,15 @@
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing)
             {
-                components.Dispose();
+                if (components != null)
+                {
+                    components.Dispose();
+                }
+                // Dispose cached GDI objects
+                if (_groupNameFormat != null) _groupNameFormat.Dispose();
+                if (_groupSuffixFormat != null) _groupSuffixFormat.Dispose();
             }
             base.Dispose(disposing);
         }

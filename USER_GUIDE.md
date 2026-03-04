@@ -206,7 +206,7 @@ When a Keep Open application stops unexpectedly:
 1. The crash is detected by the watchdog (within one poll interval, default: 10 seconds)
 2. The crash count increments
 3. The retry count increments
-4. A countdown begins: **Restarting (5s)** → **Restarting (4s)** → ... → **Starting...**
+4. A countdown begins: **Restarting (5s)** to **Restarting (4s)** to ... to **Starting...**
 5. The application relaunches automatically
 6. If the relaunch succeeds and the app runs stably for the **Stable Run Period** (default: 30 seconds), the retry count resets to 0
 
@@ -221,7 +221,7 @@ If the application crashes more times than the max retry limit (without running 
 ### Stable Run Period
 The retry count only resets to 0 after the application has been running continuously for the configured **Stable Run Period** (default: 30 seconds). This prevents apps that crash shortly after starting from resetting retries indefinitely and never reaching "Failed" state.
 
-You can configure this per-application via **Edit** → **Stable Run Period (seconds)**.
+You can configure this per-application via **Edit** to **Stable Run Period (seconds)**.
 
 ### Important Notes
 - Manually stopping an app via the **Stop** button does **not** trigger a restart — even with Keep Open enabled
@@ -244,7 +244,7 @@ Detects when an application's UI thread is frozen (e.g., infinite loop, UI deadl
 3. After the configured timeout (or 2 consecutive poll cycles if timeout is `0`), the process is force-killed
 4. Auto-restart takes over
 
-**Configure via:** Edit → **Not Responding (sec)**
+**Configure via:** Edit to **Not Responding (sec)**
 
 > **Tip**: Set a non-zero value (e.g., 30 seconds) for apps that occasionally freeze briefly during heavy operations like loading large files.
 
@@ -278,7 +278,7 @@ Detects when an application's window title changes unexpectedly, which can indic
 3. If the title changes and stays changed for 2 consecutive poll cycles, the process is force-killed
 4. Auto-restart takes over
 
-**Configure via:** Edit → **Detect Title Change** (opt-in, disabled by default)
+**Configure via:** Edit to **Detect Title Change** (opt-in, disabled by default)
 
 > **Warning**: Only enable this for apps with a stable, unchanging window title. Apps that show document names, status text, or progress in their title bar will trigger false positives.
 
@@ -291,7 +291,7 @@ Detects when an application's working set memory exceeds a configured threshold.
 2. If the working set exceeds the configured limit, the process is force-killed immediately (no confirmation wait)
 3. Auto-restart takes over
 
-**Configure via:** Edit → **Memory Limit (MB)** (set to `0` to disable)
+**Configure via:** Edit to **Memory Limit (MB)** (set to `0` to disable)
 
 > **Tip**: Monitor your app's normal memory usage first, then set the limit to 2–3× the expected peak. For example, if an app normally uses 200 MB, set the limit to 500 MB.
 
@@ -328,13 +328,13 @@ The following table shows which types of application failures IMEE can detect an
 |---|---|---|---|
 | **UI Freeze** | Infinite loop on UI thread | Not Responding detection | ✅ Yes |
 | **Unhandled Exception Dialog** | `NullReferenceException`, `DivideByZeroException` on UI thread | Error Dialog title matching + Title Change detection | ✅ Yes |
-| **Stack Overflow** | Infinite recursion | Process terminates → crash detection | ✅ Yes |
+| **Stack Overflow** | Infinite recursion | Process terminates to crash detection | ✅ Yes |
 | **Out of Memory** | Memory exhaustion | Memory Limit detection (proactive) + crash detection (reactive) | ✅ Yes |
-| **Access Violation** | Writing to invalid memory | Process terminates → crash detection | ✅ Yes |
+| **Access Violation** | Writing to invalid memory | Process terminates to crash detection | ✅ Yes |
 | **UI Deadlock** | Two locks acquired in opposite order | Not Responding detection (UI blocked) + CPU-Hung detection (spin-wait) | ✅ Yes |
-| **Background Thread Exception** | Unhandled exception on worker thread | Process terminates → crash detection + zombie detection | ✅ Yes |
-| **Environment.FailFast** | Immediate process termination | Process terminates → crash detection | ✅ Yes |
-| **Process Crash** | Any unexpected process exit | Window disappears → crash detection | ✅ Yes |
+| **Background Thread Exception** | Unhandled exception on worker thread | Process terminates to crash detection + zombie detection | ✅ Yes |
+| **Environment.FailFast** | Immediate process termination | Process terminates to crash detection | ✅ Yes |
+| **Process Crash** | Any unexpected process exit | Window disappears to crash detection | ✅ Yes |
 | **Memory Leak** | Gradual memory growth | Memory Limit detection | ✅ Yes |
 | **CPU Spin Loop** | Infinite `while(true)` with work | CPU-Hung detection (3 consecutive ticks >95%) | ✅ Yes |
 | **Zombie Process** | Window closed but process lingers | Background Zombie detection | ✅ Yes |
@@ -432,7 +432,7 @@ IMEE logs all operations to daily log files.
 ```
 
 ### Log Retention
-Logs older than the configured retention period (default: 7 days) are automatically deleted. You can change this in **Settings** → **Log Retention (days)**.
+Logs older than the configured retention period (default: 7 days) are automatically deleted. You can change this in **Settings** to **Log Retention (days)**.
 
 ### Real-Time Log Monitoring
 Open a PowerShell window and run:

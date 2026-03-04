@@ -4,6 +4,7 @@ using System.Windows.Forms;
 using System.IO;
 using System.Diagnostics;
 using IntelligentMutexExecutionEnvironment.Models;
+using IntelligentMutexExecutionEnvironment.Utilities;
 
 namespace IntelligentMutexExecutionEnvironment
 {
@@ -40,12 +41,20 @@ namespace IntelligentMutexExecutionEnvironment
         private Font _smallBoldFont;
         private Font _buttonFont;
 
+        // Original values captured at dialog open for change detection logging
+        private int _originalCrashCount;
+        private int _originalRetryCount;
+
         public string NewDirectory { get { return _directoryTextBox.Text.Trim(); } }
         public string NewLauncherPath { get { return _launcherTextBox.Text.Trim(); } }
 
         public EditAppDialog(ManagedApplication app)
         {
             _app = app;
+
+            // Capture original statistics values before any reset buttons are clicked
+            _originalCrashCount = app.CrashCount;
+            _originalRetryCount = app.RetryCount;
 
             // Create shared fonts once
             _normalFont = new Font("AUMOVIO Screen", 9F);
@@ -59,7 +68,7 @@ namespace IntelligentMutexExecutionEnvironment
         private void InitializeControls()
         {
             this.Text = $"Edit - {_app.AppName}";
-            this.Size = new Size(600, 790);
+            this.Size = new Size(600, 740);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
@@ -763,16 +772,127 @@ namespace IntelligentMutexExecutionEnvironment
                 return;
             }
 
-            _app.KeepOpen = _keepOpenCheckBox.Checked;
-            _app.HealthMonitoringEnabled = _keepOpenCheckBox.Checked;
-            _app.MaxRetries = (int)_maxRetriesNumeric.Value;
-            _app.StartDelaySeconds = (int)_startDelayNumeric.Value;
-            _app.StartupDelaySeconds = (int)_startupDelayNumeric.Value;
-            _app.StableRunPeriodSeconds = (int)_stableRunNumeric.Value;
-            _app.NotRespondingTimeoutSeconds = (int)_notRespondingTimeoutNumeric.Value;
-            _app.MemoryLimitMB = (int)_memoryLimitNumeric.Value;
-            _app.DetectTitleChange = _detectTitleChangeCheckBox.Checked;
-            _app.LauncherPath = string.IsNullOrEmpty(launcherPath) ? null : launcherPath;
+            // Capture new values
+            bool newKeepOpen = _keepOpenCheckBox.Checked;
+            bool newHealthMonitoringEnabled = _keepOpenCheckBox.Checked;
+            int newMaxRetries = (int)_maxRetriesNumeric.Value;
+            int newStartDelaySeconds = (int)_startDelayNumeric.Value;
+            int newStartupDelaySeconds = (int)_startupDelayNumeric.Value;
+            int newStableRunPeriodSeconds = (int)_stableRunNumeric.Value;
+            int newNotRespondingTimeoutSeconds = (int)_notRespondingTimeoutNumeric.Value;
+            int newMemoryLimitMB = (int)_memoryLimitNumeric.Value;
+            bool newDetectTitleChange = _detectTitleChangeCheckBox.Checked;
+            string newLauncherPath = string.IsNullOrEmpty(launcherPath) ? null : launcherPath;
+
+            // Log each individual change for traceability and accountability
+            string appName = _app.AppName ?? "(unknown)";
+            int changeCount = 0;
+
+            string newDirectory = _directoryTextBox.Text.Trim();
+            if (_app.Directory != newDirectory)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' Directory changed: \"{Path.GetFileName(_app.Directory)}\" to \"{Path.GetFileName(newDirectory)}\"");
+                changeCount++;
+            }
+
+            if (_app.KeepOpen != newKeepOpen)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' KeepOpen changed: {_app.KeepOpen} to {newKeepOpen}");
+                changeCount++;
+            }
+            if (_app.HealthMonitoringEnabled != newHealthMonitoringEnabled)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' HealthMonitoringEnabled changed: {_app.HealthMonitoringEnabled} to {newHealthMonitoringEnabled}");
+                changeCount++;
+            }
+            if (_app.MaxRetries != newMaxRetries)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' MaxRetries changed: {_app.MaxRetries} to {newMaxRetries}");
+                changeCount++;
+            }
+            if (_app.StartDelaySeconds != newStartDelaySeconds)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' StartDelaySeconds changed: {_app.StartDelaySeconds} to {newStartDelaySeconds}");
+                changeCount++;
+            }
+            if (_app.StartupDelaySeconds != newStartupDelaySeconds)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' StartupDelaySeconds changed: {_app.StartupDelaySeconds} to {newStartupDelaySeconds}");
+                changeCount++;
+            }
+            if (_app.StableRunPeriodSeconds != newStableRunPeriodSeconds)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' StableRunPeriodSeconds changed: {_app.StableRunPeriodSeconds} to {newStableRunPeriodSeconds}");
+                changeCount++;
+            }
+            if (_app.NotRespondingTimeoutSeconds != newNotRespondingTimeoutSeconds)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' NotRespondingTimeoutSeconds changed: {_app.NotRespondingTimeoutSeconds} to {newNotRespondingTimeoutSeconds}");
+                changeCount++;
+            }
+            if (_app.MemoryLimitMB != newMemoryLimitMB)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' MemoryLimitMB changed: {_app.MemoryLimitMB} to {newMemoryLimitMB}");
+                changeCount++;
+            }
+            if (_app.DetectTitleChange != newDetectTitleChange)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' DetectTitleChange changed: {_app.DetectTitleChange} to {newDetectTitleChange}");
+                changeCount++;
+            }
+            if (_app.LauncherPath != newLauncherPath)
+            {
+                string oldLauncher = string.IsNullOrEmpty(_app.LauncherPath) ? "(none)" : Path.GetFileName(_app.LauncherPath);
+                string newLauncher = string.IsNullOrEmpty(newLauncherPath) ? "(none)" : Path.GetFileName(newLauncherPath);
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' LauncherPath changed: {oldLauncher} to {newLauncher}");
+                changeCount++;
+            }
+            if (_originalCrashCount != int.Parse(_crashCountLabel.Text))
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' CrashCount reset: {_originalCrashCount} to {_crashCountLabel.Text}");
+                changeCount++;
+            }
+            if (_originalRetryCount != int.Parse(_retryCountLabel.Text.Split('/')[0].Trim()))
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' RetryCount reset: {_originalRetryCount} to {_retryCountLabel.Text.Split('/')[0].Trim()}");
+                changeCount++;
+            }
+
+            if (changeCount == 0)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' edit dialog closed with OK — no settings changes detected");
+            }
+            else
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' total settings changed: {changeCount}");
+            }
+
+            // Apply the new values
+            _app.KeepOpen = newKeepOpen;
+            _app.HealthMonitoringEnabled = newHealthMonitoringEnabled;
+            _app.MaxRetries = newMaxRetries;
+            _app.StartDelaySeconds = newStartDelaySeconds;
+            _app.StartupDelaySeconds = newStartupDelaySeconds;
+            _app.StableRunPeriodSeconds = newStableRunPeriodSeconds;
+            _app.NotRespondingTimeoutSeconds = newNotRespondingTimeoutSeconds;
+            _app.MemoryLimitMB = newMemoryLimitMB;
+            _app.DetectTitleChange = newDetectTitleChange;
+            _app.LauncherPath = newLauncherPath;
             this.DialogResult = DialogResult.OK;
             this.Close();
         }

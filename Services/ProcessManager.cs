@@ -87,6 +87,12 @@ namespace IntelligentMutexExecutionEnvironment.Services
         private readonly Dictionary<string, List<int>> _nameToAppsCache = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<int, ProcessSnapshot> _snapshotResultsCache = new Dictionary<int, ProcessSnapshot>();
 
+        /// <summary>
+        /// Reusable HashSet for batched EnumWindows — stores PIDs that own at least one top-level window.
+        /// Avoids per-tick allocation in GetBatchProcessSnapshot.
+        /// </summary>
+        private readonly HashSet<uint> _pidsWithWindowsCache = new HashSet<uint>();
+
         // Error dialog detection patterns (checked case-insensitively against window titles)
         private static readonly string[] ErrorDialogPatterns = new string[]
         {
@@ -259,6 +265,26 @@ namespace IntelligentMutexExecutionEnvironment.Services
         }
 
         /// <summary>
+        /// Performs a single EnumWindows call to build a set of all PIDs that own
+        /// at least one top-level window. This replaces N individual HasAnyTopLevelWindow
+        /// calls (one per windowless process) with a single system-wide enumeration.
+        /// </summary>
+        private void BuildPidsWithWindows(HashSet<uint> result)
+        {
+            result.Clear();
+            EnumWindows(delegate(IntPtr hWnd, IntPtr lParam)
+            {
+                uint windowPid;
+                GetWindowThreadProcessId(hWnd, out windowPid);
+                if (windowPid != 0)
+                {
+                    result.Add(windowPid);
+                }
+                return true; // continue enumerating all windows
+            }, IntPtr.Zero);
+        }
+
+        /// <summary>
         /// Takes a single system-wide process snapshot and returns per-app results.
         /// This is dramatically more efficient than calling GetProcessesByName per app,
         /// because each GetProcessesByName call internally enumerates ALL system processes.
@@ -306,6 +332,11 @@ namespace IntelligentMutexExecutionEnvironment.Services
             if (nameToApps.Count == 0)
                 return results;
 
+            // Single EnumWindows call to build a set of all PIDs that own top-level windows.
+            // This replaces N individual HasAnyTopLevelWindow calls for windowless processes.
+            var pidsWithWindows = _pidsWithWindowsCache;
+            BuildPidsWithWindows(pidsWithWindows);
+
             Process[] allProcesses = null;
             try
             {
@@ -337,16 +368,15 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         continue; // Process exited
                     }
 
-                    // If no visible main window, check for hidden top-level windows (system tray apps).
-                    // Apps minimized to the system tray have MainWindowHandle == IntPtr.Zero but still
-                    // own hidden top-level windows. Without this check, tray apps are falsely classified
-                    // as background/zombie processes and may be killed.
+                    // If no visible main window, check the pre-built PID set for hidden top-level
+                    // windows (system tray apps). This is an O(1) HashSet lookup instead of a
+                    // per-process EnumWindows call.
                     bool isTrayApp = false;
                     if (!hasWindow)
                     {
                         try
                         {
-                            isTrayApp = HasAnyTopLevelWindow(allProcesses[i].Id);
+                            isTrayApp = pidsWithWindows.Contains((uint)allProcesses[i].Id);
                         }
                         catch (InvalidOperationException)
                         {

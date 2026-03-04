@@ -78,7 +78,7 @@ namespace IntelligentMutexExecutionEnvironment.Models
             RetryCount = 0;
             MaxRetries = 3;
             StartDelaySeconds = 5;
-            StartupDelaySeconds = 0;
+            StartupDelaySeconds = 10;
             StableRunPeriodSeconds = 30;
             NotRespondingTimeoutSeconds = 0;
             MemoryLimitMB = 0;
