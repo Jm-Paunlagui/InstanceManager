@@ -822,7 +822,7 @@ namespace IntelligentMutexExecutionEnvironment
                     // Force-kill it so auto-restart can take over.
                     // Uses configurable NotRespondingTimeoutSeconds per app, or falls back to
                     // 2 consecutive poll cycles if not configured (timeout = 0).
-                    if (isRunning && wasRunning && app.KeepOpen && snapshot.HasNotRespondingProcess)
+                    if (isRunning && wasRunning && snapshot.HasNotRespondingProcess)
                     {
                         if (!_notRespondingTracking.ContainsKey(app.Index))
                         {
@@ -898,7 +898,7 @@ namespace IntelligentMutexExecutionEnvironment
                     // unhandled exception, crash, or error dialogs). These windows pump messages
                     // so Process.Responding returns true, but the app is effectively stuck.
                     // Only applies to KeepOpen apps that are running and authorized.
-                    if (isRunning && wasRunning && app.KeepOpen && snapshot.HasErrorDialogWindow)
+                    if (isRunning && wasRunning && snapshot.HasErrorDialogWindow)
                     {
                         if (!_errorDialogTracking.ContainsKey(app.Index))
                         {
@@ -948,7 +948,7 @@ namespace IntelligentMutexExecutionEnvironment
                     // this class of dialog that would otherwise be invisible to pattern matching.
                     // Requires 2 consecutive detections to avoid false positives from apps that
                     // legitimately change their title (e.g. showing a document name).
-                    if (isRunning && wasRunning && app.KeepOpen && app.DetectTitleChange
+                    if (isRunning && wasRunning && app.DetectTitleChange
                         && snapshot.MainWindowTitle != null)
                     {
                         string knownTitle;
@@ -1013,7 +1013,7 @@ namespace IntelligentMutexExecutionEnvironment
 
                     // Detect memory limit breach for KeepOpen apps with a configured MemoryLimitMB.
                     // Uses WorkingSet64 from the batch snapshot (lightweight kernel query, no overhead).
-                    if (isRunning && wasRunning && app.KeepOpen && app.MemoryLimitMB > 0)
+                    if (isRunning && wasRunning && app.MemoryLimitMB > 0)
                     {
                         long limitBytes = (long)app.MemoryLimitMB * 1024L * 1024L;
                         if (snapshot.PeakWorkingSetBytes > limitBytes)
@@ -1045,7 +1045,7 @@ namespace IntelligentMutexExecutionEnvironment
                     // If CPU usage exceeds HighCpuThreshold for HighCpuStreakThreshold consecutive
                     // ticks, the process is considered hung (infinite loop, deadlock spin, etc.).
                     // This uses only Process.TotalProcessorTime which is a lightweight kernel query.
-                    if (isRunning && wasRunning && app.KeepOpen && snapshot.TotalCpuTime.Ticks > 0)
+                    if (isRunning && wasRunning && snapshot.TotalCpuTime.Ticks > 0)
                     {
                         KeyValuePair<DateTime, TimeSpan> lastSample;
                         if (_cpuTimeSamples.TryGetValue(app.Index, out lastSample))
@@ -1113,24 +1113,6 @@ namespace IntelligentMutexExecutionEnvironment
                         _highCpuStreak.Remove(app.Index);
                     }
 
-                    // Detect background zombie processes (no window but process still alive)
-                    // This handles apps like Excel that close their window but linger in the background
-                    if (!isRunning && wasRunning && snapshot.HasBackgroundProcess)
-                    {
-                        if (app.HealthMonitoringEnabled)
-                        {
-                            int killed = _processManager.KillBackgroundProcesses(app);
-                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                $"'{app.AppName}' lost its window but had {killed} background process(es) - killed them");
-                        }
-                        else
-                        {
-                            NotifyHealthIssue(app, item, "Zombie/background process(es) detected");
-                        }
-
-                        // After killing background processes (or not), the state is considered not running — if we didn't kill, we still avoid further action here.
-                    }
-
                     // Detect unauthorized external launch (or cross-group detection)
                     if (isRunning && !_authorizedApps.Contains(app.Index))
                     {
@@ -1166,6 +1148,10 @@ namespace IntelligentMutexExecutionEnvironment
                     }
 
                     // App was stopped externally (outside IMEE) — possible crash
+                    // This also handles background zombie processes: when a process crashes,
+                    // it may leave behind a lingering background process (no window). We handle
+                    // zombie cleanup here as part of crash detection so the exit code and crash
+                    // reason are properly classified instead of being masked as a generic "zombie".
                     if (!isRunning && wasRunning)
                     {
                         _authorizedApps.Remove(app.Index);
@@ -1179,8 +1165,20 @@ namespace IntelligentMutexExecutionEnvironment
                         int? exitCode = _processManager.GetTrackedExitCode(app.Index);
                         if (exitCode.HasValue)
                         {
+                            string crashReason = ClassifyExitCode(exitCode.Value);
                             SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
-                                $"'{app.AppName}' exited with code {exitCode.Value}");
+                                $"'{app.AppName}' exited with code {exitCode.Value} ({crashReason})");
+                        }
+
+                        // Clean up any lingering background/zombie processes left behind by the crash.
+                        // This must happen AFTER exit code retrieval but BEFORE restart scheduling.
+                        bool hadZombies = false;
+                        if (snapshot.HasBackgroundProcess)
+                        {
+                            hadZombies = true;
+                            int killed = _processManager.KillBackgroundProcesses(app);
+                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                $"'{app.AppName}' had {killed} lingering background process(es) after exit — cleaned up");
                         }
 
                         // If KeepOpen is enabled, treat this as a crash and schedule restart
@@ -1189,11 +1187,15 @@ namespace IntelligentMutexExecutionEnvironment
                             int newCrashCount = app.CrashCount + 1;
                             int newRetryCount = app.RetryCount + 1;
 
+                            // Build a descriptive crash reason for logging
+                            string detailedReason = BuildCrashDescription(exitCode, hadZombies);
+
                             // Check if max retries exhausted
                             if (newRetryCount >= app.MaxRetries)
                             {
                                 SimpleLogger.Error("UpdateApplicationStatuses @ Form1.cs",
-                                    $"'{app.AppName}' exceeded max retries ({newRetryCount}/{app.MaxRetries}). Giving up.");
+                                    $"'{app.AppName}' exceeded max retries ({newRetryCount}/{app.MaxRetries}). " +
+                                    $"Crash reason: {detailedReason}. Giving up.");
 
                                 _failedApps.Add(app.Index);
 
@@ -1236,7 +1238,8 @@ namespace IntelligentMutexExecutionEnvironment
                                     }
 
                                     SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                        $"'{app.AppName}' crashed (KeepOpen=Yes). Crash #{newCrashCount}, retry {newRetryCount}/{app.MaxRetries}, scheduling restart in {delay}s");
+                                        $"'{app.AppName}' crashed (KeepOpen=Yes). Crash reason: {detailedReason}. " +
+                                        $"Crash #{newCrashCount}, retry {newRetryCount}/{app.MaxRetries}, scheduling restart in {delay}s");
 
                                     _storageService.UpdateApplicationFields(app.Index, isRunning: false,
                                         lastStop: stopTime, crashCount: newCrashCount, retryCount: newRetryCount,
@@ -1266,7 +1269,8 @@ namespace IntelligentMutexExecutionEnvironment
                                 {
                                     // Health monitoring disabled: just notify and log
                                     SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                        $"'{app.AppName}' crashed but health monitoring disabled — not scheduling auto-restart");
+                                        $"'{app.AppName}' crashed but health monitoring disabled. " +
+                                        $"Crash reason: {detailedReason}. Not scheduling auto-restart.");
                                     _storageService.UpdateApplicationFields(app.Index, isRunning: false,
                                         lastStop: stopTime, crashCount: newCrashCount, retryCount: newRetryCount,
                                         lastExitCode: exitCode);
@@ -1279,52 +1283,69 @@ namespace IntelligentMutexExecutionEnvironment
                                         item.SubItems[9].Text = exitCode.HasValue ? exitCode.Value.ToString() : "—";
                                         item.ForeColor = Color.DarkOrange;
                                     }
-                                    NotifyHealthIssue(app, item, "Process crash / unexpected exit");
+                                    NotifyHealthIssue(app, item, detailedReason);
                                 }
                             }
                         }
                         else
                         {
+                            // Non-KeepOpen app stopped externally — check if it was an abnormal exit
+                            // and notify the user if so (crash detection for non-KeepOpen apps)
+                            string detailedReason = BuildCrashDescription(exitCode, hadZombies);
+
+                            // Treat as abnormal if:
+                            // 1. Exit code is non-zero (definite crash), OR
+                            // 2. Exit code is unavailable (null) — the app unexpectedly disappeared
+                            //    (e.g., OS killed it for Out of Memory before IMEE could read the exit code)
+                            // Only exit code 0 (confirmed normal exit) is treated as a clean stop.
+                            bool isAbnormalExit = !exitCode.HasValue || exitCode.Value != 0;
+
+                            int newCrashCount = app.CrashCount + (isAbnormalExit ? 1 : 0);
+
                             _storageService.UpdateApplicationFields(app.Index, isRunning: false, lastStop: stopTime,
-                                lastExitCode: exitCode);
+                                lastExitCode: exitCode, crashCount: isAbnormalExit ? (int?)newCrashCount : null);
 
                             if (item != null)
                             {
-                                item.SubItems[3].Text = "Stopped";
+                                if (isAbnormalExit)
+                                {
+                                    item.SubItems[3].Text = "Stopped (Crashed)";
+                                    item.SubItems[5].Text = newCrashCount.ToString();
+                                    item.ForeColor = Color.DarkOrange;
+                                }
+                                else
+                                {
+                                    item.SubItems[3].Text = "Stopped";
+                                    item.ForeColor = Color.Black;
+                                }
                                 item.SubItems[8].Text = stopTime.ToString("yyyy-MM-dd HH:mm:ss");
                                 item.SubItems[9].Text = exitCode.HasValue ? exitCode.Value.ToString() : "—";
-                                item.ForeColor = Color.Black;
+
+                                var tagApp = item.Tag as ManagedApplication;
+                                if (tagApp != null)
+                                {
+                                    tagApp.LastStop = stopTime;
+                                    tagApp.IsRunning = false;
+                                    if (isAbnormalExit) tagApp.CrashCount = newCrashCount;
+                                    if (exitCode.HasValue) tagApp.LastExitCode = exitCode.Value;
+                                }
                             }
 
-                            SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
-                                $"'{app.AppName}' was stopped externally");
-                        }
-
-                        // Clean up the tracked handle after reading exit code
-                        _processManager.UntrackPid(app.Index);
-
-                        continue;
-                    }
-
-                    if (app.IsRunning != isRunning)
-                    {
-                        _storageService.UpdateApplicationFields(app.Index, isRunning: isRunning);
-
-                        // If the app just appeared as running (e.g. launcher-started app that
-                        // took longer than the grace period to start), ensure we have a tracked
-                        // Process handle for exit code retrieval.
-                        if (isRunning && _authorizedApps.Contains(app.Index))
-                        {
-                            _processManager.TryTrackActualAppProcess(app);
+                            if (isAbnormalExit)
+                            {
+                                SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                    $"'{app.AppName}' crashed (KeepOpen=No). Crash reason: {detailedReason}");
+                                NotifyHealthIssue(app, item, detailedReason);
+                            }
+                            else
+                            {
+                                SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
+                                    $"'{app.AppName}' was stopped externally");
+                            }
                         }
                     }
                 }
-
-                // Flush any throttled storage changes periodically
-                _storageService.FlushPendingChanges();
-
-                // Update group indicators in the left panel based on current app states
-                UpdateGroupIndicators(allApps);
+             
             }
             catch (Exception ex)
             {
@@ -1406,7 +1427,8 @@ namespace IntelligentMutexExecutionEnvironment
                     if (item != null)
                     {
                         item.SubItems[3].Text = "Starting...";
-                        item.SubItems[7].Text = now.ToString("yyyy-MM-dd HH:mm:ss");
+                        item.SubItems[6].Text = app.RetryCount.ToString();
+                        item.SubItems[7].Text = app.GetLastStartDisplay();
                         item.ForeColor = Color.DarkOrange;
 
                         var tagApp = item.Tag as ManagedApplication;
@@ -1544,8 +1566,12 @@ namespace IntelligentMutexExecutionEnvironment
 
             _notifiedHealthIssues.Add(app.Index);
 
+            string exitCodeInfo = app.LastExitCode.HasValue
+                ? $"Last Exit Code: {app.LastExitCode.Value}" + (app.LastExitCode.Value != 0 ? " (abnormal)" : "")
+                : "Last Exit Code: N/A";
+
             SimpleLogger.Warn("HealthMonitor @ Form1.cs",
-                $"Health issue detected for '{app.AppName}': {issue}. " +
+                $"Health issue detected for '{app.AppName}': {issue}. {exitCodeInfo}. " +
                 "Automatic corrective action is DISABLED for this application (HealthMonitoringEnabled=false). " +
                 "IMEE will not kill or restart this process. User acknowledgement required.");
 
@@ -1555,6 +1581,7 @@ namespace IntelligentMutexExecutionEnvironment
                 {
                     string appName = app.AppName;
                     string issueCopy = issue;
+                    string exitCodeCopy = exitCodeInfo;
                     this.BeginInvoke(new Action(() =>
                     {
                         try
@@ -1562,10 +1589,12 @@ namespace IntelligentMutexExecutionEnvironment
                             if (_isClosing) return;
 
                             MessageBoxHelper.ShowWarning(this,
-                                $"'{appName}' may be experiencing: {issueCopy}.\n\nIMEE is configured to NOT take automatic corrective action for this application.");
+                                $"'{appName}' may be experiencing: {issueCopy}.\n\n" +
+                                $"{exitCodeCopy}\n\n" +
+                                "IMEE is configured to NOT take automatic corrective action for this application.");
 
                             SimpleLogger.Info("HealthMonitor @ Form1.cs",
-                                $"User acknowledged health issue for '{appName}': {issueCopy}. " +
+                                $"User acknowledged health issue for '{appName}': {issueCopy}. {exitCodeCopy}. " +
                                 "No further notifications will be shown for this issue until the user takes action (start, stop, or delete).");
                         }
                         catch (Exception ex)
@@ -1577,6 +1606,342 @@ namespace IntelligentMutexExecutionEnvironment
             }
             catch (ObjectDisposedException) { }
             catch (InvalidOperationException) { }
+        }
+
+        /// <summary>
+        /// Classifies a process exit code into a human-readable crash reason.
+        /// Common Windows and .NET exit codes are mapped to descriptive names.
+        /// </summary>
+        private static string ClassifyExitCode(int exitCode)
+        {
+            // Use unsigned comparison for NTSTATUS/Win32 codes
+            uint code = unchecked((uint)exitCode);
+
+            switch (code)
+            {
+                // Normal exits
+                case 0x00000000:
+                    return "Normal exit";
+                case 0x00000001:
+                    return "General error (exit code 1)";
+                case 0x00000002:
+                    return "File not found (exit code 2)";
+                case 0x00000003:
+                    return "Path not found (exit code 3)";
+
+                // NTSTATUS informational / warnings (0x8xxxxxxx)
+                case 0x80000001: // -2147483647
+                    return "Guard page violation";
+                case 0x80000002: // -2147483646
+                    return "Datatype misalignment";
+                case 0x80000003: // -2147483645
+                    return "Breakpoint hit";
+                case 0x80000004: // -2147483644
+                    return "Single step (debugger)";
+
+                // NTSTATUS error codes (0xCxxxxxxx)
+                case 0xC0000005: // -1073741819
+                    return "Access violation";
+                case 0xC0000006: // -1073741818
+                    return "In-page error (page fault)";
+                case 0xC000000D: // -1073741811
+                    return "Invalid parameter";
+                case 0xC0000017: // -1073741801
+                    return "Out of memory (no memory)";
+                case 0xC000001D: // -1073741795
+                    return "Illegal instruction";
+                case 0xC0000025: // -1073741787
+                    return "Non-continuable exception";
+                case 0xC000007B: // -1073741701
+                    return "Invalid image format (wrong architecture or corrupt executable)";
+                case 0xC000007F: // -1073741697
+                    return "Disk full";
+                case 0xC000008C: // -1073741684
+                    return "Array bounds exceeded";
+                case 0xC000008D: // -1073741683
+                    return "Floating point denormal operand";
+                case 0xC000008E: // -1073741682
+                    return "Floating point divide by zero";
+                case 0xC000008F: // -1073741681
+                    return "Floating point inexact result";
+                case 0xC0000090: // -1073741680
+                    return "Floating point invalid operation";
+                case 0xC0000091: // -1073741679
+                    return "Floating point overflow";
+                case 0xC0000092: // -1073741678
+                    return "Floating point stack check";
+                case 0xC0000093: // -1073741677
+                    return "Floating point underflow";
+                case 0xC0000094: // -1073741676
+                    return "Integer divide by zero";
+                case 0xC0000095: // -1073741675
+                    return "Integer overflow";
+                case 0xC0000096: // -1073741674
+                    return "Privileged instruction";
+                case 0xC000009A: // -1073741670
+                    return "Insufficient system resources";
+                case 0xC0000120: // -1073741536
+                    return "Operation cancelled (thread abort / CancellationToken)";
+                case 0xC00000FD: // -1073741571
+                    return "Stack overflow";
+                case 0xC0000102: // -1073741054
+                    return "File corrupt / disk error";
+                case 0xC0000135: // -1073741515
+                    return "DLL not found";
+                case 0xC0000138: // -1073741512
+                    return "DLL ordinal not found";
+                case 0xC0000139: // -1073741511
+                    return "DLL entry point not found";
+                case 0xC000013A: // -1073741510
+                    return "Process terminated by Ctrl+C";
+                case 0xC0000142: // -1073741502
+                    return "DLL initialization failed";
+                case 0xC0000185: // -1073741435
+                    return "I/O device error";
+                case 0xC0000194: // -1073741420
+                    return "Possible deadlock (wait timeout)";
+                case 0xC0000374: // -1073740940
+                    return "Heap corruption";
+                case 0xC0000409: // -1073740791
+                    return "Stack buffer overrun (/GS security cookie)";
+                case 0xC0000417: // -1073740777
+                    return "Invalid C runtime parameter";
+                case 0xC000041B: // -1073740773
+                    return "Fatal user callback exception";
+                case 0xC000041D: // -1073740771
+                    return "Fatal app exit / terminate() called";
+                case 0xC0000420: // -1073740768
+                    return "Assertion failure";
+                case 0xC0000602: // -1073740286
+                    return "Unknown software exception (WER)";
+
+                // --- Elevation / UAC / privilege failures ---
+                case 0x800702E4: // ERROR_ELEVATION_REQUIRED
+                    return "Elevation required — application must be run as administrator";
+                case 0xC0000061: // STATUS_PRIVILEGE_NOT_HELD
+                    return "Required privilege not held (missing admin or SE_* privilege)";
+                case 0xC000007C: // STATUS_NO_TOKEN
+                    return "No impersonation token (access token missing or invalid)";
+                case 0xC0000022: // STATUS_ACCESS_DENIED (duplicate from above — keep for clarity)
+                    return "Access denied (may require elevation or admin rights)";
+                case 0x80070005: // E_ACCESSDENIED / ERROR_ACCESS_DENIED
+                    return "Access denied (COM/Win32 — may require administrator rights)";
+                case 0x80070522: // ERROR_PRIVILEGE_NOT_HELD
+                    return "A required privilege is not held by the client (missing admin right)";
+                case 0x80070542: // ERROR_ONLY_IF_CONNECTED
+                    return "Operation only valid when connected (session or token not elevated)";
+
+                // --- Network drive / UNC path failures ---
+                case 0x80070035: // ERROR_BAD_NETPATH
+                    return "Network path not found (disconnected or unavailable network drive)";
+                case 0x80070037: // ERROR_DEV_NOT_EXIST
+                    return "Network device no longer exists (drive was disconnected)";
+                case 0x80070040: // ERROR_NETNAME_DELETED
+                    return "Network name deleted (share removed or connection dropped)";
+                case 0x80070041: // ERROR_NETWORK_ACCESS_DENIED
+                    return "Network access denied (credentials invalid or share permissions)";
+                case 0x80070043: // ERROR_BAD_NET_NAME
+                    return "Network name cannot be found (bad UNC path or share name)";
+                case 0x80070044: // ERROR_TOO_MANY_NAMES
+                    return "Too many network names registered";
+                case 0x80070045: // ERROR_TOO_MANY_SESS
+                    return "Too many remote sessions — server refused connection";
+                case 0x80070046: // ERROR_SHARING_PAUSED
+                    return "Network sharing is paused on the remote server";
+                case 0x8007003B: // ERROR_UNEXP_NET_ERR
+                    return "Unexpected network error (connection lost mid-operation)";
+                case 0x80070571: // ERROR_DISK_CORRUPT
+                    return "Disk structure is corrupt and unreadable (possibly mapped drive)";
+                case 0x800700DF: // ERROR_NO_NET_OR_BAD_NET
+                    return "No network available or network configuration error";
+
+                // --- General Win32 / application startup failures ---
+                case 0x80070006: // E_HANDLE
+                    return "Invalid handle (closed, revoked, or never opened)";
+                case 0x8007000B: // ERROR_BAD_FORMAT
+                    return "Bad executable format (corrupt or incompatible binary)";
+                case 0x8007000E: // E_OUTOFMEMORY
+                    return "Out of memory (Win32 heap allocation failed)";
+                case 0x80070057: // E_INVALIDARG
+                    return "Invalid argument passed to Win32 API";
+                case 0x8007007B: // ERROR_INVALID_NAME
+                    return "Invalid file or path name (bad characters or malformed path)";
+                case 0x8007007E: // ERROR_MOD_NOT_FOUND
+                    return "Module (DLL) not found — dependency missing";
+                case 0x8007007F: // ERROR_PROC_NOT_FOUND
+                    return "Procedure not found in DLL (version mismatch or wrong DLL)";
+                case 0x800700C1: // ERROR_BAD_EXE_FORMAT
+                    return "Bad EXE format (wrong bitness, e.g. 16-bit app on 64-bit OS)";
+                case 0x800700C2: // ERROR_ITERATED_DATA_EXCEEDS_64k
+                    return "Iterated data exceeds 64KB (corrupt or ancient 16-bit binary)";
+                case 0x800701F4: // ERROR_INVALID_EXE_SIGNATURE
+                    return "Invalid executable signature (not a valid PE image)";
+                case 0x80070216: // ERROR_ARITHMETIC_OVERFLOW
+                    return "Arithmetic overflow in Win32 API call";
+                case 0x80070218: // ERROR_PIPE_BUSY
+                    return "Named pipe busy — server not accepting connections yet";
+                case 0x80070490: // ERROR_NOT_FOUND
+                    return "Element not found (registry key, file, or resource missing)";
+                case 0x800704C7: // ERROR_CANCELLED
+                    return "Operation cancelled by user (UAC prompt dismissed)";
+                case 0x800704DD: // ERROR_NOT_AUTHENTICATED
+                    return "Not authenticated — credentials required";
+                case 0x800704DE: // ERROR_NOT_LOGGED_ON
+                    return "User not logged on (service or session issue)";
+                case 0x80040154: // REGDB_E_CLASSNOTREG
+                    return "COM class not registered (missing COM component or 32/64-bit mismatch)";
+                case 0x80004003: // E_POINTER
+                    return "Null pointer (COM/interop E_POINTER)";
+                case 0x80004005: // E_FAIL
+                    return "Unspecified COM/interop failure (E_FAIL)";
+
+                // --- Network / socket / WinSock errors ---
+                case 0x80072742: // WSAENETDOWN
+                    return "Network is down (local network adapter or stack failure)";
+                case 0x80072743: // WSAENETUNREACH
+                    return "Network unreachable (no route to host or gateway down)";
+                case 0x80072744: // WSAENETRESET
+                    return "Network connection reset (keep-alive failure)";
+                case 0x80072745: // WSAECONNABORTED
+                    return "Connection aborted (software caused connection abort)";
+                case 0x80072746: // WSAECONNRESET
+                    return "Connection reset by remote peer (RST received)";
+                case 0x80072747: // WSAENOBUFS
+                    return "No buffer space available (socket buffer exhausted)";
+                case 0x8007274C: // WSAETIMEDOUT
+                    return "Connection timed out (remote host did not respond)";
+                case 0x8007274D: // WSAECONNREFUSED
+                    return "Connection refused (port closed or service not running)";
+                case 0x80072751: // WSAEHOSTUNREACH
+                    return "Host unreachable (no route to remote host)";
+                case 0x80072AF9: // WSAHOST_NOT_FOUND
+                    return "Host not found (DNS resolution failed)";
+                case 0x80072AFC: // WSANO_DATA
+                    return "No DNS data record for requested type";
+
+                // WinHTTP / WinINet network errors
+                case 0x80072EE2: // ERROR_INTERNET_TIMEOUT / ERROR_WINHTTP_TIMEOUT
+                    return "HTTP/network request timed out";
+                case 0x80072EE7: // ERROR_INTERNET_NAME_NOT_RESOLVED / ERROR_WINHTTP_NAME_NOT_RESOLVED
+                    return "Hostname could not be resolved (DNS failure or no network)";
+                case 0x80072EED: // ERROR_INTERNET_CANNOT_CONNECT / ERROR_WINHTTP_CANNOT_CONNECT
+                    return "Cannot connect to server (refused or unreachable)";
+                case 0x80072EEE: // ERROR_INTERNET_CONNECTION_ABORTED
+                    return "Internet connection aborted (dropped mid-request)";
+                case 0x80072EEF: // ERROR_INTERNET_CONNECTION_RESET
+                    return "Internet connection reset by server";
+                case 0x80072EF3: // ERROR_INTERNET_INCORRECT_HANDLE_STATE
+                    return "WinINet handle in incorrect state (request lifecycle error)";
+                case 0x80072F06: // ERROR_INTERNET_SEC_CERT_CN_INVALID
+                    return "SSL certificate common name mismatch (wrong domain on certificate)";
+                case 0x80072F0D: // ERROR_INTERNET_INVALID_CA
+                    return "SSL certificate from untrusted authority (self-signed or expired CA)";
+                case 0x80072F8F: // ERROR_INTERNET_DECRYPTION_FAILED
+                    return "TLS/SSL decryption failed (protocol mismatch or cipher unsupported)";
+
+                // .NET / CLR exceptions
+                case 0xE0434352: // CLR exception marker
+                    return ".NET unhandled exception (CLR)";
+                case 0xE0455843: // Fatal CLR error
+                    return ".NET fatal execution engine error (EEException)";
+                case 0xE0524F54: // FailFast
+                    return "Environment.FailFast (application requested termination)";
+
+                // .NET Framework / Core HRESULT codes
+                case 0x80131500: return ".NET base Exception thrown and unhandled";
+                case 0x80131501: return ".NET SystemException thrown and unhandled";
+                case 0x80131502: return ".NET ArgumentOutOfRangeException";
+                case 0x80131503: return ".NET ArrayTypeMismatchException";
+                case 0x80131504: return ".NET ContextMarshalException (cross-AppDomain marshal failure)";
+                case 0x80131506: return ".NET StackOverflowException";
+                case 0x80131507: return ".NET ArithmeticException (overflow, divide by zero, etc.)";
+                case 0x80131508: return ".NET DivideByZeroException";
+                case 0x80131509: return ".NET InvalidCastException";
+                case 0x8013150A: return ".NET NullReferenceException";
+                case 0x8013150B: return ".NET OutOfMemoryException";
+                case 0x8013150C: return ".NET OverflowException";
+                case 0x8013150D: return ".NET FileNotFoundException";
+                case 0x8013150E: return ".NET IOException";
+                case 0x80131510: return ".NET TypeLoadException (missing type or assembly binding failure)";
+                case 0x80131513: return ".NET IndexOutOfRangeException";
+                case 0x80131515: return ".NET InvalidOperationException";
+                case 0x80131516: return ".NET SecurityException (CAS / permission denied)";
+                case 0x80131517: return ".NET SerializationException";
+                case 0x80131519: return ".NET ThreadAbortException (Thread.Abort called — Framework only)";
+                case 0x8013151A: return ".NET ThreadInterruptedException (Thread.Interrupt called)";
+                case 0x8013151B: return ".NET ThreadStateException (invalid thread state)";
+                case 0x8013151D: return ".NET EntryPointNotFoundException (P/Invoke or reflection failure)";
+                case 0x80131522: return ".NET BadImageFormatException (wrong bitness or corrupt assembly)";
+                case 0x80131523: return ".NET MethodAccessException (reflection or cross-assembly access denied)";
+                case 0x80131524: return ".NET FieldAccessException";
+                case 0x80131534: return ".NET MissingFieldException";
+                case 0x80131535: return ".NET MissingMethodException";
+                case 0x80131536: return ".NET MissingMemberException";
+                case 0x80131537: return ".NET NotImplementedException";
+                case 0x80131538: return ".NET NotSupportedException";
+                case 0x80131539: return ".NET ObjectDisposedException";
+                case 0x80131543: return ".NET AmbiguousMatchException (reflection)";
+                case 0x80131577: return ".NET KeyNotFoundException";
+                case 0x80131578: return ".NET InsufficientMemoryException";
+                case 0x8013157B: return ".NET PlatformNotSupportedException";
+                case 0x8013157D: return ".NET TimeoutException";
+                case 0x80131620: return ".NET AppDomainUnloadedException (Framework only)";
+
+                // .NET network-specific exceptions (surfaced as HRESULT via COMException or SocketException)
+                case 0x80131501 | 0x2742: // disambiguated in practice by message; listed for reference
+                    return ".NET SocketException — network down";
+                case 0x80004005 | 0x2EE7:
+                    return ".NET WebException — name resolution failure";
+                case 0x80131620 + 1: // COR_E_REMOTING
+                    return ".NET RemotingException (Framework only — cross-AppDomain channel failure)";
+
+                // .NET runtime hosting / startup failures
+                case 0x80008081: return ".NET runtime failed to load (shim error)";
+                case 0x80008082: return ".NET runtime export not found (version mismatch)";
+                case 0x80008083: return ".NET install root not found (runtime not installed)";
+                case 0x80008091: return ".NET legacy runtime already bound (mixed version conflict)";
+                case 0x80131022: return ".NET assembly requires a newer runtime version";
+                case 0x80131044: return ".NET reference assembly cannot be loaded for execution";
+
+                default:
+                    if (code >= 0x80000000 && code <= 0x8FFFFFFF)
+                        return "NTSTATUS warning (0x" + code.ToString("X8") + ")";
+                    if (code >= 0xC0000000 && code <= 0xCFFFFFFF)
+                        return "NTSTATUS exception (0x" + code.ToString("X8") + ")";
+                    if (code >= 0xE0000000 && code <= 0xEFFFFFFF)
+                        return "Application exception (0x" + code.ToString("X8") + ")";
+                    if (code < 0)
+                        return "Abnormal termination (exit code " + code + ")";
+                    return "Exit code " + code;
+            }
+        }
+
+        /// <summary>
+        /// Builds a descriptive crash message combining exit code classification and zombie state.
+        /// Used in log messages and health notifications to provide actionable context.
+        /// </summary>
+        private static string BuildCrashDescription(int? exitCode, bool hadZombies)
+        {
+            string reason;
+            if (exitCode.HasValue)
+            {
+                reason = ClassifyExitCode(exitCode.Value);
+                if (exitCode.Value != 0)
+                {
+                    reason = reason + " (exit code " + exitCode.Value + ")";
+                }
+            }
+            else
+            {
+                reason = "Process terminated (exit code unavailable)";
+            }
+
+            if (hadZombies)
+            {
+                reason = reason + " + zombie process(es) cleaned up";
+            }
+
+            return reason;
         }
 
         private void AddButton_Click(object sender, EventArgs e)
@@ -1825,7 +2190,7 @@ namespace IntelligentMutexExecutionEnvironment
             {
                 // Check if the process is running because another group started it
                 var siblings = _storageService.FindOtherEntriesWithSamePath(app.Directory, app.Index);
-                foreach (var sibling in siblings)
+                foreach ( var sibling in siblings)
                 {
                     if (_authorizedApps.Contains(sibling.Index))
                     {

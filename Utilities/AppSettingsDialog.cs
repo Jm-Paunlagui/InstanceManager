@@ -245,7 +245,7 @@ namespace IntelligentMutexExecutionEnvironment
             // --- Crash Recovery & Health Monitoring Section ---
             var settingsSectionLabel = new Label
             {
-                Text = "Crash Recovery and Health Monitoring",
+                Text = "Crash Recovery",
                 Location = new Point(labelX, y),
                 AutoSize = true,
                 Font = _boldFont
@@ -900,13 +900,6 @@ namespace IntelligentMutexExecutionEnvironment
         private void InitializeComponent()
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(EditAppDialog));
-            this.SuspendLayout();
-            // 
-            // EditAppDialog
-            // 
-            this.ClientSize = new System.Drawing.Size(284, 261);
-            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
-            this.Name = "EditAppDialog";
             this.ResumeLayout(false);
 
         }
