@@ -747,6 +747,11 @@ namespace IntelligentMutexExecutionEnvironment
                             {
                                 SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
                                     $"'{app.AppName}' is now running (App PID: {snapshot.FirstWindowedPid})");
+
+                                // Ensure we have a tracked Process handle for the actual app
+                                // (important for launcher-started apps where the handle may not
+                                // have been available at launch time)
+                                _processManager.TryTrackActualAppProcess(app);
                             }
                             _startGracePeriod.Remove(app.Index);
                         }
@@ -763,6 +768,9 @@ namespace IntelligentMutexExecutionEnvironment
                                     {
                                         SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
                                             $"'{app.AppName}' is now running (App PID: {snapshot.FirstWindowedPid})");
+
+                                        // Ensure we have a tracked Process handle for the actual app
+                                        _processManager.TryTrackActualAppProcess(app);
                                     }
 
                                     item.SubItems[3].Text = "Running";
@@ -1301,16 +1309,13 @@ namespace IntelligentMutexExecutionEnvironment
                     if (app.IsRunning != isRunning)
                     {
                         _storageService.UpdateApplicationFields(app.Index, isRunning: isRunning);
-                    }
 
-                    // Keep the visible ListView row in sync with the current state
-                    if (item != null)
-                    {
-                        string statusText = isRunning ? "Running" : "Stopped";
-                        if (item.SubItems[3].Text != statusText)
+                        // If the app just appeared as running (e.g. launcher-started app that
+                        // took longer than the grace period to start), ensure we have a tracked
+                        // Process handle for exit code retrieval.
+                        if (isRunning && _authorizedApps.Contains(app.Index))
                         {
-                            item.SubItems[3].Text = statusText;
-                            item.ForeColor = isRunning ? Color.Green : Color.Black;
+                            _processManager.TryTrackActualAppProcess(app);
                         }
                     }
                 }
@@ -1961,17 +1966,16 @@ namespace IntelligentMutexExecutionEnvironment
                 item.ForeColor = Color.DarkOrange;
             }
 
-            // Capture exit code before stopping (the tracked handle will be disposed by StopApplication)
-            int? exitCode = _processManager.GetTrackedExitCode(app.Index);
-
-            if (_processManager.StopApplication(app))
+            // StopApplication now captures the exit code internally after the process exits
+            int? exitCode;
+            if (_processManager.StopApplication(app, out exitCode))
             {
                 app.LastStop = DateTime.Now;
                 app.IsRunning = false;
-                if (exitCode.HasValue)
-                {
-                    app.LastExitCode = exitCode.Value;
-                }
+                // Do NOT overwrite LastExitCode on intentional user stop.
+                // The previous exit code (from a crash or unexpected exit) is far more
+                // useful for troubleshooting than the exit code from a graceful/forced stop
+                // (which is typically 0 or a kill code). Preserve the existing value.
                 _storageService.UpdateApplication(app);
 
                 _pendingStop.Remove(app.Index);
@@ -1980,7 +1984,8 @@ namespace IntelligentMutexExecutionEnvironment
                 {
                     item.SubItems[3].Text = "Stopped";
                     item.SubItems[8].Text = app.GetLastStopDisplay();
-                    item.SubItems[9].Text = exitCode.HasValue ? exitCode.Value.ToString() : "—";
+                    // Keep showing the existing last exit code (don't overwrite with stop's exit code)
+                    item.SubItems[9].Text = app.LastExitCode.HasValue ? app.LastExitCode.Value.ToString() : "—";
                     item.ForeColor = Color.Black;
                 }
 
@@ -2861,28 +2866,6 @@ namespace IntelligentMutexExecutionEnvironment
             }
         }
 
-        protected override void OnResize(EventArgs e)
-        {
-            base.OnResize(e);
-
-            try
-            {
-                if (this.WindowState == FormWindowState.Minimized && !_isClosing)
-                {
-                    MinimizeToTray();
-                }
-            }
-            catch (Exception ex)
-            {
-                SimpleLogger.Error("OnResize @ Form1.cs", $"Error handling resize: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Intercepts the custom WM_SHOWFIRSTINSTANCE message broadcast by a second instance
-        /// and restores this window to the foreground. Handles all cases: minimized to tray,
-        /// minimized to taskbar, or simply behind other windows.
-        /// </summary>
         protected override void WndProc(ref Message m)
         {
             if (m.Msg == Program.WM_SHOWFIRSTINSTANCE)

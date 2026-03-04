@@ -181,6 +181,17 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     {
                         return proc.ExitCode;
                     }
+
+                    // Process may have just exited — wait briefly for it to register
+                    try
+                    {
+                        if (proc.WaitForExit(500))
+                        {
+                            return proc.ExitCode;
+                        }
+                    }
+                    catch { }
+
                     // Still running — no exit code yet
                     return null;
                 }
@@ -198,11 +209,13 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 }
             }
 
-            // Fallback to PID-based lookup (unlikely to work on .NET 4.0 after handle disposal)
+            // Fallback to PID-based lookup
             int pid;
             if (!_appPidMap.TryGetValue(appIndex, out pid))
                 return null;
 
+            // Try to open the process by PID — if it still exists, no exit code yet.
+            // If it no longer exists, we can't retrieve the exit code without the original handle.
             try
             {
                 Process procById = null;
@@ -793,20 +806,23 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     try
                     {
                         int pid = process.Id;
-                        // Track the PID for identification
-                        TrackLaunchedPid(app.Index, pid);
-                        // Keep the Process handle alive so we can read ExitCode later
-                        TrackLaunchedProcess(app.Index, process);
 
                         if (useLauncher)
                         {
                             // The PID here belongs to the launcher process (e.g. cmd.exe, powershell.exe, cscript.exe),
-                            // not the actual application. Log both for clarity.
+                            // not the actual application. Track the launcher PID for identification but
+                            // we cannot track the launcher handle for exit code — it will exit with 0
+                            // after spawning the app. The actual app's Process handle will be tracked
+                            // later when the watchdog detects it running (via TrackActualAppProcess).
+                            TrackLaunchedPid(app.Index, pid);
+                            // Dispose the launcher Process handle — we don't need it for exit code
+                            process.Dispose();
+
                             string monitoredProcessName = Path.GetFileNameWithoutExtension(app.Directory);
                             SimpleLogger.Info("StartApplication @ ProcessManager.cs",
                                 $"Successfully started {app.AppName} via launcher '{Path.GetFileName(app.LauncherPath)}' (Launcher PID: {pid}), monitoring process: {monitoredProcessName}");
 
-                            // Attempt to find the actual application PID after launcher starts it
+                            // Attempt to find and track the actual application process
                             try
                             {
                                 Process[] appProcesses = null;
@@ -824,11 +840,44 @@ namespace IntelligentMutexExecutionEnvironment.Services
                                         }
                                         SimpleLogger.Info("StartApplication @ ProcessManager.cs",
                                             $"Found {appProcesses.Length} '{monitoredProcessName}' process(es) — App PID(s): {string.Join(", ", pids)}");
+
+                                        // Get the PID of the first process, then dispose all
+                                        // GetProcessesByName handles (they have limited access rights)
+                                        int targetPid = -1;
+                                        try { targetPid = appProcesses[0].Id; }
+                                        catch (InvalidOperationException) { }
+
+                                        for (int i = 0; i < appProcesses.Length; i++)
+                                        {
+                                            appProcesses[i].Dispose();
+                                        }
+                                        appProcesses = null; // prevent double-dispose in finally
+
+                                        // Re-open via GetProcessById and enable EnableRaisingEvents.
+                                        // This forces the runtime to open a wait handle with SYNCHRONIZE
+                                        // access, required to read ExitCode after exit on .NET Framework 4.0.
+                                        if (targetPid > 0)
+                                        {
+                                            try
+                                            {
+                                                Process tracked = Process.GetProcessById(targetPid);
+                                                try { tracked.EnableRaisingEvents = true; }
+                                                catch (System.ComponentModel.Win32Exception) { }
+                                                catch (InvalidOperationException) { }
+
+                                                TrackLaunchedProcess(app.Index, tracked);
+                                                TrackLaunchedPid(app.Index, targetPid);
+                                            }
+                                            catch (ArgumentException)
+                                            {
+                                                // Process already exited
+                                            }
+                                        }
                                     }
                                     else
                                     {
                                         SimpleLogger.Info("StartApplication @ ProcessManager.cs",
-                                            $"No '{monitoredProcessName}' process found yet — it may still be starting via the launcher");
+                                            $"No '{monitoredProcessName}' process found yet — it may still be starting via the launcher. Exit code tracking will be attempted when the process appears.");
                                     }
                                 }
                                 finally
@@ -850,14 +899,20 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         }
                         else
                         {
+                            // Direct launch — track both PID and Process handle for exit code retrieval
+                            TrackLaunchedPid(app.Index, pid);
+                            TrackLaunchedProcess(app.Index, process);
                             SimpleLogger.Info("StartApplication @ ProcessManager.cs",
                                 $"Successfully started {app.AppName} (PID: {pid})");
                         }
                     }
                     catch (InvalidOperationException)
                     {
-                        // PID unavailable but process started — still keep the handle
-                        TrackLaunchedProcess(app.Index, process);
+                        if (!useLauncher)
+                        {
+                            // PID unavailable but process started — still keep the handle
+                            TrackLaunchedProcess(app.Index, process);
+                        }
                         SimpleLogger.Info("StartApplication @ ProcessManager.cs",
                             $"Successfully started {app.AppName} (PID unavailable - process may have exited quickly)");
                     }
@@ -916,11 +971,14 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     };
 
                 default:
-                    // .exe or any other file type — use shell execute
+                    // .exe or any other file type — use CreateProcess (UseShellExecute = false)
+                    // so the returned Process handle properly supports ExitCode retrieval.
+                    // UseShellExecute = true uses ShellExecuteEx which does not always provide
+                    // a process handle that supports GetExitCodeProcess on .NET Framework 4.0.
                     return new ProcessStartInfo
                     {
                         FileName = filePath,
-                        UseShellExecute = true,
+                        UseShellExecute = false,
                         WorkingDirectory = workingDir
                     };
             }
@@ -930,9 +988,19 @@ namespace IntelligentMutexExecutionEnvironment.Services
         /// Stops the specified application by closing its main window, if any.
         /// If the application does not respond to a graceful close, it will be
         /// forcefully terminated.
+        /// The exit code is captured from the actual application process after it exits.
         /// </summary>
         public bool StopApplication(ManagedApplication app)
         {
+            return StopApplication(app, out _);
+        }
+
+        /// <summary>
+        /// Stops the specified application and captures the exit code.
+        /// </summary>
+        public bool StopApplication(ManagedApplication app, out int? exitCode)
+        {
+            exitCode = null;
             try
             {
                 if (app == null || string.IsNullOrEmpty(app.Directory))
@@ -948,9 +1016,6 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     return false;
                 }
 
-                // Clear PID tracking since we're intentionally stopping
-                UntrackPid(app.Index);
-
                 Process[] processes = null;
                 try
                 {
@@ -958,6 +1023,9 @@ namespace IntelligentMutexExecutionEnvironment.Services
 
                     if (processes.Length == 0)
                     {
+                        // Process already exited — try to read exit code from tracked handle before cleanup
+                        exitCode = GetTrackedExitCode(app.Index);
+                        UntrackPid(app.Index);
                         SimpleLogger.Warn("StopApplication @ ProcessManager.cs", $"Cannot stop {app.AppName}: Not running");
                         return false;
                     }
@@ -978,6 +1046,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                                     try
                                     {
                                         processes[i].Kill();
+                                        processes[i].WaitForExit(2000);
                                         SimpleLogger.Warn("StopApplication @ ProcessManager.cs", $"Force killed {app.AppName} (PID: {pid}) - graceful shutdown timed out");
                                     }
                                     catch (System.ComponentModel.Win32Exception killEx)
@@ -995,12 +1064,27 @@ namespace IntelligentMutexExecutionEnvironment.Services
                                 try
                                 {
                                     processes[i].Kill();
+                                    processes[i].WaitForExit(2000);
                                     SimpleLogger.Warn("StopApplication @ ProcessManager.cs", $"Force killed background process {app.AppName} (PID: {pid}) - no main window");
                                 }
                                 catch (System.ComponentModel.Win32Exception killEx)
                                 {
                                     SimpleLogger.Error("StopApplication @ ProcessManager.cs", $"Access denied killing background {app.AppName} (PID: {pid}): {killEx.Message}");
                                 }
+                            }
+
+                            // Capture exit code from the process we just stopped
+                            if (exitCode == null)
+                            {
+                                try
+                                {
+                                    if (processes[i].HasExited)
+                                    {
+                                        exitCode = processes[i].ExitCode;
+                                    }
+                                }
+                                catch (InvalidOperationException) { }
+                                catch (System.ComponentModel.Win32Exception) { }
                             }
                         }
                         catch (InvalidOperationException)
@@ -1024,6 +1108,30 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     }
                 }
 
+                // If we didn't get an exit code from the stopped processes,
+                // try the tracked handle as a fallback
+                if (exitCode == null)
+                {
+                    // Give the tracked handle a moment to register the exit
+                    Process trackedProc;
+                    if (_appProcessHandles.TryGetValue(app.Index, out trackedProc))
+                    {
+                        try
+                        {
+                            if (trackedProc.WaitForExit(1000))
+                            {
+                                exitCode = trackedProc.ExitCode;
+                            }
+                        }
+                        catch (InvalidOperationException) { }
+                        catch (System.ComponentModel.Win32Exception) { }
+                        catch (Exception) { }
+                    }
+                }
+
+                // Now safe to clean up the tracked handle
+                UntrackPid(app.Index);
+
                 return true;
             }
             catch (Exception ex)
@@ -1031,6 +1139,111 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 SimpleLogger.Error("StopApplication @ ProcessManager.cs", $"Error stopping {(app != null ? app.AppName : "null")}: {ex.Message}");
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Attempts to track the actual application process for exit code retrieval.
+        /// This is used when a launcher was used to start the app and the actual process
+        /// wasn't found at launch time. Call this when the watchdog first detects the app running.
+        /// Returns true if a process was successfully tracked.
+        /// </summary>
+        public bool TryTrackActualAppProcess(ManagedApplication app)
+        {
+            // If we already have a tracked process handle, check if it's usable
+            Process existing;
+            if (_appProcessHandles.TryGetValue(app.Index, out existing))
+            {
+                try
+                {
+                    // Check if the existing handle is still for a live process
+                    if (!existing.HasExited)
+                        return true;
+                }
+                catch { }
+                // Handle is stale — fall through to find a new one
+            }
+
+            try
+            {
+                string processName = Path.GetFileNameWithoutExtension(app.Directory);
+                if (string.IsNullOrEmpty(processName))
+                    return false;
+
+                Process[] processes = null;
+                try
+                {
+                    processes = Process.GetProcessesByName(processName);
+                    if (processes.Length > 0)
+                    {
+                        int targetPid;
+                        try
+                        {
+                            targetPid = processes[0].Id;
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            return false;
+                        }
+
+                        // Dispose the GetProcessesByName handles — they have limited access rights
+                        // on .NET Framework 4.0 and cannot reliably read ExitCode after the process exits.
+                        for (int i = 0; i < processes.Length; i++)
+                        {
+                            processes[i].Dispose();
+                        }
+                        processes = null; // prevent double-dispose in finally
+
+                        // Re-open via GetProcessById and enable EnableRaisingEvents.
+                        // EnableRaisingEvents forces the runtime to open a wait handle with
+                        // SYNCHRONIZE access, which is required to read ExitCode after exit.
+                        Process tracked = null;
+                        try
+                        {
+                            tracked = Process.GetProcessById(targetPid);
+                            tracked.EnableRaisingEvents = true;
+                        }
+                        catch (ArgumentException)
+                        {
+                            // Process already exited between GetProcessesByName and GetProcessById
+                            if (tracked != null) tracked.Dispose();
+                            return false;
+                        }
+                        catch (System.ComponentModel.Win32Exception)
+                        {
+                            // Access denied — still track it, ExitCode may work via fallback
+                            // (tracked handle is usable, just EnableRaisingEvents failed)
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            if (tracked != null) tracked.Dispose();
+                            return false;
+                        }
+
+                        TrackLaunchedProcess(app.Index, tracked);
+                        TrackLaunchedPid(app.Index, targetPid);
+
+                        SimpleLogger.Debug("TryTrackActualAppProcess @ ProcessManager.cs",
+                            $"Tracked '{app.AppName}' process (PID: {targetPid}) for exit code retrieval");
+                        return true;
+                    }
+                }
+                finally
+                {
+                    if (processes != null)
+                    {
+                        for (int i = 0; i < processes.Length; i++)
+                        {
+                            processes[i].Dispose();
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Debug("TryTrackActualAppProcess @ ProcessManager.cs",
+                    $"Error tracking process for '{app.AppName}': {ex.Message}");
+            }
+            return false;
         }
 
         /// <summary>
