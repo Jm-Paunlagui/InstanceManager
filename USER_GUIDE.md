@@ -12,8 +12,9 @@
 9. [Settings](#settings)
 10. [Logs](#logs)
 11. [Security: Unauthorized Launch Prevention](#security-unauthorized-launch-prevention)
-12. [Frequently Asked Questions](#frequently-asked-questions)
-13. [Troubleshooting](#troubleshooting)
+12. [System Tray](#system-tray)
+13. [Frequently Asked Questions](#frequently-asked-questions)
+14. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -26,7 +27,7 @@ No installation is required. Copy `IntelligentMutexExecutionEnvironment.exe` to 
 |------|---------|
 | `applications.json` | Stores your managed applications |
 | `groups.json` | Stores your groups |
-| `settings.json` | Stores station name, performance, and logging configuration |
+| `settings.json` | Stores station name, startup, performance, and logging configuration |
 | `logs/` | Daily log files |
 
 ### First Launch
@@ -48,9 +49,9 @@ The interface is divided into two main areas:
 - **Add Group / Edit Group / Delete Group**: Manage groups
 
 ### Right Panel — Applications
-- **Application List**: Shows apps in the selected group with 9 columns
+- **Application List**: Shows apps in the selected group with 10 columns
 - **Action Buttons**: Add, Edit, Delete, Start, Stop, Start All, Stop All, Refresh
-- **Settings / Logs**: Configure station name, performance, and logging settings, or open the logs folder
+- **User Guide / Settings / Logs**: Open the user guide PDF, configure station name, performance, and logging settings, or open the logs folder
 
 ### Application List Columns
 
@@ -65,6 +66,7 @@ The interface is divided into two main areas:
 | Retries | Current auto-restart retry count |
 | Last Start | When the app was last started |
 | Last Stop | When the app was last stopped |
+| Exit Code | The exit code from the last process termination ("—" if none recorded) |
 
 ---
 
@@ -113,15 +115,24 @@ Groups let you organize your applications logically — for example, by producti
 #### Application Path
 - **Directory**: The full path to the executable. Use **Browse** to change it, or **Open** to reveal the file in File Explorer.
 
+#### Launcher Script / Exe (Optional)
+If your application requires a launcher script or wrapper executable to start (e.g., a `.bat`, `.cmd`, `.vbs`, `.ps1`, or another `.exe`), you can configure it here. When a launcher is set, IMEE will execute the launcher to start the application, but will still monitor the **primary executable** (from Application Path above) for running status detection.
+
+- **Launcher Path**: The path to the launcher file. Use **Browse** to select it, **Open** to reveal it in File Explorer, or **Clear** to remove it.
+- Supported launcher types: `.exe`, `.bat`, `.cmd`, `.vbs`, `.ps1`
+- Leave empty to launch the application directly from its Application Path.
+
+> **Note**: When using a launcher, the exit code tracking is for the actual monitored application process, not the launcher process.
+
 #### Startup Settings
 | Setting | Range | Default | Description |
 |---------|-------|---------|-------------|
-| **Startup Delay (sec)** | 0–300 | 0 | Wait time before launching this app during sequential Start All. Apps with 0 launch immediately. |
+| **Startup Delay (sec)** | 0–300 | 10 | Wait time before launching this app during sequential Start All. Apps with 0 launch immediately. |
 
 #### Crash Recovery Settings
 | Setting | Range | Default | Description |
 |---------|-------|---------|-------------|
-| **Keep Open (Auto-Restart)** | Yes/No | No | When enabled, the watchdog automatically restarts the app after a crash. |
+| **Keep Open (Auto-Restart)** | Yes/No | No | When enabled, the watchdog automatically restarts the app after a crash. Also enables health monitoring — when Keep Open is active, IMEE will actively kill and restart unhealthy processes. When disabled, IMEE only logs and notifies about detected issues without taking corrective action. |
 | **Max Retries** | 1–100 | 3 | Maximum number of consecutive restart attempts before giving up. |
 | **Restart Delay (sec)** | 1–300 | 5 | Seconds to wait before attempting a restart after a crash. |
 | **Stable Run Period (sec)** | 5–600 | 30 | How long the app must run continuously after restart before the retry count resets to 0. |
@@ -133,12 +144,14 @@ Groups let you organize your applications logically — for example, by producti
 | **Memory Limit (MB)** | 0–65536 | 0 | Maximum working set memory allowed. If the process exceeds this limit, it is force-killed for auto-restart. `0` = no limit (disabled). Useful for detecting memory leaks in long-running apps. |
 | **Detect Title Change** | Yes/No | No | When enabled, the watchdog records the app's initial window title and treats a persistent title change as a suspected error dialog (e.g., a WinForms unhandled exception dialog whose title is just the app name). Requires 2 consecutive detections to confirm. Leave disabled for apps that legitimately change their window title (e.g., showing a document name). |
 
+> **Note**: Health monitoring controls (Not Responding, Memory Limit, Detect Title Change) are only enabled when **Keep Open** is checked. When Keep Open is active, health monitoring is automatically enforced — unhealthy processes will be killed and restarted. When Keep Open is off, IMEE will only log and notify about detected issues.
+
 #### Statistics
 | Field | Description |
 |-------|-------------|
 | **Crash Count** | Total number of detected crashes (cumulative). Click **Reset** to clear. |
 | **Retry Count** | Current consecutive restart attempt count vs. max retries (e.g., "1 / 3"). Click **Reset** to clear and remove "Failed" state. |
-| **Last Exit Code** | The exit code from the last process termination. `N/A` if no exit has been recorded. A non-zero exit code (shown in red with "abnormal") typically indicates the process crashed or terminated with an error. |
+| **Last Exit Code** | The exit code from the last process termination. `N/A` if no exit has been recorded. A non-zero exit code (shown in red with "abnormal") typically indicates the process crashed or terminated with an error. Click **Copy** to copy the exit code to the clipboard. |
 
 4. Click **OK** to save changes, or **Cancel** to discard.
 
@@ -233,6 +246,8 @@ You can configure this per-application via **Edit** to **Stable Run Period (seco
 ## Health Monitoring
 
 IMEE includes several health monitoring mechanisms that detect unhealthy applications beyond simple crash detection. All health monitoring features apply only to **Keep Open** applications and trigger the same auto-restart flow as a regular crash.
+
+When Keep Open is **disabled**, IMEE will still detect health issues but will only **log and notify** the user without taking automatic corrective action. The application status will show **Warning** (orange) to indicate a detected issue.
 
 ### Not Responding Detection
 
@@ -348,6 +363,8 @@ The following table shows which types of application failures IMEE can detect an
 | Status | Color | What It Means | What to Do |
 |--------|-------|---------------|------------|
 | **Stopped** | Black | Application is not running | Click Start to launch |
+| **Stopped (Crashed)** | Orange | Application crashed unexpectedly (non-KeepOpen apps) | Investigate the crash, then click Start to relaunch |
+| **Stopped (Issue Detected)** | Orange | Health issue detected but automatic action is disabled | Check logs for details, then take manual action |
 | **Starting...** | Orange | Application was just launched, waiting for its window to appear | Wait — will change to Running |
 | **Running** | Green | Application is running normally | No action needed |
 | **Running (Other Group)** | Dark Cyan | Application is running, but it was started from a different group | Stop it in the other group first if you want to start it here |
@@ -355,6 +372,7 @@ The following table shows which types of application failures IMEE can detect an
 | **Restarting (Ns)** | Orange | Application crashed, auto-restart countdown in progress | Wait for countdown to finish |
 | **Starting...** | Orange | Restart countdown finished, application is being relaunched | Wait — will change to Running |
 | **Waiting (Ns)** | Orange | Sequential Start All — this app is next in line | Wait for countdown to finish |
+| **Warning** | Orange | Health issue detected but automatic corrective action is disabled | Check logs for details; acknowledge the notification |
 | **Failed** | Red | Auto-restart gave up after max retries | Check the app, then Start manually or reset retries |
 
 ### Group Status Indicators
@@ -376,13 +394,14 @@ Each group in the left panel displays a colored circle indicator that summarizes
 
 ## Settings
 
-The Settings dialog lets you configure the station name and tune performance and logging parameters. Click the **Settings** button in the header to open it.
+The Settings dialog lets you configure the station name, startup behavior, and tune performance and logging parameters. Click the **Settings** button in the header to open it.
 
 ### General
 
 | Setting | Description | Default |
 |---------|-------------|---------|
 | **Station Name** | Identifies the workstation in the title bar | (empty) |
+| **Run on Windows Startup** | When enabled, IMEE automatically launches when Windows starts so managed applications are monitored at all times. Uses the current user's registry Run key — no administrator rights required. | Off |
 
 ### Performance
 
@@ -423,6 +442,7 @@ IMEE logs all operations to daily log files.
 - Crash detections and auto-restart attempts
 - Health monitoring events (not responding, error dialogs, memory limit breaches, CPU-hung detection, title changes)
 - Group and application add/edit/delete operations
+- Individual setting changes (both app-level and global settings)
 - Errors and warnings
 - Startup terminations
 
@@ -471,13 +491,40 @@ IMEE enforces that managed applications can **only** be launched through its int
 
 ---
 
+## System Tray
+
+IMEE can minimize to the system tray to continue monitoring applications in the background without occupying taskbar space.
+
+### Minimizing to Tray
+When you close the IMEE window (click the X button), a prompt appears with three options:
+- **Yes** — Minimize to tray: IMEE hides from the taskbar and continues running in the background. A tray icon appears with a balloon notification.
+- **No** — Exit: IMEE closes completely. Managed applications continue running but are no longer monitored.
+- **Cancel** — Cancel: The close is cancelled and the window remains open.
+
+### Restoring from Tray
+- **Double-click** the tray icon to restore the main window
+- **Right-click** the tray icon for a context menu with **Restore** and **Exit** options
+
+### Tray Context Menu
+
+| Option | Description |
+|--------|-------------|
+| **Restore** | Restores the main window from the tray |
+| **Exit** | Prompts for confirmation, then exits IMEE completely |
+
+> **Note**: While minimized to tray, IMEE continues all monitoring, watchdog checks, and auto-restart operations normally.
+
+---
+
 ## Frequently Asked Questions
 
 ### Can I manage applications that require Administrator privileges?
 No. IMEE runs at standard user level and cannot manage elevated processes. If your managed application requires elevation, IMEE won't be able to start or stop it.
 
 ### What happens if I close IMEE while applications are running?
-The managed applications **continue running** — IMEE does not stop them on exit. However, the watchdog will no longer monitor them. When you restart IMEE, any still-running managed apps will be terminated.
+If you choose **Exit** (not minimize to tray), the managed applications **continue running** — IMEE does not stop them on exit. However, the watchdog will no longer monitor them. When you restart IMEE, any still-running managed apps will be terminated.
+
+If you choose **Minimize to tray**, IMEE continues running in the background and all monitoring remains active.
 
 ### Can I manage the same application in multiple groups?
 Yes, you can add the same executable to different groups. Each entry is tracked independently. However, you cannot run the same application simultaneously from multiple groups. If you try to start an application that is already running in another group, IMEE will show a warning telling you which group it's running in. You must stop it in the other group first before starting it in a new one. The status column will show **Running (Other Group)** in dark cyan for entries whose executable is running from a different group.
@@ -486,7 +533,15 @@ Yes, you can add the same executable to different groups. Each entry is tracked 
 No. IMEE only starts and stops processes. It never modifies any application files.
 
 ### What if my application doesn't have a visible window?
-IMEE detects running applications by checking for a main window handle. Applications that run purely in the background (no window at all) may not be detected as "Running" and could be falsely treated as crashed.
+IMEE detects running applications by checking for a main window handle. Applications that run purely in the background (no window at all) may not be detected as "Running" and could be falsely treated as crashed. However, applications minimized to the system tray (which have hidden top-level windows) are correctly detected as running.
+
+### What if my application needs a launcher script to start?
+Use the **Launcher Script / Exe** feature in the Edit dialog:
+1. Click **Edit** on the application
+2. In the **Launcher Script / Exe** section, click **Browse** to select a launcher file (`.exe`, `.bat`, `.cmd`, `.vbs`, or `.ps1`)
+3. Click OK
+
+IMEE will execute the launcher to start the application but will still monitor the **primary executable** (from Application Path) for running status, health checks, and crash detection.
 
 ### What if my application shows an error dialog (unhandled exception)?
 IMEE has multiple layers of detection for error dialogs:
@@ -494,13 +549,14 @@ IMEE has multiple layers of detection for error dialogs:
 2. **Not Responding Detection** — If the error dialog blocks the UI thread and the window becomes unresponsive, it is detected via `Process.Responding` and force-killed after the configured timeout.
 3. **Title Change Detection** — If the error dialog's title doesn't match any known pattern (e.g., a WinForms `ThreadExceptionDialog` that uses the app's product name as its title), enable **Detect Title Change** in the Edit dialog. The watchdog will detect the title change and force-kill the process.
 
-All three mechanisms trigger auto-restart for Keep Open applications.
+All three mechanisms trigger auto-restart for Keep Open applications. For non-Keep Open apps, IMEE will log and notify about the issue without taking automatic action.
 
 ### How do I set a memory limit for my application?
 1. Click **Edit** on the application
-2. Set **Memory Limit (MB)** to your desired maximum (e.g., 500 for 500 MB)
-3. Click OK
-4. If the application's working set exceeds this limit, it will be force-killed and auto-restarted (if Keep Open is enabled)
+2. Enable **Keep Open** (required for health monitoring controls)
+3. Set **Memory Limit (MB)** to your desired maximum (e.g., 500 for 500 MB)
+4. Click OK
+5. If the application's working set exceeds this limit, it will be force-killed and auto-restarted
 
 > **Tip**: Monitor your app's normal memory usage in Task Manager first, then set the limit to 2–3× the expected peak.
 
@@ -513,11 +569,14 @@ The Last Exit Code shows the exit code from the most recent process termination.
 ### Can I change the watchdog polling interval?
 Yes. Click **Settings** and adjust the **Status Poll Interval** value. The default is 10000ms (10 seconds). Lower values make detection faster but use more CPU.
 
+### Can I make IMEE start automatically with Windows?
+Yes. Click **Settings** and check **Run on Windows Startup**. This adds IMEE to the current user's Windows startup registry — no administrator rights required.
+
 ### Where is my data stored?
 All data files are in the same folder as `IntelligentMutexExecutionEnvironment.exe`:
 - `applications.json` — your managed applications
 - `groups.json` — your groups
-- `settings.json` — station name, performance, and logging configuration
+- `settings.json` — station name, startup, performance, and logging configuration
 - `logs/` — daily log files
 
 ### How do I reset everything?
@@ -529,9 +588,10 @@ Delete `applications.json`, `groups.json`, and `settings.json`, then restart IME
 
 ### Application Won't Start
 1. Check that the file path is correct — click **Edit** and verify the Directory
-2. Make sure the `.exe` file exists at that path
-3. Check the log file for error messages
-4. Verify you have permission to run the application
+2. If using a launcher, verify the launcher path also exists
+3. Make sure the `.exe` file exists at that path
+4. Check the log file for error messages
+5. Verify you have permission to run the application
 
 ### Application Won't Stop
 1. Check the log file for "Access denied" errors

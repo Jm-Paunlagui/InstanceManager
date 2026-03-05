@@ -754,31 +754,35 @@ namespace IntelligentMutexExecutionEnvironment
                                 _processManager.TryTrackActualAppProcess(app);
                             }
                             _startGracePeriod.Remove(app.Index);
-                        }
-                        else
-                        {
+
+                            // Update ListView to reflect the app is now running (or stopped if it exited during grace)
                             if (item != null)
                             {
                                 if (isRunning)
                                 {
-                                    // Grace period still active but window appeared — log the app PID
-                                    _startGracePeriod.Remove(app.Index);
-
-                                    if (snapshot.FirstWindowedPid > 0)
-                                    {
-                                        SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
-                                            $"'{app.AppName}' is now running (App PID: {snapshot.FirstWindowedPid})");
-
-                                        // Ensure we have a tracked Process handle for the actual app
-                                        _processManager.TryTrackActualAppProcess(app);
-                                    }
-
                                     item.SubItems[3].Text = "Running";
                                     item.ForeColor = Color.Green;
                                 }
                                 else
                                 {
+                                    item.SubItems[3].Text = "Stopped";
+                                    item.ForeColor = Color.Black;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if (item != null)
+                            {
+                                // Grace period active — show as starting if running, else stopping
+                                if (isRunning)
+                                {
                                     item.SubItems[3].Text = "Starting...";
+                                    item.ForeColor = Color.DarkOrange;
+                                }
+                                else
+                                {
+                                    item.SubItems[3].Text = "Stopping...";
                                     item.ForeColor = Color.DarkOrange;
                                 }
                             }
@@ -1344,6 +1348,19 @@ namespace IntelligentMutexExecutionEnvironment
                             }
                         }
                     }
+                    // Catch-all: ensure running, authorized apps display "Running" (green).
+                    // This handles edge cases where the status text was left in a transitional
+                    // state (e.g., "Starting..." after grace period expiry, or "Warning" after
+                    // a health issue clears) and no earlier branch updated it.
+                    if (isRunning && item != null)
+                    {
+                        string currentStatus = item.SubItems[3].Text;
+                        if (currentStatus != "Running")
+                        {
+                            item.SubItems[3].Text = "Running";
+                            item.ForeColor = Color.Green;
+                        }
+                    }
                 }
              
             }
@@ -1434,14 +1451,17 @@ namespace IntelligentMutexExecutionEnvironment
                         var tagApp = item.Tag as ManagedApplication;
                         if (tagApp != null)
                         {
-                            tagApp.LastStart = now;
+                            tagApp.LastStart = app.LastStart;
                             tagApp.IsRunning = true;
                         }
                     }
 
+                    // Refresh group indicator immediately
+                    UpdateGroupIndicators(_storageService.GetAllApplicationsReadOnly());
                     SimpleLogger.Info("AttemptAutoRestart @ Form1.cs",
                         $"Auto-restarted '{app.AppName}' successfully (Retry {app.RetryCount}/{app.MaxRetries}), " +
                         $"retry count will reset after {stablePeriod}s of stable running");
+                    return;
                 }
                 else
                 {
@@ -2231,6 +2251,13 @@ namespace IntelligentMutexExecutionEnvironment
                     item.SubItems[6].Text = app.RetryCount.ToString();
                     item.SubItems[7].Text = app.GetLastStartDisplay();
                     item.ForeColor = Color.DarkOrange;
+
+                    var tagApp = item.Tag as ManagedApplication;
+                    if (tagApp != null)
+                    {
+                        tagApp.LastStart = app.LastStart;
+                        tagApp.IsRunning = true;
+                    }
                 }
 
                 // Refresh group indicator immediately
