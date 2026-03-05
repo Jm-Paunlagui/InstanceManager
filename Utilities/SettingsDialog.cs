@@ -52,7 +52,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
         private void InitializeControls(SettingsService settings)
         {
             this.Text = "Settings";
-            this.Size = new Size(520, 480);
+            this.Size = new Size(520, 505);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
@@ -105,7 +105,19 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
                 Font = _normalFont
             };
             this.Controls.Add(_runOnStartupCheckBox);
-            y += rowHeight + 12;
+            y += rowHeight - 5;
+
+            // Description label for Run on Startup
+            var startupDescLabel = new Label
+            {
+                Text = "Automatically launch IMEE when Windows starts so managed applications are monitored at all times.",
+                Location = new Point(labelX + 17, y),
+                Size = new Size(460, 28),
+                ForeColor = Color.Gray,
+                Font = new Font(_normalFont.FontFamily, 7.5F)
+            };
+            this.Controls.Add(startupDescLabel);
+            y += 30 + 12;
 
             // ===== Performance Settings =====
             var perfLabel = new Label
