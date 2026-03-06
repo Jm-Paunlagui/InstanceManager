@@ -1930,7 +1930,7 @@ namespace IntelligentMutexExecutionEnvironment
                     return "Required privilege not held (missing admin or SE_* privilege)";
                 case 0xC000007C: // STATUS_NO_TOKEN
                     return "No impersonation token (access token missing or invalid)";
-                case 0xC0000022: // STATUS_ACCESS_DENIED (duplicate from above — keep for clarity)
+                case 0xC0000022: // STATUS_ACCESS_DENIED
                     return "Access denied (may require elevation or admin rights)";
                 case 0x80070005: // E_ACCESSDENIED / ERROR_ACCESS_DENIED
                     return "Access denied (COM/Win32 — may require administrator rights)";
@@ -1940,7 +1940,7 @@ namespace IntelligentMutexExecutionEnvironment
                     return "Operation only valid when connected (session or token not elevated)";
 
                 // --- Network drive / UNC path failures ---
-                               case 0x80070035: // ERROR_BAD_NETPATH
+                case 0x80070035: // ERROR_BAD_NETPATH
                     return "Network path not found (disconnected or unavailable network drive)";
                 case 0x80070037: // ERROR_DEV_NOT_EXIST
                     return "Network device no longer exists (drive was disconnected)";
@@ -2094,14 +2094,9 @@ namespace IntelligentMutexExecutionEnvironment
                 case 0x8013157B: return ".NET PlatformNotSupportedException";
                 case 0x8013157D: return ".NET TimeoutException";
                 case 0x80131620: return ".NET AppDomainUnloadedException (Framework only)";
-
-                // .NET network-specific exceptions (surfaced as HRESULT via COMException or SocketException)
-                case 0x80131501 | 0x2742: // disambiguated in practice by message; listed for reference
-                    return ".NET SocketException — network down";
-                case 0x80004005 | 0x2EE7:
-                    return ".NET WebException — name resolution failure";
-                case 0x80131620 + 1: // COR_E_REMOTING
-                    return ".NET RemotingException (Framework only — cross-AppDomain channel failure)";
+                case 0x80131621: return ".NET RemotingException (Framework only — cross-AppDomain channel failure)"; // COR_E_REMOTING; was: 0x80131620 + 1
+                case 0x80006EE7: return ".NET WebException — name resolution failure";                               // was: 0x80004005 | 0x2EE7
+                case 0x80133743: return ".NET SocketException — network down";                                       // was: 0x80131501 | 0x2742
 
                 // .NET runtime hosting / startup failures
                 case 0x80008081: return ".NET runtime failed to load (shim error)";
