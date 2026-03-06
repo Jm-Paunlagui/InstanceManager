@@ -238,7 +238,8 @@ namespace IntelligentMutexExecutionEnvironment.Services
         /// Only non-null parameters are applied.
         /// </summary>
         public void UpdateApplicationFields(int appIndex, bool? isRunning = null, DateTime? lastStart = null,
-            DateTime? lastStop = null, int? crashCount = null, int? retryCount = null, int? lastExitCode = null)
+            DateTime? lastStop = null, int? crashCount = null, int? retryCount = null, int? lastExitCode = null,
+            bool clearLastExitCode = false)
         {
             ManagedApplication existingApp = null;
             for (int i = 0; i < _applications.Count; i++)
@@ -277,7 +278,12 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 if (existingApp.RetryCount != retryCount.Value) persistentChanged = true;
                 existingApp.RetryCount = retryCount.Value;
             }
-            if (lastExitCode.HasValue)
+            if (clearLastExitCode)
+            {
+                if (existingApp.LastExitCode.HasValue) persistentChanged = true;
+                existingApp.LastExitCode = null;
+            }
+            else if (lastExitCode.HasValue)
             {
                 if (existingApp.LastExitCode != lastExitCode.Value) persistentChanged = true;
                 existingApp.LastExitCode = lastExitCode.Value;

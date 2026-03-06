@@ -238,7 +238,8 @@ You can configure this per-application via **Edit** to **Stable Run Period (seco
 
 ### Important Notes
 - Manually stopping an app via the **Stop** button does **not** trigger a restart — even with Keep Open enabled
-- The retry count resets to 0 whenever the app successfully starts (manual or auto)
+- The retry count resets to 0 immediately when the app is manually started via the **Start** button
+- After an auto-restart, the retry count resets to 0 only after the app runs stably for the configured **Stable Run Period** (default: 30 seconds)
 - The crash count is cumulative and never resets automatically (reset it via Edit)
 
 ---

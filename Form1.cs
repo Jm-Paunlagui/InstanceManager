@@ -623,13 +623,52 @@ namespace IntelligentMutexExecutionEnvironment
             }
             else if (isRunning)
             {
-                statusText = "Running";
-                statusColor = Color.Green;
+                if (_startGracePeriod.ContainsKey(app.Index))
+                {
+                    statusText = "Starting...";
+                    statusColor = Color.DarkOrange;
+                }
+                else
+                {
+                    statusText = "Running";
+                    statusColor = Color.Green;
+                }
+            }
+            else if (_failedApps.Contains(app.Index))
+            {
+                statusText = "Failed";
+                statusColor = Color.Red;
+            }
+            else if (_pendingRestart.ContainsKey(app.Index))
+            {
+                int secondsLeft = (int)Math.Ceiling((_pendingRestart[app.Index] - DateTime.Now).TotalSeconds);
+                statusText = secondsLeft > 0 ? $"Restarting ({secondsLeft}s)" : "Starting...";
+                statusColor = Color.DarkOrange;
+            }
+            else if (_pendingStop.Contains(app.Index))
+            {
+                statusText = "Stopping...";
+                statusColor = Color.DarkOrange;
+            }
+            else if (_pendingSequentialStart.Contains(app.Index))
+            {
+                statusText = "Waiting...";
+                statusColor = Color.DarkOrange;
             }
             else
             {
-                statusText = "Stopped";
-                statusColor = Color.Black;
+                // Determine stopped sub-status from the app's last known state
+                if (app.CrashCount > 0 && app.LastStop.HasValue
+                    && (!app.LastStart.HasValue || app.LastStop.Value > app.LastStart.Value) && app.LastExitCode.HasValue && app.LastExitCode.Value != 0)
+                {
+                    statusText = "Stopped (Crashed)";
+                    statusColor = Color.DarkOrange;
+                }
+                else
+                {
+                    statusText = "Stopped";
+                    statusColor = Color.Black;
+                }
             }
 
             ListViewItem item = new ListViewItem(app.Index.ToString());
@@ -767,7 +806,7 @@ namespace IntelligentMutexExecutionEnvironment
                         }
                         else if (DateTime.Now >= _startGracePeriod[app.Index])
                         {
-                            // Grace period expired — log PID if the app is now running
+                            // Grace period expired — check if the app is now running
                             if (isRunning && snapshot.FirstWindowedPid > 0)
                             {
                                 SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
@@ -793,6 +832,38 @@ namespace IntelligentMutexExecutionEnvironment
                                     item.SubItems[3].Text = "Stopped";
                                     item.ForeColor = Color.Black;
                                 }
+                            }
+
+                            // IMPORTANT: If the app is NOT running when the grace period expires,
+                            // do NOT fall through to the crash detection branch (!isRunning && wasRunning).
+                            // For launcher-based apps, the actual application process may still be
+                            // starting (the launcher exits quickly but the app takes time to show its window).
+                            // Falling through would falsely remove the app from _authorizedApps and
+                            // trigger unauthorized launch detection on the next tick when the app finally appears.
+                            if (!isRunning)
+                            {
+                                // For apps with a launcher, extend the grace period by one more poll cycle
+                                // to give the launched application more time to show its window.
+                                if (!string.IsNullOrEmpty(app.LauncherPath))
+                                {
+                                    int extensionSeconds = Math.Max(_settingsService.StatusPollIntervalMs / 1000, 5);
+                                    _startGracePeriod[app.Index] = DateTime.Now.AddSeconds(extensionSeconds);
+
+                                    SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
+                                        $"'{app.AppName}' not yet running after grace period (launcher-based app) — extending grace period by {extensionSeconds}s");
+
+                                    if (item != null)
+                                    {
+                                        item.SubItems[3].Text = "Starting...";
+                                        item.ForeColor = Color.DarkOrange;
+                                    }
+                                }
+                                else
+                                {
+                                    SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                        $"'{app.AppName}' not running after grace period expired — will re-check on next tick");
+                                }
+                                continue;
                             }
                         }
                         else
@@ -822,16 +893,18 @@ namespace IntelligentMutexExecutionEnvironment
                                 SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
                                     $"'{app.AppName}' has been running stably — resetting retry count from {app.RetryCount} to 0");
 
-                                _storageService.UpdateApplicationFields(app.Index, retryCount: 0);
+                                _storageService.UpdateApplicationFields(app.Index, retryCount: 0, clearLastExitCode: true);
 
                                 if (item != null)
                                 {
                                     item.SubItems[6].Text = "0";
+                                    item.SubItems[9].Text = "—";
 
                                     var tagApp = item.Tag as ManagedApplication;
                                     if (tagApp != null)
                                     {
                                         tagApp.RetryCount = 0;
+                                        tagApp.LastExitCode = null;
                                     }
                                 }
                             }
@@ -1519,7 +1592,6 @@ namespace IntelligentMutexExecutionEnvironment
                     if (item != null)
                     {
                         item.SubItems[3].Text = "Starting...";
-                        item.SubItems[6].Text = app.RetryCount.ToString();
                         item.SubItems[7].Text = app.GetLastStartDisplay();
                         item.ForeColor = Color.DarkOrange;
 
@@ -1868,7 +1940,7 @@ namespace IntelligentMutexExecutionEnvironment
                     return "Operation only valid when connected (session or token not elevated)";
 
                 // --- Network drive / UNC path failures ---
-                case 0x80070035: // ERROR_BAD_NETPATH
+                               case 0x80070035: // ERROR_BAD_NETPATH
                     return "Network path not found (disconnected or unavailable network drive)";
                 case 0x80070037: // ERROR_DEV_NOT_EXIST
                     return "Network device no longer exists (drive was disconnected)";
@@ -2362,12 +2434,12 @@ namespace IntelligentMutexExecutionEnvironment
 
                 DateTime now = DateTime.Now;
                 // Reset retryCount on manual start so the user gets a fresh start
-                _storageService.UpdateApplicationFields(app.Index, isRunning: true, lastStart: now, retryCount: 0);
+                // Also clear LastExitCode so the column shows "—" until the next exit
+                _storageService.UpdateApplicationFields(app.Index, isRunning: true, lastStart: now, retryCount: 0, clearLastExitCode: true);
 
                 if (item != null)
                 {
                     item.SubItems[3].Text = "Starting...";
-                    item.SubItems[6].Text = "0";
                     item.SubItems[7].Text = app.GetLastStartDisplay();
                     item.ForeColor = Color.DarkOrange;
 
@@ -2376,7 +2448,6 @@ namespace IntelligentMutexExecutionEnvironment
                     {
                         tagApp.LastStart = app.LastStart;
                         tagApp.IsRunning = true;
-                        tagApp.RetryCount = 0;
                     }
                 }
 
