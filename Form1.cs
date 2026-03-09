@@ -1851,336 +1851,336 @@ namespace IntelligentMutexExecutionEnvironment
             {
                 // Normal exits
                 case 0x00000000:
-                    return "Normal exit (0)";
+                    return "Normal exit";
                 case 0x00000001:
-                    return "General error (exit code 1)";
+                    return "General error";
                 case 0x00000002:
-                    return "File not found (exit code 2)";
+                    return "File not found";
                 case 0x00000003:
-                    return "Path not found (exit code 3)";
+                    return "Path not found";
 
                 // FIX: 0xC000000B is STATUS_INVALID_CID (invalid process/thread client ID),
                 //      NOT a timeout. Wait-timeout is STATUS_TIMEOUT = 0x00000102.
                 case 0x00000102:
-                    return $"Wait operation timed out (STATUS_TIMEOUT) — common in frozen UI threads (0x{code:X8})";
+                    return $"Wait operation timed out (STATUS_TIMEOUT) — common in frozen UI threads";
                 case 0xC000000B:
-                    return $"Invalid client ID — process or thread ID not found in system (STATUS_INVALID_CID) (0x{code:X8})";
+                    return $"Invalid client ID — process or thread ID not found in system (STATUS_INVALID_CID)";
                 case 0x800705B4:
-                    return $"Generic timeout (0x{code:X8})";
+                    return $"Generic timeout";
                 case 0x000000EF:
-                    return $"Critical system process stopped (0x{code:X8})";
+                    return $"Critical system process stopped";
                 // FIX: 0x0000007E is BSOD SYSTEM_THREAD_EXCEPTION_NOT_HANDLED,
                 //      an unhandled exception in a system thread — not simply "frozen"
                 case 0x0000007E:
-                    return $"BSOD: unhandled exception in a system thread (SYSTEM_THREAD_EXCEPTION_NOT_HANDLED) (0x{code:X8})";
+                    return $"BSOD: unhandled exception in a system thread (SYSTEM_THREAD_EXCEPTION_NOT_HANDLED)";
                 // FIX: 0x00000139 is BSOD KERNEL_SECURITY_CHECK_FAILURE —
                 //      a stack cookie, CFG, or other security integrity check failed
                 case 0x00000139:
-                    return $"BSOD: kernel security check failure (stack cookie, CFG, or integrity violation) (0x{code:X8})";
+                    return $"BSOD: kernel security check failure (stack cookie, CFG, or integrity violation)";
                 case 0x00000101:
-                    return $"CPU core stopped responding — classic full system freeze (0x{code:X8})";
+                    return $"CPU core stopped responding — classic full system freeze";
                 case 0x00000133:
-                    return $"Deferred Procedure Call took too long — often causes UI hangs (0x{code:X8})";
+                    return $"Deferred Procedure Call took too long — often causes UI hangs";
 
                 // NTSTATUS informational / warnings (0x8xxxxxxx)
                 case 0x80000001: // -2147483647
-                    return $"Guard page violation (0x{code:X8})";
+                    return $"Guard page violation";
                 case 0x80000002: // -2147483646
-                    return $"Datatype misalignment (0x{code:X8})";
+                    return $"Datatype misalignment";
                 case 0x80000003: // -2147483645
-                    return $"Breakpoint hit (0x{code:X8})";
+                    return $"Breakpoint hit";
                 case 0x80000004: // -2147483644
-                    return $"Single step (debugger) (0x{code:X8})";
+                    return $"Single step (debugger)";
 
                 // NTSTATUS error codes (0xCxxxxxxx)
                 case 0xC0000005: // -1073741819
-                    return $"Access violation (0x{code:X8})";
+                    return $"Access violation";
                 case 0xC0000006: // -1073741818
-                    return $"In-page error (page fault) (0x{code:X8})";
+                    return $"In-page error (page fault)";
                 case 0xC000000D: // -1073741811
-                    return $"Invalid parameter (0x{code:X8})";
+                    return $"Invalid parameter";
                 case 0xC0000017: // -1073741801
-                    return $"Out of memory (no memory) (0x{code:X8})";
+                    return $"Out of memory (no memory)";
                 case 0xC000001D: // -1073741795
-                    return $"Illegal instruction (0x{code:X8})";
+                    return $"Illegal instruction";
                 case 0xC0000025: // -1073741787
-                    return $"Non-continuable exception (0x{code:X8})";
+                    return $"Non-continuable exception";
                 case 0xC000007B: // -1073741701
-                    return $"Invalid image format (wrong architecture or corrupt executable) (0x{code:X8})";
+                    return $"Invalid image format (wrong architecture or corrupt executable)";
                 case 0xC000007F: // -1073741697
-                    return $"Disk full (0x{code:X8})";
+                    return $"Disk full";
                 case 0xC000008C: // -1073741684
-                    return $"Array bounds exceeded (0x{code:X8})";
+                    return $"Array bounds exceeded";
                 case 0xC000008D: // -1073741683
-                    return $"Floating point denormal operand (0x{code:X8})";
+                    return $"Floating point denormal operand";
                 case 0xC000008E: // -1073741682
-                    return $"Floating point divide by zero (0x{code:X8})";
+                    return $"Floating point divide by zero";
                 case 0xC000008F: // -1073741681
-                    return $"Floating point inexact result (0x{code:X8})";
+                    return $"Floating point inexact result";
                 case 0xC0000090: // -1073741680
-                    return $"Floating point invalid operation (0x{code:X8})";
+                    return $"Floating point invalid operation";
                 case 0xC0000091: // -1073741679
-                    return $"Floating point overflow (0x{code:X8})";
+                    return $"Floating point overflow";
                 case 0xC0000092: // -1073741678
-                    return $"Floating point stack check (0x{code:X8})";
+                    return $"Floating point stack check";
                 case 0xC0000093: // -1073741677
-                    return $"Floating point underflow (0x{code:X8})";
+                    return $"Floating point underflow";
                 case 0xC0000094: // -1073741676
-                    return $"Integer divide by zero (0x{code:X8})";
+                    return $"Integer divide by zero";
                 case 0xC0000095: // -1073741675
-                    return $"Integer overflow (0x{code:X8})";
+                    return $"Integer overflow";
                 case 0xC0000096: // -1073741674
-                    return $"Privileged instruction (0x{code:X8})";
+                    return $"Privileged instruction";
                 case 0xC000009A: // -1073741670
-                    return $"Insufficient system resources (0x{code:X8})";
+                    return $"Insufficient system resources";
                 case 0xC0000120: // -1073741536
-                    return $"Operation cancelled (thread abort / CancellationToken) (0x{code:X8})";
+                    return $"Operation cancelled (thread abort / CancellationToken)";
                 case 0xC00000FD: // -1073741571
-                    return $"Stack overflow (0x{code:X8})";
+                    return $"Stack overflow";
                 case 0xC0000102: // -1073741054
-                    return $"File corrupt / disk error (0x{code:X8})";
+                    return $"File corrupt / disk error";
                 case 0xC0000135: // -1073741515
-                    return $"DLL not found (0x{code:X8})";
+                    return $"DLL not found";
                 case 0xC0000138: // -1073741512
-                    return $"DLL ordinal not found (0x{code:X8})";
+                    return $"DLL ordinal not found";
                 case 0xC0000139: // -1073741511
-                    return $"DLL entry point not found (0x{code:X8})";
+                    return $"DLL entry point not found";
                 case 0xC000013A: // -1073741510
-                    return $"Process terminated by Ctrl+C (0x{code:X8})";
+                    return $"Process terminated by Ctrl+C";
                 case 0xC0000142: // -1073741502
-                    return $"DLL initialization failed (0x{code:X8})";
+                    return $"DLL initialization failed";
                 case 0xC0000185: // -1073741435
-                    return $"I/O device error (0x{code:X8})";
+                    return $"I/O device error";
                 case 0xC0000194: // -1073741420
-                    return $"Possible deadlock (wait timeout) (0x{code:X8})";
+                    return $"Possible deadlock (wait timeout)";
                 case 0xC0000374: // -1073740940
-                    return $"Heap corruption (0x{code:X8})";
+                    return $"Heap corruption";
                 case 0xC0000409: // -1073740791
-                    return $"Stack buffer overrun (/GS security cookie) (0x{code:X8})";
+                    return $"Stack buffer overrun (/GS security cookie)";
                 case 0xC0000417: // -1073740777
-                    return $"Invalid C runtime parameter (0x{code:X8})";
+                    return $"Invalid C runtime parameter";
                 case 0xC000041B: // -1073740773
-                    return $"Fatal user callback exception (0x{code:X8})";
+                    return $"Fatal user callback exception";
                 case 0xC000041D: // -1073740771
-                    return $"Fatal app exit / terminate() called (0x{code:X8})";
+                    return $"Fatal app exit / terminate() called";
                 case 0xC0000420: // -1073740768
-                    return $"Assertion failure (0x{code:X8})";
+                    return $"Assertion failure";
                 // REMOVED: 0xC0000602 was incorrectly labelled "Unknown software exception (WER)".
                 //          On Windows 10+, 0xC0000602 = STATUS_CLOUD_FILE_NOT_SUPPORTED (OneDrive placeholder).
                 //          WER unknown software exceptions belong in the 0xE0xxxxxx range (e.g. 0xE06D7363).
 
                 // --- Elevation / UAC / privilege failures ---
                 case 0x800702E4: // ERROR_ELEVATION_REQUIRED
-                    return $"Elevation required — application must be run as administrator (0x{code:X8})";
+                    return $"Elevation required — application must be run as administrator";
                 case 0xC0000061: // STATUS_PRIVILEGE_NOT_HELD
-                    return $"Required privilege not held (missing admin or SE_* privilege) (0x{code:X8})";
+                    return $"Required privilege not held (missing admin or SE_* privilege)";
                 case 0xC000007C: // STATUS_NO_TOKEN
-                    return $"No impersonation token (access token missing or invalid) (0x{code:X8})";
+                    return $"No impersonation token (access token missing or invalid)";
                 case 0xC0000022: // STATUS_ACCESS_DENIED
-                    return $"Access denied (may require elevation or admin rights) (0x{code:X8})";
+                    return $"Access denied (may require elevation or admin rights)";
                 case 0x80070005: // E_ACCESSDENIED / ERROR_ACCESS_DENIED
-                    return $"Access denied (COM/Win32 — may require administrator rights) (0x{code:X8})";
+                    return $"Access denied (COM/Win32 — may require administrator rights)";
                 case 0x80070522: // ERROR_PRIVILEGE_NOT_HELD
-                    return $"A required privilege is not held by the client (missing admin right) (0x{code:X8})";
+                    return $"A required privilege is not held by the client (missing admin right)";
                 // FIX: 0x80070542 = Win32 error 1346 = ERROR_BAD_IMPERSONATION_LEVEL,
                 //      not ERROR_ONLY_IF_CONNECTED (which is 1251 = 0x800704E3)
                 case 0x80070542: // ERROR_BAD_IMPERSONATION_LEVEL
-                    return $"Bad impersonation level — required impersonation level not provided or invalid (0x{code:X8})";
+                    return $"Bad impersonation level — required impersonation level not provided or invalid";
 
                 // --- Network drive / UNC path failures ---
                 case 0x80070035: // ERROR_BAD_NETPATH
-                    return $"Network path not found (disconnected or unavailable network drive) (0x{code:X8})";
+                    return $"Network path not found (disconnected or unavailable network drive)";
                 case 0x80070037: // ERROR_DEV_NOT_EXIST
-                    return $"Network device no longer exists (drive was disconnected) (0x{code:X8})";
+                    return $"Network device no longer exists (drive was disconnected)";
                 case 0x80070040: // ERROR_NETNAME_DELETED
-                    return $"Network name deleted (share removed or connection dropped) (0x{code:X8})";
+                    return $"Network name deleted (share removed or connection dropped)";
                 case 0x80070041: // ERROR_NETWORK_ACCESS_DENIED
-                    return $"Network access denied (credentials invalid or share permissions) (0x{code:X8})";
+                    return $"Network access denied (credentials invalid or share permissions)";
                 case 0x80070043: // ERROR_BAD_NET_NAME
-                    return $"Network name cannot be found (bad UNC path or share name) (0x{code:X8})";
+                    return $"Network name cannot be found (bad UNC path or share name)";
                 case 0x80070044: // ERROR_TOO_MANY_NAMES
-                    return $"Too many network names registered (0x{code:X8})";
+                    return $"Too many network names registered";
                 case 0x80070045: // ERROR_TOO_MANY_SESS
-                    return $"Too many remote sessions — server refused connection (0x{code:X8})";
+                    return $"Too many remote sessions — server refused connection";
                 case 0x80070046: // ERROR_SHARING_PAUSED
-                    return $"Network sharing is paused on the remote server (0x{code:X8})";
+                    return $"Network sharing is paused on the remote server";
                 case 0x8007003B: // ERROR_UNEXP_NET_ERR
-                    return $"Unexpected network error (connection lost mid-operation) (0x{code:X8})";
+                    return $"Unexpected network error (connection lost mid-operation)";
                 case 0x80070571: // ERROR_DISK_CORRUPT
-                    return $"Disk structure is corrupt and unreadable (possibly mapped drive) (0x{code:X8})";
+                    return $"Disk structure is corrupt and unreadable (possibly mapped drive)";
                 case 0x800700DF: // ERROR_NO_NET_OR_BAD_NET
-                    return $"No network available or network configuration error (0x{code:X8})";
+                    return $"No network available or network configuration error";
 
                 // --- General Win32 / application startup failures ---
                 case 0x80070006: // E_HANDLE
-                    return $"Invalid handle (closed, revoked, or never opened) (0x{code:X8})";
+                    return $"Invalid handle (closed, revoked, or never opened)";
                 case 0x8007000B: // ERROR_BAD_FORMAT
-                    return $"Bad executable format (corrupt or incompatible binary) (0x{code:X8})";
+                    return $"Bad executable format (corrupt or incompatible binary)";
                 case 0x8007000E: // E_OUTOFMEMORY
-                    return $"Out of memory (Win32 heap allocation failed) (0x{code:X8})";
+                    return $"Out of memory (Win32 heap allocation failed)";
                 case 0x80070057: // E_INVALIDARG
-                    return $"Invalid argument passed to Win32 API (0x{code:X8})";
+                    return $"Invalid argument passed to Win32 API";
                 case 0x8007007B: // ERROR_INVALID_NAME
-                    return $"Invalid file or path name (bad characters or malformed path) (0x{code:X8})";
+                    return $"Invalid file or path name (bad characters or malformed path)";
                 case 0x8007007E: // ERROR_MOD_NOT_FOUND
-                    return $"Module (DLL) not found — dependency missing (0x{code:X8})";
+                    return $"Module (DLL) not found — dependency missing";
                 case 0x8007007F: // ERROR_PROC_NOT_FOUND
-                    return $"Procedure not found in DLL (version mismatch or wrong DLL) (0x{code:X8})";
+                    return $"Procedure not found in DLL (version mismatch or wrong DLL)";
                 case 0x800700C1: // ERROR_BAD_EXE_FORMAT
-                    return $"Bad EXE format (wrong bitness, e.g. 16-bit app on 64-bit OS) (0x{code:X8})";
+                    return $"Bad EXE format (wrong bitness, e.g. 16-bit app on 64-bit OS)";
                 case 0x800700C2: // ERROR_ITERATED_DATA_EXCEEDS_64k
-                    return $"Iterated data exceeds 64KB (corrupt or ancient 16-bit binary) (0x{code:X8})";
+                    return $"Iterated data exceeds 64KB (corrupt or ancient 16-bit binary)";
                 // FIX: 0x800700BF = Win32 error 191 = ERROR_INVALID_EXE_SIGNATURE (not 0x800701F4)
                 case 0x800700BF: // ERROR_INVALID_EXE_SIGNATURE
-                    return $"Invalid executable signature (not a valid PE image) (0x{code:X8})";
+                    return $"Invalid executable signature (not a valid PE image)";
                 // FIX: 0x800701F4 = Win32 error 500 = ERROR_INVALID_USER_BUFFER,
                 //      not ERROR_INVALID_EXE_SIGNATURE (corrected above)
                 case 0x800701F4: // ERROR_INVALID_USER_BUFFER
-                    return $"Invalid user buffer — supplied buffer is not valid for the requested operation (0x{code:X8})";
+                    return $"Invalid user buffer — supplied buffer is not valid for the requested operation";
                 case 0x80070216: // ERROR_ARITHMETIC_OVERFLOW
-                    return $"Arithmetic overflow in Win32 API call (0x{code:X8})";
+                    return $"Arithmetic overflow in Win32 API call";
                 // FIX: 0x800700E7 = Win32 error 231 = ERROR_PIPE_BUSY (not 0x80070218)
                 case 0x800700E7: // ERROR_PIPE_BUSY
-                    return $"Named pipe busy — server not accepting connections yet (0x{code:X8})";
+                    return $"Named pipe busy — server not accepting connections yet";
                 // FIX: 0x80070218 = Win32 error 536 = ERROR_PIPE_CONNECTED,
                 //      not ERROR_PIPE_BUSY (corrected above)
                 case 0x80070218: // ERROR_PIPE_CONNECTED
-                    return $"Named pipe connected — there is a process on the other end of the pipe (0x{code:X8})";
+                    return $"Named pipe connected — there is a process on the other end of the pipe";
                 case 0x80070490: // ERROR_NOT_FOUND
-                    return $"Element not found (registry key, file, or resource missing) (0x{code:X8})";
+                    return $"Element not found (registry key, file, or resource missing)";
                 case 0x800704C7: // ERROR_CANCELLED
-                    return $"Operation cancelled by user (UAC prompt dismissed) (0x{code:X8})";
+                    return $"Operation cancelled by user (UAC prompt dismissed)";
                 // FIX: 0x800704DC = Win32 error 1244 = ERROR_NOT_AUTHENTICATED (was incorrectly on 0xDD)
                 case 0x800704DC: // ERROR_NOT_AUTHENTICATED
-                    return $"Not authenticated — credentials required (0x{code:X8})";
+                    return $"Not authenticated — credentials required";
                 // FIX: 0x800704DD = Win32 error 1245 = ERROR_NOT_LOGGED_ON (was incorrectly on 0xDD)
                 case 0x800704DD: // ERROR_NOT_LOGGED_ON
-                    return $"User not logged on (service or session issue) (0x{code:X8})";
+                    return $"User not logged on (service or session issue)";
                 // REMOVED: 0x800704DE = Win32 error 1246 = ERROR_CONTINUE (instructs handler to continue),
                 //          not a logon or authentication error. Not meaningful as an exit code.
                 case 0x80040154: // REGDB_E_CLASSNOTREG
-                    return $"COM class not registered (missing COM component or 32/64-bit mismatch) (0x{code:X8})";
+                    return $"COM class not registered (missing COM component or 32/64-bit mismatch)";
                 case 0x80004003: // E_POINTER
-                    return $"Null pointer (COM/interop E_POINTER) (0x{code:X8})";
+                    return $"Null pointer (COM/interop E_POINTER)";
                 case 0x80004005: // E_FAIL
-                    return $"Unspecified COM/interop failure (E_FAIL) (0x{code:X8})";
+                    return $"Unspecified COM/interop failure (E_FAIL)";
 
                 // --- Network / socket / WinSock errors ---
                 case 0x80072742: // WSAENETDOWN
-                    return $"Network is down (local network adapter or stack failure) (0x{code:X8})";
+                    return $"Network is down (local network adapter or stack failure)";
                 case 0x80072743: // WSAENETUNREACH
-                    return $"Network unreachable (no route to host or gateway down) (0x{code:X8})";
+                    return $"Network unreachable (no route to host or gateway down)";
                 case 0x80072744: // WSAENETRESET
-                    return $"Network connection reset (keep-alive failure) (0x{code:X8})";
+                    return $"Network connection reset (keep-alive failure)";
                 case 0x80072745: // WSAECONNABORTED
-                    return $"Connection aborted (software caused connection abort) (0x{code:X8})";
+                    return $"Connection aborted (software caused connection abort)";
                 case 0x80072746: // WSAECONNRESET
-                    return $"Connection reset by remote peer (RST received) (0x{code:X8})";
+                    return $"Connection reset by remote peer (RST received)";
                 case 0x80072747: // WSAENOBUFS
-                    return $"No buffer space available (socket buffer exhausted) (0x{code:X8})";
+                    return $"No buffer space available (socket buffer exhausted)";
                 case 0x8007274C: // WSAETIMEDOUT
-                    return $"Connection timed out (remote host did not respond) (0x{code:X8})";
+                    return $"Connection timed out (remote host did not respond)";
                 case 0x8007274D: // WSAECONNREFUSED
-                    return $"Connection refused (port closed or service not running) (0x{code:X8})";
+                    return $"Connection refused (port closed or service not running)";
                 case 0x80072751: // WSAEHOSTUNREACH
-                    return $"Host unreachable (no route to remote host) (0x{code:X8})";
+                    return $"Host unreachable (no route to remote host)";
                 case 0x80072AF9: // WSAHOST_NOT_FOUND
-                    return $"Host not found (DNS resolution failed) (0x{code:X8})";
+                    return $"Host not found (DNS resolution failed)";
                 case 0x80072AFC: // WSANO_DATA
-                    return $"No DNS data record for requested type (0x{code:X8})";
+                    return $"No DNS data record for requested type";
 
                 // WinHTTP / WinINet network errors
                 case 0x80072EE2: // ERROR_INTERNET_TIMEOUT / ERROR_WINHTTP_TIMEOUT
-                    return $"HTTP/network request timed out (0x{code:X8})";
+                    return $"HTTP/network request timed out";
                 case 0x80072EE7: // ERROR_INTERNET_NAME_NOT_RESOLVED / ERROR_WINHTTP_NAME_NOT_RESOLVED
-                    return $"Hostname could not be resolved (DNS failure or no network) (0x{code:X8})";
+                    return $"Hostname could not be resolved (DNS failure or no network)";
                 case 0x80072EED: // ERROR_INTERNET_CANNOT_CONNECT / ERROR_WINHTTP_CANNOT_CONNECT
-                    return $"Cannot connect to server (refused or unreachable) (0x{code:X8})";
+                    return $"Cannot connect to server (refused or unreachable)";
                 case 0x80072EEE: // ERROR_INTERNET_CONNECTION_ABORTED
-                    return $"Internet connection aborted (dropped mid-request) (0x{code:X8})";
+                    return $"Internet connection aborted (dropped mid-request)";
                 case 0x80072EEF: // ERROR_INTERNET_CONNECTION_RESET
-                    return $"Internet connection reset by server (0x{code:X8})";
+                    return $"Internet connection reset by server";
                 case 0x80072EF3: // ERROR_INTERNET_INCORRECT_HANDLE_STATE
-                    return $"WinINet handle in incorrect state (request lifecycle error) (0x{code:X8})";
+                    return $"WinINet handle in incorrect state (request lifecycle error)";
                 case 0x80072F06: // ERROR_INTERNET_SEC_CERT_CN_INVALID
-                    return $"SSL certificate common name mismatch (wrong domain on certificate) (0x{code:X8})";
+                    return $"SSL certificate common name mismatch (wrong domain on certificate)";
                 case 0x80072F0D: // ERROR_INTERNET_INVALID_CA
-                    return $"SSL certificate from untrusted authority (self-signed or expired CA) (0x{code:X8})";
+                    return $"SSL certificate from untrusted authority (self-signed or expired CA)";
                 case 0x80072F8F: // ERROR_INTERNET_DECRYPTION_FAILED
-                    return $"TLS/SSL decryption failed (protocol mismatch or cipher unsupported) (0x{code:X8})";
+                    return $"TLS/SSL decryption failed (protocol mismatch or cipher unsupported)";
 
                 // .NET / CLR exceptions
                 case 0xE0434352: // CLR exception marker
-                    return $".NET unhandled exception (CLR) (0x{code:X8})";
+                    return $".NET unhandled exception (CLR)";
                 case 0xE0455843: // Fatal CLR error
-                    return $".NET fatal execution engine error (EEException) (0x{code:X8})";
+                    return $".NET fatal execution engine error (EEException)";
                 // FIX: 0xE0524F54 bytes decode to "ROT" and is not a verified FailFast marker.
                 //      Environment.FailFast surfaces as COR_E_FAILFAST = 0x80131623.
                 case 0x80131623: // COR_E_FAILFAST
-                    return $"Environment.FailFast — application requested immediate termination (0x{code:X8})";
+                    return $"Environment.FailFast — application requested immediate termination";
 
                 // .NET Framework / Core HRESULT codes
-                case 0x80131500: return $".NET base Exception thrown and unhandled (0x{code:X8})";
-                case 0x80131501: return $".NET SystemException thrown and unhandled (0x{code:X8})";
-                case 0x80131502: return $".NET ArgumentOutOfRangeException (0x{code:X8})";
-                case 0x80131503: return $".NET ArrayTypeMismatchException (0x{code:X8})";
-                case 0x80131504: return $".NET ContextMarshalException (cross-AppDomain marshal failure) (0x{code:X8})";
-                case 0x80131506: return $".NET StackOverflowException (0x{code:X8})";
-                case 0x80131507: return $".NET ArithmeticException (overflow, divide by zero, etc.) (0x{code:X8})";
-                case 0x80131508: return $".NET DivideByZeroException (0x{code:X8})";
-                case 0x80131509: return $".NET InvalidCastException (0x{code:X8})";
-                case 0x8013150A: return $".NET NullReferenceException (0x{code:X8})";
-                case 0x8013150B: return $".NET OutOfMemoryException (0x{code:X8})";
-                case 0x8013150C: return $".NET OverflowException (0x{code:X8})";
-                case 0x8013150D: return $".NET FileNotFoundException (0x{code:X8})";
-                case 0x8013150E: return $".NET IOException (0x{code:X8})";
-                case 0x80131510: return $".NET TypeLoadException (missing type or assembly binding failure) (0x{code:X8})";
-                case 0x80131513: return $".NET IndexOutOfRangeException (0x{code:X8})";
-                case 0x80131515: return $".NET InvalidOperationException (0x{code:X8})";
-                case 0x80131516: return $".NET SecurityException (CAS / permission denied) (0x{code:X8})";
-                case 0x80131517: return $".NET SerializationException (0x{code:X8})";
-                case 0x80131519: return $".NET ThreadAbortException (Thread.Abort called — Framework only) (0x{code:X8})";
-                case 0x8013151A: return $".NET ThreadInterruptedException (Thread.Interrupt called) (0x{code:X8})";
-                case 0x8013151B: return $".NET ThreadStateException (invalid thread state) (0x{code:X8})";
-                case 0x8013151D: return $".NET EntryPointNotFoundException (P/Invoke or reflection failure) (0x{code:X8})";
-                case 0x80131522: return $".NET BadImageFormatException (wrong bitness or corrupt assembly) (0x{code:X8})";
-                case 0x80131523: return $".NET MethodAccessException (reflection or cross-assembly access denied) (0x{code:X8})";
-                case 0x80131524: return $".NET FieldAccessException (0x{code:X8})";
-                case 0x80131534: return $".NET MissingFieldException (0x{code:X8})";
-                case 0x80131535: return $".NET MissingMethodException (0x{code:X8})";
-                case 0x80131536: return $".NET MissingMemberException (0x{code:X8})";
-                case 0x80131537: return $".NET NotImplementedException (0x{code:X8})";
-                case 0x80131538: return $".NET NotSupportedException (0x{code:X8})";
-                case 0x80131539: return $".NET ObjectDisposedException (0x{code:X8})";
-                case 0x80131543: return $".NET AmbiguousMatchException (reflection) (0x{code:X8})";
-                case 0x80131577: return $".NET KeyNotFoundException (0x{code:X8})";
-                case 0x80131578: return $".NET InsufficientMemoryException (0x{code:X8})";
-                case 0x8013157B: return $".NET PlatformNotSupportedException (0x{code:X8})";
-                case 0x8013157D: return $".NET TimeoutException (0x{code:X8})";
-                case 0x80131620: return $".NET AppDomainUnloadedException (Framework only) (0x{code:X8})";
-                case 0x80131621: return $".NET RemotingException (Framework only — cross-AppDomain channel failure) (0x{code:X8})";
+                case 0x80131500: return $".NET base Exception thrown and unhandled";
+                case 0x80131501: return $".NET SystemException thrown and unhandled";
+                case 0x80131502: return $".NET ArgumentOutOfRangeException";
+                case 0x80131503: return $".NET ArrayTypeMismatchException";
+                case 0x80131504: return $".NET ContextMarshalException (cross-AppDomain marshal failure)";
+                case 0x80131506: return $".NET StackOverflowException";
+                case 0x80131507: return $".NET ArithmeticException (overflow, divide by zero, etc.)";
+                case 0x80131508: return $".NET DivideByZeroException";
+                case 0x80131509: return $".NET InvalidCastException";
+                case 0x8013150A: return $".NET NullReferenceException";
+                case 0x8013150B: return $".NET OutOfMemoryException";
+                case 0x8013150C: return $".NET OverflowException";
+                case 0x8013150D: return $".NET FileNotFoundException";
+                case 0x8013150E: return $".NET IOException";
+                case 0x80131510: return $".NET TypeLoadException (missing type or assembly binding failure)";
+                case 0x80131513: return $".NET IndexOutOfRangeException";
+                case 0x80131515: return $".NET InvalidOperationException";
+                case 0x80131516: return $".NET SecurityException (CAS / permission denied)";
+                case 0x80131517: return $".NET SerializationException";
+                case 0x80131519: return $".NET ThreadAbortException (Thread.Abort called — Framework only)";
+                case 0x8013151A: return $".NET ThreadInterruptedException (Thread.Interrupt called)";
+                case 0x8013151B: return $".NET ThreadStateException (invalid thread state)";
+                case 0x8013151D: return $".NET EntryPointNotFoundException (P/Invoke or reflection failure)";
+                case 0x80131522: return $".NET BadImageFormatException (wrong bitness or corrupt assembly)";
+                case 0x80131523: return $".NET MethodAccessException (reflection or cross-assembly access denied)";
+                case 0x80131524: return $".NET FieldAccessException";
+                case 0x80131534: return $".NET MissingFieldException";
+                case 0x80131535: return $".NET MissingMethodException";
+                case 0x80131536: return $".NET MissingMemberException";
+                case 0x80131537: return $".NET NotImplementedException";
+                case 0x80131538: return $".NET NotSupportedException";
+                case 0x80131539: return $".NET ObjectDisposedException";
+                case 0x80131543: return $".NET AmbiguousMatchException (reflection)";
+                case 0x80131577: return $".NET KeyNotFoundException";
+                case 0x80131578: return $".NET InsufficientMemoryException";
+                case 0x8013157B: return $".NET PlatformNotSupportedException";
+                case 0x8013157D: return $".NET TimeoutException";
+                case 0x80131620: return $".NET AppDomainUnloadedException (Framework only)";
+                case 0x80131621: return $".NET RemotingException (Framework only — cross-AppDomain channel failure)";
                 // REMOVED: 0x80006EE7 was a typo/duplicate of 0x80072EE7 (already listed above in WinHTTP section).
                 //          .NET WebException name-resolution failures map to the WSA/WinHTTP codes, not a 0x80006xxx HRESULT.
                 // REMOVED: 0x80133743 is not a real HRESULT. .NET SocketException surfaces as a Win32Exception
                 //          carrying the underlying WSA error code (e.g. WSAENETDOWN = 0x80072742, listed above).
 
                 // .NET runtime hosting / startup failures
-                case 0x80008081: return $".NET runtime failed to load (shim error) (0x{code:X8})";
-                case 0x80008082: return $".NET runtime export not found (version mismatch) (0x{code:X8})";
-                case 0x80008083: return $".NET install root not found (runtime not installed) (0x{code:X8})";
-                case 0x80008091: return $".NET legacy runtime already bound (mixed version conflict) (0x{code:X8})";
-                case 0x80131022: return $".NET assembly requires a newer runtime version (0x{code:X8})";
-                case 0x80131044: return $".NET reference assembly cannot be loaded for execution (0x{code:X8})";
+                case 0x80008081: return $".NET runtime failed to load (shim error)";
+                case 0x80008082: return $".NET runtime export not found (version mismatch)";
+                case 0x80008083: return $".NET install root not found (runtime not installed)";
+                case 0x80008091: return $".NET legacy runtime already bound (mixed version conflict)";
+                case 0x80131022: return $".NET assembly requires a newer runtime version";
+                case 0x80131044: return $".NET reference assembly cannot be loaded for execution";
 
                 default:
                     if (code >= 0x80000000 && code <= 0x8FFFFFFF)
-                        return $"NTSTATUS warning (0x{code:X8})";
+                        return $"NTSTATUS warning";
                     if (code >= 0xC0000000 && code <= 0xCFFFFFFF)
-                        return $"NTSTATUS exception (0x{code:X8})";
+                        return $"NTSTATUS exception";
                     if (code >= 0xE0000000 && code <= 0xEFFFFFFF)
-                        return $"Application exception (0x{code:X8})";
+                        return $"Application exception";
                     if (exitCode < 0)
-                        return $"Abnormal termination (0x{code:X8})";
+                        return $"Abnormal termination";
                     return $"Exit code {exitCode}";
             }
         }
