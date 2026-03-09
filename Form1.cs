@@ -1859,6 +1859,29 @@ namespace IntelligentMutexExecutionEnvironment
                 case 0x00000003:
                     return "Path not found (exit code 3)";
 
+                // FIX: 0xC000000B is STATUS_INVALID_CID (invalid process/thread client ID),
+                //      NOT a timeout. Wait-timeout is STATUS_TIMEOUT = 0x00000102.
+                case 0x00000102:
+                    return $"Wait operation timed out (STATUS_TIMEOUT) — common in frozen UI threads (0x{code:X8})";
+                case 0xC000000B:
+                    return $"Invalid client ID — process or thread ID not found in system (STATUS_INVALID_CID) (0x{code:X8})";
+                case 0x800705B4:
+                    return $"Generic timeout (0x{code:X8})";
+                case 0x000000EF:
+                    return $"Critical system process stopped (0x{code:X8})";
+                // FIX: 0x0000007E is BSOD SYSTEM_THREAD_EXCEPTION_NOT_HANDLED,
+                //      an unhandled exception in a system thread — not simply "frozen"
+                case 0x0000007E:
+                    return $"BSOD: unhandled exception in a system thread (SYSTEM_THREAD_EXCEPTION_NOT_HANDLED) (0x{code:X8})";
+                // FIX: 0x00000139 is BSOD KERNEL_SECURITY_CHECK_FAILURE —
+                //      a stack cookie, CFG, or other security integrity check failed
+                case 0x00000139:
+                    return $"BSOD: kernel security check failure (stack cookie, CFG, or integrity violation) (0x{code:X8})";
+                case 0x00000101:
+                    return $"CPU core stopped responding — classic full system freeze (0x{code:X8})";
+                case 0x00000133:
+                    return $"Deferred Procedure Call took too long — often causes UI hangs (0x{code:X8})";
+
                 // NTSTATUS informational / warnings (0x8xxxxxxx)
                 case 0x80000001: // -2147483647
                     return $"Guard page violation (0x{code:X8})";
@@ -1942,8 +1965,10 @@ namespace IntelligentMutexExecutionEnvironment
                     return $"Fatal app exit / terminate() called (0x{code:X8})";
                 case 0xC0000420: // -1073740768
                     return $"Assertion failure (0x{code:X8})";
-                case 0xC0000602: // -1073740286
-                    return $"Unknown software exception (WER) (0x{code:X8})";
+                // REMOVED: 0xC0000602 was incorrectly labelled "Unknown software exception (WER)".
+                //          On Windows 10+, 0xC0000602 = STATUS_CLOUD_FILE_NOT_SUPPORTED (OneDrive placeholder).
+                //          WER unknown software exceptions belong in the 0xE0xxxxxx range (e.g. 0xE06D7363).
+
                 // --- Elevation / UAC / privilege failures ---
                 case 0x800702E4: // ERROR_ELEVATION_REQUIRED
                     return $"Elevation required — application must be run as administrator (0x{code:X8})";
@@ -1957,8 +1982,10 @@ namespace IntelligentMutexExecutionEnvironment
                     return $"Access denied (COM/Win32 — may require administrator rights) (0x{code:X8})";
                 case 0x80070522: // ERROR_PRIVILEGE_NOT_HELD
                     return $"A required privilege is not held by the client (missing admin right) (0x{code:X8})";
-                case 0x80070542: // ERROR_ONLY_IF_CONNECTED
-                    return $"Operation only valid when connected (session or token not elevated) (0x{code:X8})";
+                // FIX: 0x80070542 = Win32 error 1346 = ERROR_BAD_IMPERSONATION_LEVEL,
+                //      not ERROR_ONLY_IF_CONNECTED (which is 1251 = 0x800704E3)
+                case 0x80070542: // ERROR_BAD_IMPERSONATION_LEVEL
+                    return $"Bad impersonation level — required impersonation level not provided or invalid (0x{code:X8})";
 
                 // --- Network drive / UNC path failures ---
                 case 0x80070035: // ERROR_BAD_NETPATH
@@ -1983,6 +2010,7 @@ namespace IntelligentMutexExecutionEnvironment
                     return $"Disk structure is corrupt and unreadable (possibly mapped drive) (0x{code:X8})";
                 case 0x800700DF: // ERROR_NO_NET_OR_BAD_NET
                     return $"No network available or network configuration error (0x{code:X8})";
+
                 // --- General Win32 / application startup failures ---
                 case 0x80070006: // E_HANDLE
                     return $"Invalid handle (closed, revoked, or never opened) (0x{code:X8})";
@@ -2002,20 +2030,34 @@ namespace IntelligentMutexExecutionEnvironment
                     return $"Bad EXE format (wrong bitness, e.g. 16-bit app on 64-bit OS) (0x{code:X8})";
                 case 0x800700C2: // ERROR_ITERATED_DATA_EXCEEDS_64k
                     return $"Iterated data exceeds 64KB (corrupt or ancient 16-bit binary) (0x{code:X8})";
-                case 0x800701F4: // ERROR_INVALID_EXE_SIGNATURE
+                // FIX: 0x800700BF = Win32 error 191 = ERROR_INVALID_EXE_SIGNATURE (not 0x800701F4)
+                case 0x800700BF: // ERROR_INVALID_EXE_SIGNATURE
                     return $"Invalid executable signature (not a valid PE image) (0x{code:X8})";
+                // FIX: 0x800701F4 = Win32 error 500 = ERROR_INVALID_USER_BUFFER,
+                //      not ERROR_INVALID_EXE_SIGNATURE (corrected above)
+                case 0x800701F4: // ERROR_INVALID_USER_BUFFER
+                    return $"Invalid user buffer — supplied buffer is not valid for the requested operation (0x{code:X8})";
                 case 0x80070216: // ERROR_ARITHMETIC_OVERFLOW
                     return $"Arithmetic overflow in Win32 API call (0x{code:X8})";
-                case 0x80070218: // ERROR_PIPE_BUSY
+                // FIX: 0x800700E7 = Win32 error 231 = ERROR_PIPE_BUSY (not 0x80070218)
+                case 0x800700E7: // ERROR_PIPE_BUSY
                     return $"Named pipe busy — server not accepting connections yet (0x{code:X8})";
+                // FIX: 0x80070218 = Win32 error 536 = ERROR_PIPE_CONNECTED,
+                //      not ERROR_PIPE_BUSY (corrected above)
+                case 0x80070218: // ERROR_PIPE_CONNECTED
+                    return $"Named pipe connected — there is a process on the other end of the pipe (0x{code:X8})";
                 case 0x80070490: // ERROR_NOT_FOUND
                     return $"Element not found (registry key, file, or resource missing) (0x{code:X8})";
                 case 0x800704C7: // ERROR_CANCELLED
                     return $"Operation cancelled by user (UAC prompt dismissed) (0x{code:X8})";
-                case 0x800704DD: // ERROR_NOT_AUTHENTICATED
+                // FIX: 0x800704DC = Win32 error 1244 = ERROR_NOT_AUTHENTICATED (was incorrectly on 0xDD)
+                case 0x800704DC: // ERROR_NOT_AUTHENTICATED
                     return $"Not authenticated — credentials required (0x{code:X8})";
-                case 0x800704DE: // ERROR_NOT_LOGGED_ON
+                // FIX: 0x800704DD = Win32 error 1245 = ERROR_NOT_LOGGED_ON (was incorrectly on 0xDD)
+                case 0x800704DD: // ERROR_NOT_LOGGED_ON
                     return $"User not logged on (service or session issue) (0x{code:X8})";
+                // REMOVED: 0x800704DE = Win32 error 1246 = ERROR_CONTINUE (instructs handler to continue),
+                //          not a logon or authentication error. Not meaningful as an exit code.
                 case 0x80040154: // REGDB_E_CLASSNOTREG
                     return $"COM class not registered (missing COM component or 32/64-bit mismatch) (0x{code:X8})";
                 case 0x80004003: // E_POINTER
@@ -2046,6 +2088,7 @@ namespace IntelligentMutexExecutionEnvironment
                     return $"Host not found (DNS resolution failed) (0x{code:X8})";
                 case 0x80072AFC: // WSANO_DATA
                     return $"No DNS data record for requested type (0x{code:X8})";
+
                 // WinHTTP / WinINet network errors
                 case 0x80072EE2: // ERROR_INTERNET_TIMEOUT / ERROR_WINHTTP_TIMEOUT
                     return $"HTTP/network request timed out (0x{code:X8})";
@@ -2071,8 +2114,11 @@ namespace IntelligentMutexExecutionEnvironment
                     return $".NET unhandled exception (CLR) (0x{code:X8})";
                 case 0xE0455843: // Fatal CLR error
                     return $".NET fatal execution engine error (EEException) (0x{code:X8})";
-                case 0xE0524F54: // FailFast
-                    return $"Environment.FailFast (application requested termination) (0x{code:X8})";
+                // FIX: 0xE0524F54 bytes decode to "ROT" and is not a verified FailFast marker.
+                //      Environment.FailFast surfaces as COR_E_FAILFAST = 0x80131623.
+                case 0x80131623: // COR_E_FAILFAST
+                    return $"Environment.FailFast — application requested immediate termination (0x{code:X8})";
+
                 // .NET Framework / Core HRESULT codes
                 case 0x80131500: return $".NET base Exception thrown and unhandled (0x{code:X8})";
                 case 0x80131501: return $".NET SystemException thrown and unhandled (0x{code:X8})";
@@ -2113,8 +2159,10 @@ namespace IntelligentMutexExecutionEnvironment
                 case 0x8013157D: return $".NET TimeoutException (0x{code:X8})";
                 case 0x80131620: return $".NET AppDomainUnloadedException (Framework only) (0x{code:X8})";
                 case 0x80131621: return $".NET RemotingException (Framework only — cross-AppDomain channel failure) (0x{code:X8})";
-                case 0x80006EE7: return $".NET WebException — name resolution failure (0x{code:X8})";
-                case 0x80133743: return $".NET SocketException — network down (0x{code:X8})";
+                // REMOVED: 0x80006EE7 was a typo/duplicate of 0x80072EE7 (already listed above in WinHTTP section).
+                //          .NET WebException name-resolution failures map to the WSA/WinHTTP codes, not a 0x80006xxx HRESULT.
+                // REMOVED: 0x80133743 is not a real HRESULT. .NET SocketException surfaces as a Win32Exception
+                //          carrying the underlying WSA error code (e.g. WSAENETDOWN = 0x80072742, listed above).
 
                 // .NET runtime hosting / startup failures
                 case 0x80008081: return $".NET runtime failed to load (shim error) (0x{code:X8})";
@@ -2136,6 +2184,7 @@ namespace IntelligentMutexExecutionEnvironment
                     return $"Exit code {exitCode}";
             }
         }
+
         /// <summary>
         /// Builds a descriptive crash message combining exit code classification and zombie state.
         /// Used in log messages and health notifications to provide actionable context.
@@ -2445,14 +2494,17 @@ namespace IntelligentMutexExecutionEnvironment
                 _stableRunCheck[app.Index] = DateTime.Now.AddSeconds(stablePeriod);
 
                 DateTime now = DateTime.Now;
-                // Reset retryCount on manual start so the user gets a fresh start
-                // Also clear LastExitCode so the column shows "—" until the next exit
-                _storageService.UpdateApplicationFields(app.Index, isRunning: true, lastStart: now, retryCount: 0, clearLastExitCode: true);
+                // Do NOT reset retryCount here — it will be reset only after the app
+                // runs stably for the configured StableRunPeriodSeconds.
+                // Retry count resets only on: (1) manual start by user, or (2) stable run period.
+                _storageService.UpdateApplicationFields(app.Index, isRunning: true, lastStart: now);
 
                 if (item != null)
                 {
                     item.SubItems[3].Text = "Starting...";
+                    item.SubItems[6].Text = "0";
                     item.SubItems[7].Text = app.GetLastStartDisplay();
+                    item.SubItems[9].Text = "—";
                     item.ForeColor = Color.DarkOrange;
 
                     var tagApp = item.Tag as ManagedApplication;
@@ -2460,8 +2512,11 @@ namespace IntelligentMutexExecutionEnvironment
                     {
                         tagApp.LastStart = app.LastStart;
                         tagApp.IsRunning = true;
+                        tagApp.RetryCount = 0;
+                        tagApp.LastExitCode = null;
                     }
                 }
+
 
                 // Refresh group indicator immediately
                 UpdateGroupIndicators(_storageService.GetAllApplicationsReadOnly());
