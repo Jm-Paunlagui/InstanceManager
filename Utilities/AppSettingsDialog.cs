@@ -48,6 +48,18 @@ namespace IntelligentMutexExecutionEnvironment
         public string NewDirectory { get { return _directoryTextBox.Text.Trim(); } }
         public string NewLauncherPath { get { return _launcherTextBox.Text.Trim(); } }
 
+        /// <summary>
+        /// Formats an exit code for display. Non-zero codes are shown in hex (e.g., "0xC0000005").
+        /// Zero is shown as "0" since it's always a normal exit.
+        /// </summary>
+        private static string FormatExitCode(int exitCode)
+        {
+            if (exitCode == 0)
+                return "0";
+            uint code = unchecked((uint)exitCode);
+            return "0x" + code.ToString("X8");
+        }
+
         public EditAppDialog(ManagedApplication app)
         {
             _app = app;
@@ -545,7 +557,7 @@ namespace IntelligentMutexExecutionEnvironment
                 Location = new Point(labelX, y + 2),
                 AutoSize = true
             };
-            string exitCodeText = _app.LastExitCode.HasValue ? _app.LastExitCode.Value.ToString() : "N/A";
+            string exitCodeText = _app.LastExitCode.HasValue ? FormatExitCode(_app.LastExitCode.Value) : "N/A";
 
             _lastExitCodeLabel = new Label
             {
@@ -570,7 +582,7 @@ namespace IntelligentMutexExecutionEnvironment
             {
                 if (_app.LastExitCode.HasValue)
                 {
-                    Clipboard.SetText(_app.LastExitCode.Value.ToString());
+                    Clipboard.SetText(FormatExitCode(_app.LastExitCode.Value));
                 }
             };
             this.Controls.Add(exitCodeLabel);

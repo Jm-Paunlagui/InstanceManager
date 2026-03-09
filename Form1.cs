@@ -212,7 +212,9 @@ namespace IntelligentMutexExecutionEnvironment
                         if (!terminatedProcessNames.Contains(processName))
                         {
                             SimpleLogger.Warn("TerminateAlreadyRunningApps @ Form1.cs",
-                                $"'{app.AppName}' was running before IMEE started - terminating");
+                                $"'{app.AppName}' was running before IMEE started - terminating")
+
+                            ;
 
                             _processManager.StopApplication(app);
                             terminatedProcessNames.Add(processName);
@@ -680,7 +682,7 @@ namespace IntelligentMutexExecutionEnvironment
             item.SubItems.Add(app.RetryCount.ToString());            // [6] Retries
             item.SubItems.Add(app.GetLastStartDisplay());            // [7] Last Start
             item.SubItems.Add(app.GetLastStopDisplay());             // [8] Last Stop
-            item.SubItems.Add(app.LastExitCode.HasValue ? app.LastExitCode.Value.ToString() : "—"); // [9] Exit Code
+            item.SubItems.Add(FormatExitCodeDisplay(app.LastExitCode)); // [9] Exit Code
             item.Tag = app;
             item.ForeColor = statusColor;
 
@@ -1273,13 +1275,13 @@ namespace IntelligentMutexExecutionEnvironment
                             if (wasForceKilled)
                             {
                                 SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
-                                    $"'{app.AppName}' exited with code {exitCode.Value} (health monitor force-kill — original reason: {preRecordedReason})");
+                                    $"'{app.AppName}' exited with code {FormatExitCode(exitCode.Value)} (health monitor force-kill — original reason: {preRecordedReason})");
                             }
                             else
                             {
                                 string crashReason = ClassifyExitCode(exitCode.Value);
                                 SimpleLogger.Info("UpdateApplicationStatuses @ Form1.cs",
-                                    $"'{app.AppName}' exited with code {exitCode.Value} ({crashReason})");
+                                    $"'{app.AppName}' exited with code {FormatExitCode(exitCode.Value)} ({crashReason})");
                             }
                         }
 
@@ -1337,7 +1339,7 @@ namespace IntelligentMutexExecutionEnvironment
                                     item.SubItems[5].Text = newCrashCount.ToString();
                                     item.SubItems[6].Text = newRetryCount.ToString();
                                     item.SubItems[8].Text = stopTime.ToString("yyyy-MM-dd HH:mm:ss");
-                                    item.SubItems[9].Text = exitCode.HasValue ? exitCode.Value.ToString() : "—";
+                                    item.SubItems[9].Text = FormatExitCodeDisplay(exitCode);
                                     item.ForeColor = Color.Red;
 
                                     var tagApp = item.Tag as ManagedApplication;
@@ -1381,7 +1383,7 @@ namespace IntelligentMutexExecutionEnvironment
                                         item.SubItems[5].Text = newCrashCount.ToString();
                                         item.SubItems[6].Text = newRetryCount.ToString();
                                         item.SubItems[8].Text = stopTime.ToString("yyyy-MM-dd HH:mm:ss");
-                                        item.SubItems[9].Text = exitCode.HasValue ? exitCode.Value.ToString() : "—";
+                                        item.SubItems[9].Text = FormatExitCodeDisplay(exitCode);
                                         item.ForeColor = Color.DarkOrange;
 
                                         var tagApp = item.Tag as ManagedApplication;
@@ -1410,7 +1412,7 @@ namespace IntelligentMutexExecutionEnvironment
                                         item.SubItems[5].Text = newCrashCount.ToString();
                                         item.SubItems[6].Text = newRetryCount.ToString();
                                         item.SubItems[8].Text = stopTime.ToString("yyyy-MM-dd HH:mm:ss");
-                                        item.SubItems[9].Text = exitCode.HasValue ? exitCode.Value.ToString() : "—";
+                                        item.SubItems[9].Text = FormatExitCodeDisplay(exitCode);
                                         item.ForeColor = Color.DarkOrange;
                                     }
                                     NotifyHealthIssue(app, item, detailedReason);
@@ -1461,7 +1463,7 @@ namespace IntelligentMutexExecutionEnvironment
                                     item.ForeColor = Color.Black;
                                 }
                                 item.SubItems[8].Text = stopTime.ToString("yyyy-MM-dd HH:mm:ss");
-                                item.SubItems[9].Text = exitCode.HasValue ? exitCode.Value.ToString() : "—";
+                                item.SubItems[9].Text = FormatExitCodeDisplay(exitCode);
 
                                 var tagApp = item.Tag as ManagedApplication;
                                 if (tagApp != null)
@@ -1735,7 +1737,7 @@ namespace IntelligentMutexExecutionEnvironment
             _notifiedHealthIssues.Add(app.Index);
 
             string exitCodeInfo = app.LastExitCode.HasValue
-                ? $"Last Exit Code: {app.LastExitCode.Value}" + (app.LastExitCode.Value != 0 ? " (abnormal)" : "")
+                ? $"Last Exit Code: {FormatExitCode(app.LastExitCode.Value)}" + (app.LastExitCode.Value != 0 ? " (abnormal)" : "")
                 : "Last Exit Code: N/A";
 
             SimpleLogger.Warn("HealthMonitor @ Form1.cs",
@@ -1811,6 +1813,29 @@ namespace IntelligentMutexExecutionEnvironment
             }
             catch (ObjectDisposedException) { }
             catch (InvalidOperationException) { }
+        }
+
+        /// <summary>
+        /// Formats an exit code for display in the ListView and dialogs.
+        /// Non-zero codes are shown in hex (e.g., "0xC0000005") for easier lookup.
+        /// Zero is shown as "0" since it's always a normal exit.
+        /// </summary>
+        private static string FormatExitCode(int exitCode)
+        {
+            if (exitCode == 0)
+                return "0";
+            uint code = unchecked((uint)exitCode);
+            return "0x" + code.ToString("X8");
+        }
+
+        /// <summary>
+        /// Formats a nullable exit code for display: hex for non-zero, "0" for zero, "—" for null.
+        /// </summary>
+        private static string FormatExitCodeDisplay(int? exitCode)
+        {
+            if (!exitCode.HasValue)
+                return "—";
+            return FormatExitCode(exitCode.Value);
         }
 
         /// <summary>
@@ -2123,7 +2148,7 @@ namespace IntelligentMutexExecutionEnvironment
                 reason = ClassifyExitCode(exitCode.Value);
                 if (exitCode.Value != 0)
                 {
-                    reason = reason + " (exit code " + exitCode.Value + ")";
+                    reason = reason + " (exit code " + FormatExitCode(exitCode.Value) + ")";
                 }
             }
             else
@@ -2570,7 +2595,7 @@ namespace IntelligentMutexExecutionEnvironment
                     item.SubItems[3].Text = "Stopped";
                     item.SubItems[8].Text = app.GetLastStopDisplay();
                     // Keep showing the existing last exit code (don't overwrite with stop's exit code)
-                    item.SubItems[9].Text = app.LastExitCode.HasValue ? app.LastExitCode.Value.ToString() : "—";
+                    item.SubItems[9].Text = FormatExitCodeDisplay(app.LastExitCode);
                     item.ForeColor = Color.Black;
                 }
 
@@ -2742,13 +2767,10 @@ namespace IntelligentMutexExecutionEnvironment
 
                 SimpleLogger.Info("StartAllSequential @ Form1.cs", $"Start All (sequential) for group {_selectedGroupId}: {msg}");
 
-                if (!_isClosing)
-                {
-                    if (failed > 0)
-                        MessageBoxHelper.ShowWarning(this, msg);
-                    else
-                        MessageBoxHelper.ShowSuccess(this, msg);
-                }
+                if (failed > 0)
+                    MessageBoxHelper.ShowWarning(this, msg);
+                else
+                    MessageBoxHelper.ShowSuccess(this, msg);
             };
 
             Action launchNext = null;
@@ -3089,6 +3111,7 @@ namespace IntelligentMutexExecutionEnvironment
                                 "Choose 'Yes' to keep it running in the background.\n" +
                                 "Choose 'No' to exit and stop monitoring.";
 
+
                 // Build a custom dialog using MessageBox buttons — map to choices
                 var choice = MessageBox.Show(this, promptMsg, "Close Application?", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
 
@@ -3375,8 +3398,7 @@ namespace IntelligentMutexExecutionEnvironment
         {
             try
             {
-                if (notifyIcon != null)
-                    notifyIcon.Visible = false;
+                notifyIcon.Visible = false;
 
                 this.Show();
                 this.WindowState = FormWindowState.Normal;
@@ -3396,11 +3418,8 @@ namespace IntelligentMutexExecutionEnvironment
         {
             try
             {
-                if (notifyIcon != null)
-                {
-                    notifyIcon.Visible = true;
-                    notifyIcon.ShowBalloonTip(1000, "IMEE", "Application minimized to tray.", ToolTipIcon.Info);
-                }
+                notifyIcon.Visible = true;
+                notifyIcon.ShowBalloonTip(1000, "IMEE", "Application minimized to tray.", ToolTipIcon.Info);
 
                 this.Hide();
             }
