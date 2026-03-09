@@ -9,6 +9,8 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
     {
         private TextBox _stationNameTextBox;
         private CheckBox _runOnStartupCheckBox;
+        private NumericUpDown _fontSizePercentNumeric;
+        private Label _fontSizePreviewLabel;
 
         private NumericUpDown _statusPollIntervalNumeric;
         private NumericUpDown _startGracePeriodNumeric;
@@ -31,6 +33,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
         // Public properties for retrieving values after OK
         public string StationName { get { return _stationNameTextBox.Text.Trim(); } }
         public bool RunOnStartup { get { return _runOnStartupCheckBox.Checked; } }
+        public int FontSizePercent { get { return (int)_fontSizePercentNumeric.Value; } }
         public int StatusPollIntervalMs { get { return (int)_statusPollIntervalNumeric.Value; } }
         public int StartGracePeriodSeconds { get { return (int)_startGracePeriodNumeric.Value; } }
         public int GcCollectIntervalMinutes { get { return (int)_gcCollectIntervalNumeric.Value; } }
@@ -41,10 +44,10 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
 
         public SettingsDialog(SettingsService settings)
         {
-            _normalFont = new Font("AUMOVIO Screen", 9F);
-            _boldFont = new Font("AUMOVIO Screen", 9F, FontStyle.Bold);
-            _smallBoldFont = new Font("AUMOVIO Screen", 7F, FontStyle.Bold);
-            _buttonFont = new Font("AUMOVIO Screen", 8F, FontStyle.Bold);
+            _normalFont = DpiScaler.CreateFont("AUMOVIO Screen", 9F);
+            _boldFont = DpiScaler.CreateFont("AUMOVIO Screen", 9F, FontStyle.Bold);
+            _smallBoldFont = DpiScaler.CreateFont("AUMOVIO Screen", 7F, FontStyle.Bold);
+            _buttonFont = DpiScaler.CreateFont("AUMOVIO Screen", 8F, FontStyle.Bold);
 
             InitializeControls(settings);
         }
@@ -52,19 +55,18 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
         private void InitializeControls(SettingsService settings)
         {
             this.Text = "Settings";
-            this.Size = new Size(520, 505);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.StartPosition = FormStartPosition.CenterParent;
             this.Font = _normalFont;
             this.BackColor = Color.White;
+            this.AutoScaleMode = AutoScaleMode.None;
 
-            int labelX = 20;
-            int controlX = 270;
-            int hintX = controlX + 90;
-            int y = 15;
-            int rowHeight = 30;
+            int labelX = DpiScaler.Scale(20);
+            int controlX = DpiScaler.Scale(270);
+            int y = DpiScaler.Scale(15);
+            int rowHeight = DpiScaler.Scale(30);
 
             // ===== General Settings =====
             var generalLabel = new Label
@@ -75,20 +77,20 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
                 Font = _boldFont
             };
             this.Controls.Add(generalLabel);
-            y += 22;
+            y += DpiScaler.Scale(22);
 
             // Station Name
             var stationLabel = new Label
             {
                 Text = "Station Name:",
-                Location = new Point(labelX, y + 3),
+                Location = new Point(labelX, y + DpiScaler.Scale(3)),
                 AutoSize = true
             };
             _stationNameTextBox = new TextBox
             {
                 Text = settings.StationName,
                 Location = new Point(controlX, y),
-                Size = new Size(210, 23),
+                Size = new Size(DpiScaler.Scale(210), DpiScaler.Scale(23)),
                 Font = _normalFont
             };
             this.Controls.Add(stationLabel);
@@ -100,24 +102,90 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             {
                 Text = "Run on Windows Startup",
                 Checked = settings.RunOnStartup,
-                Location = new Point(labelX, y + 3),
+                Location = new Point(labelX, y + DpiScaler.Scale(3)),
                 AutoSize = true,
                 Font = _normalFont
             };
             this.Controls.Add(_runOnStartupCheckBox);
-            y += rowHeight - 5;
+            y += rowHeight - DpiScaler.Scale(5);
 
             // Description label for Run on Startup
             var startupDescLabel = new Label
             {
                 Text = "Automatically launch IMEE when Windows starts so managed applications are monitored at all times.",
-                Location = new Point(labelX + 17, y),
-                Size = new Size(460, 28),
+                Location = new Point(labelX + DpiScaler.Scale(17), y),
+                Size = new Size(DpiScaler.Scale(460), DpiScaler.Scale(28)),
                 ForeColor = Color.Gray,
-                Font = new Font(_normalFont.FontFamily, 7.5F)
+                Font = DpiScaler.CreateFont("AUMOVIO Screen", 7.5F)
             };
             this.Controls.Add(startupDescLabel);
-            y += 30 + 12;
+            y += DpiScaler.Scale(30) + DpiScaler.Scale(12);
+
+            // ===== Display Settings =====
+            var displayLabel = new Label
+            {
+                Text = "Display",
+                Location = new Point(labelX, y),
+                AutoSize = true,
+                Font = _boldFont
+            };
+            this.Controls.Add(displayLabel);
+            y += DpiScaler.Scale(22);
+
+            // Font Size
+            var fontSizeLabel = new Label
+            {
+                Text = "Font Size (%):",
+                Location = new Point(labelX, y + DpiScaler.Scale(3)),
+                AutoSize = true
+            };
+            _fontSizePercentNumeric = new NumericUpDown
+            {
+                Minimum = 75,
+                Maximum = 200,
+                Increment = 5,
+                Value = Math.Max(75, Math.Min(200, settings.FontSizePercent)),
+                Location = new Point(controlX, y),
+                Size = new Size(DpiScaler.Scale(80), DpiScaler.Scale(23))
+            };
+            var fontSizeHintLabel = new Label
+            {
+                Text = "75 - 200",
+                Location = new Point(controlX + DpiScaler.Scale(85), y + DpiScaler.Scale(3)),
+                AutoSize = true,
+                ForeColor = Color.Gray,
+                Font = _normalFont
+            };
+            this.Controls.Add(fontSizeLabel);
+            this.Controls.Add(_fontSizePercentNumeric);
+            this.Controls.Add(fontSizeHintLabel);
+            y += rowHeight;
+
+            // Font Size Preview
+            _fontSizePreviewLabel = new Label
+            {
+                Text = "Preview: The quick brown fox jumps over the lazy dog",
+                Location = new Point(labelX + DpiScaler.Scale(17), y),
+                Size = new Size(DpiScaler.Scale(460), DpiScaler.Scale(22)),
+                ForeColor = Color.FromArgb(80, 80, 80)
+            };
+            UpdateFontSizePreview();
+            this.Controls.Add(_fontSizePreviewLabel);
+
+            _fontSizePercentNumeric.ValueChanged += (s, e) => { UpdateFontSizePreview(); };
+            y += DpiScaler.Scale(24);
+
+            // Font size restart note
+            var fontSizeNoteLabel = new Label
+            {
+                Text = "Changes to font size take effect after restarting IMEE.",
+                Location = new Point(labelX + DpiScaler.Scale(17), y),
+                Size = new Size(DpiScaler.Scale(460), DpiScaler.Scale(18)),
+                ForeColor = Color.Gray,
+                Font = DpiScaler.CreateFont("AUMOVIO Screen", 7.5F)
+            };
+            this.Controls.Add(fontSizeNoteLabel);
+            y += DpiScaler.Scale(24) + DpiScaler.Scale(8);
 
             // ===== Performance Settings =====
             var perfLabel = new Label
@@ -128,7 +196,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
                 Font = _boldFont
             };
             this.Controls.Add(perfLabel);
-            y += 22;
+            y += DpiScaler.Scale(22);
 
             // Status Poll Interval
             AddNumericRow(ref y, labelX, controlX, "Status Poll Interval (ms):",
@@ -150,7 +218,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
                 5, 300, settings.StorageSaveIntervalSeconds, out _storageSaveIntervalNumeric,
                 "5 - 300");
 
-            y += 12;
+            y += DpiScaler.Scale(12);
 
             // ===== Logging Settings =====
             var logLabel = new Label
@@ -161,7 +229,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
                 Font = _boldFont
             };
             this.Controls.Add(logLabel);
-            y += 22;
+            y += DpiScaler.Scale(22);
 
             // Log Flush Interval
             AddNumericRow(ref y, labelX, controlX, "Log Flush Interval (seconds):",
@@ -178,14 +246,14 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
                 1, 365, settings.LogRetentionDays, out _logRetentionDaysNumeric,
                 "1 - 365");
 
-            y += 20;
+            y += DpiScaler.Scale(20);
 
             // ===== Buttons =====
             _resetDefaultsButton = new Button
             {
                 Text = "Reset Defaults",
                 Location = new Point(labelX, y),
-                Size = new Size(110, 30),
+                Size = new Size(DpiScaler.Scale(110), DpiScaler.Scale(30)),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(243, 156, 18),
                 ForeColor = Color.White,
@@ -197,8 +265,8 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             _okButton = new Button
             {
                 Text = "OK",
-                Location = new Point(310, y),
-                Size = new Size(80, 30),
+                Location = new Point(DpiScaler.Scale(310), y),
+                Size = new Size(DpiScaler.Scale(80), DpiScaler.Scale(30)),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(46, 204, 113),
                 ForeColor = Color.White,
@@ -211,15 +279,45 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(400, y),
-                Size = new Size(80, 30),
+                Location = new Point(DpiScaler.Scale(400), y),
+                Size = new Size(DpiScaler.Scale(80), DpiScaler.Scale(30)),
                 FlatStyle = FlatStyle.Flat,
-                Font = new Font("AUMOVIO Screen", 8F)
+                Font = DpiScaler.CreateFont("AUMOVIO Screen", 8F)
             };
             this.Controls.Add(_cancelButton);
 
+            // Adjust form size to fit all controls
+            this.Size = new Size(DpiScaler.Scale(520), y + DpiScaler.Scale(75));
+
             this.AcceptButton = _okButton;
             this.CancelButton = _cancelButton;
+        }
+
+        private void UpdateFontSizePreview()
+        {
+            if (_fontSizePreviewLabel == null || _fontSizePercentNumeric == null) return;
+            float previewSize = 9F * ((float)_fontSizePercentNumeric.Value / 100f);
+            if (previewSize < 1F) previewSize = 1F;
+            try
+            {
+                var oldFont = _fontSizePreviewLabel.Font;
+                Font newFont;
+                try
+                {
+                    newFont = new Font("AUMOVIO Screen", previewSize);
+                }
+                catch
+                {
+                    // Font family not available — fall back to system font
+                    newFont = new Font(FontFamily.GenericSansSerif, previewSize);
+                }
+                _fontSizePreviewLabel.Font = newFont;
+                if (oldFont != null && oldFont != _normalFont) oldFont.Dispose();
+            }
+            catch
+            {
+                // Font creation may fail for extreme sizes - ignore
+            }
         }
 
         private void AddNumericRow(ref int y, int labelX, int controlX, string labelText,
@@ -228,7 +326,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             var label = new Label
             {
                 Text = labelText,
-                Location = new Point(labelX, y + 3),
+                Location = new Point(labelX, y + DpiScaler.Scale(3)),
                 AutoSize = true
             };
             numeric = new NumericUpDown
@@ -237,12 +335,12 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
                 Maximum = max,
                 Value = Math.Max(min, Math.Min(max, value)),
                 Location = new Point(controlX, y),
-                Size = new Size(80, 23)
+                Size = new Size(DpiScaler.Scale(80), DpiScaler.Scale(23))
             };
             var hintLabel = new Label
             {
                 Text = hint,
-                Location = new Point(controlX + 85, y + 3),
+                Location = new Point(controlX + DpiScaler.Scale(85), y + DpiScaler.Scale(3)),
                 AutoSize = true,
                 ForeColor = Color.Gray,
                 Font = _normalFont
@@ -250,11 +348,12 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             this.Controls.Add(label);
             this.Controls.Add(numeric);
             this.Controls.Add(hintLabel);
-            y += 30;
+            y += DpiScaler.Scale(30);
         }
 
         private void ResetDefaultsButton_Click(object sender, EventArgs e)
         {
+            _fontSizePercentNumeric.Value = SettingsService.DefaultFontSizePercent;
             _statusPollIntervalNumeric.Value = SettingsService.DefaultStatusPollIntervalMs;
             _startGracePeriodNumeric.Value = SettingsService.DefaultStartGracePeriodSeconds;
             _gcCollectIntervalNumeric.Value = SettingsService.DefaultGcCollectIntervalMinutes;

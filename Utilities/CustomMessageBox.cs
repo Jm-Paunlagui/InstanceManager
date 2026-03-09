@@ -28,40 +28,41 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.BackColor = Color.White;
+            this.AutoScaleMode = AutoScaleMode.None;
 
-            int formWidth = 420;
-            int labelX = 65;
-            int labelWidth = formWidth - labelX - 25;
+            int formWidth = DpiScaler.Scale(420);
+            int labelX = DpiScaler.Scale(65);
+            int labelWidth = formWidth - labelX - DpiScaler.Scale(25);
 
             iconPictureBox = new PictureBox
             {
-                Location = new Point(20, 20),
-                Size = new Size(32, 32),
+                Location = DpiScaler.ScalePoint(20, 20),
+                Size = DpiScaler.ScaleSize(32, 32),
                 SizeMode = PictureBoxSizeMode.StretchImage
             };
             SetIcon(icon);
             this.Controls.Add(iconPictureBox);
 
             // Measure the text to determine required label height
-            _labelFont = new Font("AUMOVIO Screen", 9F);
+            _labelFont = DpiScaler.CreateFont("AUMOVIO Screen", 9F);
             Size proposedSize = new Size(labelWidth, int.MaxValue);
             Size measuredSize = TextRenderer.MeasureText(message, _labelFont, proposedSize, TextFormatFlags.WordBreak);
-            int labelHeight = Math.Max(40, measuredSize.Height + 5);
+            int labelHeight = Math.Max(DpiScaler.Scale(40), measuredSize.Height + DpiScaler.Scale(5));
 
             messageLabel = new Label
             {
                 Text = message,
-                Location = new Point(labelX, 20),
+                Location = new Point(labelX, DpiScaler.Scale(20)),
                 AutoSize = false,
                 Size = new Size(labelWidth, labelHeight),
                 Font = _labelFont
             };
             this.Controls.Add(messageLabel);
 
-            int buttonY = messageLabel.Bottom + 15;
-            int buttonWidth = 80;
-            int buttonHeight = 28;
-            int formHeight = buttonY + buttonHeight + 45;
+            int buttonY = messageLabel.Bottom + DpiScaler.Scale(15);
+            int buttonWidth = DpiScaler.Scale(80);
+            int buttonHeight = DpiScaler.Scale(28);
+            int formHeight = buttonY + buttonHeight + DpiScaler.Scale(45);
 
             this.Size = new Size(formWidth, formHeight);
 
@@ -81,7 +82,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
                     break;
 
                 case MessageBoxButtons.YesNo:
-                    int totalButtonsWidth = buttonWidth * 2 + 10;
+                    int totalButtonsWidth = buttonWidth * 2 + DpiScaler.Scale(10);
                     int startX = (formWidth - totalButtonsWidth) / 2;
 
                     yesButton = new Button
@@ -97,7 +98,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
                     noButton = new Button
                     {
                         Text = "No",
-                        Location = new Point(startX + buttonWidth + 10, buttonY),
+                        Location = new Point(startX + buttonWidth + DpiScaler.Scale(10), buttonY),
                         Size = new Size(buttonWidth, buttonHeight),
                         DialogResult = DialogResult.No
                     };
