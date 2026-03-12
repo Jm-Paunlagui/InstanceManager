@@ -164,7 +164,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
                     // Ensure it stays within screen bounds
                     Screen screen = Screen.FromControl(owner);
                     if (x < screen.WorkingArea.Left) x = screen.WorkingArea.Left + 10;
-                    if (y < screen.WorkingArea.Top) x = screen.WorkingArea.Top + 10;
+                    if (y < screen.WorkingArea.Top) y = screen.WorkingArea.Top + 10;
                     if (x + msgBox.Width > screen.WorkingArea.Right) 
                         x = screen.WorkingArea.Right - msgBox.Width - 10;
                     if (y + msgBox.Height > screen.WorkingArea.Bottom) 

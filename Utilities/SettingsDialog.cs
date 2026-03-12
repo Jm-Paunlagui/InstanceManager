@@ -8,6 +8,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
     public class SettingsDialog : Form
     {
         private TextBox _stationNameTextBox;
+        private CheckBox _runOnStartupCheckBox;
 
         private NumericUpDown _statusPollIntervalNumeric;
         private NumericUpDown _startGracePeriodNumeric;
@@ -29,6 +30,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
 
         // Public properties for retrieving values after OK
         public string StationName { get { return _stationNameTextBox.Text.Trim(); } }
+        public bool RunOnStartup { get { return _runOnStartupCheckBox.Checked; } }
         public int StatusPollIntervalMs { get { return (int)_statusPollIntervalNumeric.Value; } }
         public int StartGracePeriodSeconds { get { return (int)_startGracePeriodNumeric.Value; } }
         public int GcCollectIntervalMinutes { get { return (int)_gcCollectIntervalNumeric.Value; } }
@@ -50,7 +52,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
         private void InitializeControls(SettingsService settings)
         {
             this.Text = "Settings";
-            this.Size = new Size(520, 530);
+            this.Size = new Size(520, 505);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
@@ -91,7 +93,31 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             };
             this.Controls.Add(stationLabel);
             this.Controls.Add(_stationNameTextBox);
-            y += rowHeight + 12;
+            y += rowHeight;
+
+            // Run on Startup
+            _runOnStartupCheckBox = new CheckBox
+            {
+                Text = "Run on Windows Startup",
+                Checked = settings.RunOnStartup,
+                Location = new Point(labelX, y + 3),
+                AutoSize = true,
+                Font = _normalFont
+            };
+            this.Controls.Add(_runOnStartupCheckBox);
+            y += rowHeight - 5;
+
+            // Description label for Run on Startup
+            var startupDescLabel = new Label
+            {
+                Text = "Automatically launch IMEE when Windows starts so managed applications are monitored at all times.",
+                Location = new Point(labelX + 17, y),
+                Size = new Size(460, 28),
+                ForeColor = Color.Gray,
+                Font = new Font(_normalFont.FontFamily, 7.5F)
+            };
+            this.Controls.Add(startupDescLabel);
+            y += 30 + 12;
 
             // ===== Performance Settings =====
             var perfLabel = new Label

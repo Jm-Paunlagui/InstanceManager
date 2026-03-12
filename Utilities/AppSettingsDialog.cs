@@ -4,6 +4,7 @@ using System.Windows.Forms;
 using System.IO;
 using System.Diagnostics;
 using IntelligentMutexExecutionEnvironment.Models;
+using IntelligentMutexExecutionEnvironment.Utilities;
 
 namespace IntelligentMutexExecutionEnvironment
 {
@@ -13,6 +14,10 @@ namespace IntelligentMutexExecutionEnvironment
         private TextBox _directoryTextBox;
         private Button _browseButton;
         private Button _openPathButton;
+        private TextBox _launcherTextBox;
+        private Button _launcherBrowseButton;
+        private Button _launcherClearButton;
+        private Button _launcherOpenButton;
         private CheckBox _keepOpenCheckBox;
         private NumericUpDown _startDelayNumeric;
         private NumericUpDown _maxRetriesNumeric;
@@ -21,7 +26,6 @@ namespace IntelligentMutexExecutionEnvironment
         private NumericUpDown _notRespondingTimeoutNumeric;
         private NumericUpDown _memoryLimitNumeric;
         private CheckBox _detectTitleChangeCheckBox;
-        private CheckBox _healthMonitoringCheckBox;
         private Button _resetCrashButton;
         private Button _resetRetryButton;
         private Label _crashCountLabel;
@@ -37,11 +41,32 @@ namespace IntelligentMutexExecutionEnvironment
         private Font _smallBoldFont;
         private Font _buttonFont;
 
+        // Original values captured at dialog open for change detection logging
+        private int _originalCrashCount;
+        private int _originalRetryCount;
+
         public string NewDirectory { get { return _directoryTextBox.Text.Trim(); } }
+        public string NewLauncherPath { get { return _launcherTextBox.Text.Trim(); } }
+
+        /// <summary>
+        /// Formats an exit code for display. Non-zero codes are shown in hex (e.g., "0xC0000005").
+        /// Zero is shown as "0" since it's always a normal exit.
+        /// </summary>
+        private static string FormatExitCode(int exitCode)
+        {
+            if (exitCode == 0)
+                return "0";
+            uint code = unchecked((uint)exitCode);
+            return "0x" + code.ToString("X8");
+        }
 
         public EditAppDialog(ManagedApplication app)
         {
             _app = app;
+
+            // Capture original statistics values before any reset buttons are clicked
+            _originalCrashCount = app.CrashCount;
+            _originalRetryCount = app.RetryCount;
 
             // Create shared fonts once
             _normalFont = new Font("AUMOVIO Screen", 9F);
@@ -55,7 +80,7 @@ namespace IntelligentMutexExecutionEnvironment
         private void InitializeControls()
         {
             this.Text = $"Edit - {_app.AppName}";
-            this.Size = new Size(600, 705);
+            this.Size = new Size(600, 740);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
@@ -116,6 +141,78 @@ namespace IntelligentMutexExecutionEnvironment
 
             y += rowHeight + 10;
 
+            // --- Launcher Script/Exe Section ---
+            var launcherSectionLabel = new Label
+            {
+                Text = "Launcher Script / Exe (Optional)",
+                Location = new Point(labelX, y),
+                AutoSize = true,
+                Font = _boldFont
+            };
+            this.Controls.Add(launcherSectionLabel);
+
+            y += 22;
+
+            var launcherHint = new Label
+            {
+                Text = "If set, IMEE will launch via this script/exe instead of the application path directly. Process detection still uses the application path above.",
+                Location = new Point(labelX, y),
+                AutoSize = true,
+                ForeColor = Color.Gray,
+                Font = _normalFont,
+                MaximumSize = new Size(this.ClientSize.Width - (labelX * 2), 0)
+            };
+            this.Controls.Add(launcherHint);
+
+            y += launcherHint.PreferredSize.Height + 6;
+
+            _launcherTextBox = new TextBox
+            {
+                Text = _app.LauncherPath ?? "",
+                Location = new Point(labelX, y),
+                Size = new Size(controlX + 220, 23),
+                Font = _normalFont
+            };
+            _launcherBrowseButton = new Button
+            {
+                Text = "Browse",
+                Location = new Point(labelX + (controlX + 220) + 10, y - 1),
+                Size = new Size(55, 25),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(52, 152, 219),
+                ForeColor = Color.White,
+                Font = _smallBoldFont
+            };
+            _launcherBrowseButton.Click += LauncherBrowseButton_Click;
+            _launcherOpenButton = new Button
+            {
+                Text = "Open",
+                Location = new Point(labelX + (controlX + 220) + 70, y - 1),
+                Size = new Size(50, 25),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(155, 89, 182),
+                ForeColor = Color.White,
+                Font = _smallBoldFont
+            };
+            _launcherOpenButton.Click += LauncherOpenButton_Click;
+            _launcherClearButton = new Button
+            {
+                Text = "Clear",
+                Location = new Point(labelX + (controlX + 220) + 125, y - 1),
+                Size = new Size(50, 25),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(192, 57, 43),
+                ForeColor = Color.White,
+                Font = _smallBoldFont
+            };
+            _launcherClearButton.Click += (s, ev) => { _launcherTextBox.Text = ""; };
+            this.Controls.Add(_launcherTextBox);
+            this.Controls.Add(_launcherBrowseButton);
+            this.Controls.Add(_launcherOpenButton);
+            this.Controls.Add(_launcherClearButton);
+
+            y += rowHeight + 10;
+
             // --- Startup Settings Section ---
             var startupSectionLabel = new Label
             {
@@ -157,10 +254,10 @@ namespace IntelligentMutexExecutionEnvironment
 
             y += rowHeight + 10;
 
-            // --- Crash Recovery Settings Section ---
+            // --- Crash Recovery & Health Monitoring Section ---
             var settingsSectionLabel = new Label
             {
-                Text = "Crash Recovery Settings",
+                Text = "Crash Recovery",
                 Location = new Point(labelX, y),
                 AutoSize = true,
                 Font = _boldFont
@@ -168,6 +265,20 @@ namespace IntelligentMutexExecutionEnvironment
             this.Controls.Add(settingsSectionLabel);
 
             y += 22;
+
+            // Hint text for the section
+            var sectionHint = new Label
+            {
+                Text = "When disabled, IMEE will only log and notify issues but not take automatic action.",
+                Location = new Point(labelX, y),
+                AutoSize = true,
+                ForeColor = Color.Gray,
+                Font = _normalFont,
+                MaximumSize = new Size(this.ClientSize.Width - (labelX * 2), 0)
+            };
+            this.Controls.Add(sectionHint);
+
+            y += sectionHint.PreferredSize.Height + 8;
 
             // Keep Open
             var keepOpenLabel = new Label
@@ -182,10 +293,6 @@ namespace IntelligentMutexExecutionEnvironment
                 Location = new Point(controlX + 8, y),
                 AutoSize = true,
                 Text = _app.KeepOpen ? "Yes" : "No"
-            };
-            _keepOpenCheckBox.CheckedChanged += (s, e) =>
-            {
-                _keepOpenCheckBox.Text = _keepOpenCheckBox.Checked ? "Yes" : "No";
             };
             this.Controls.Add(keepOpenLabel);
             this.Controls.Add(_keepOpenCheckBox);
@@ -258,52 +365,6 @@ namespace IntelligentMutexExecutionEnvironment
             this.Controls.Add(stableRunLabel);
             this.Controls.Add(_stableRunNumeric);
             this.Controls.Add(stableRunHint);
-
-            y += rowHeight + 10;
-
-            // --- Health Monitoring Section ---
-            var healthSectionLabel = new Label
-            {
-                Text = "Health Monitoring",
-                Location = new Point(labelX, y),
-                AutoSize = true,
-                Font = _boldFont
-            };
-            this.Controls.Add(healthSectionLabel);
-
-            y += 22;
-
-            var healthHint = new Label
-            {
-                Text = "When disabled, IMEE will only log and notify issues but not take automatic action. Even if Keep Alive is enabled, automatic recovery actions will be skipped.",
-                Location = new Point(labelX, y),
-                AutoSize = true,
-                ForeColor = Color.Gray,
-                Font = _normalFont,
-                // Allow wrapping to multiple lines to avoid overlap with other controls
-                MaximumSize = new Size(this.ClientSize.Width - (labelX * 2), 0)
-            };
-            this.Controls.Add(healthHint);
-
-            // Advance 'y' by the rendered height of the hint plus a small gap
-            y += healthHint.PreferredSize.Height + 8;
-
-            var healthEnabledLabel = new Label
-            {
-                Text = "Enable Health Monitoring:",
-                Location = new Point(labelX, y + 2),
-                AutoSize = true
-            };
-            _healthMonitoringCheckBox = new CheckBox
-            {
-                Checked = _app.HealthMonitoringEnabled,
-                Location = new Point(controlX + 8, y),
-                AutoSize = true,
-                Text = _app.HealthMonitoringEnabled ? "Yes" : "No"
-            };
-            _healthMonitoringCheckBox.CheckedChanged += (s, e) => { _healthMonitoringCheckBox.Text = _healthMonitoringCheckBox.Checked ? "Yes" : "No"; };
-            this.Controls.Add(healthEnabledLabel);
-            this.Controls.Add(_healthMonitoringCheckBox);
 
             y += rowHeight;
 
@@ -397,6 +458,16 @@ namespace IntelligentMutexExecutionEnvironment
 
             y += rowHeight + 10;
 
+            // Set initial enabled state for sub-controls based on Keep Open
+            UpdateKeepOpenDependentControls(_keepOpenCheckBox.Checked);
+
+            // Wire up Keep Open checkbox to toggle dependent controls
+            _keepOpenCheckBox.CheckedChanged += (s, e) =>
+            {
+                _keepOpenCheckBox.Text = _keepOpenCheckBox.Checked ? "Yes" : "No";
+                UpdateKeepOpenDependentControls(_keepOpenCheckBox.Checked);
+            };
+
             // --- Statistics Section ---
             var statsSectionLabel = new Label
             {
@@ -486,7 +557,7 @@ namespace IntelligentMutexExecutionEnvironment
                 Location = new Point(labelX, y + 2),
                 AutoSize = true
             };
-            string exitCodeText = _app.LastExitCode.HasValue ? _app.LastExitCode.Value.ToString() : "N/A";
+            string exitCodeText = _app.LastExitCode.HasValue ? FormatExitCode(_app.LastExitCode.Value) : "N/A";
 
             _lastExitCodeLabel = new Label
             {
@@ -511,7 +582,7 @@ namespace IntelligentMutexExecutionEnvironment
             {
                 if (_app.LastExitCode.HasValue)
                 {
-                    Clipboard.SetText(_app.LastExitCode.Value.ToString());
+                    Clipboard.SetText(FormatExitCode(_app.LastExitCode.Value));
                 }
             };
             this.Controls.Add(exitCodeLabel);
@@ -560,6 +631,19 @@ namespace IntelligentMutexExecutionEnvironment
             this.CancelButton = _cancelButton;
         }
 
+        /// <summary>
+        /// Enables or disables all controls that depend on Keep Open being active.
+        /// </summary>
+        private void UpdateKeepOpenDependentControls(bool enabled)
+        {
+            _maxRetriesNumeric.Enabled = enabled;
+            _startDelayNumeric.Enabled = enabled;
+            _stableRunNumeric.Enabled = enabled;
+            _notRespondingTimeoutNumeric.Enabled = enabled;
+            _memoryLimitNumeric.Enabled = enabled;
+            _detectTitleChangeCheckBox.Enabled = enabled;
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)
@@ -586,6 +670,24 @@ namespace IntelligentMutexExecutionEnvironment
                 if (dialog.ShowDialog(this) == DialogResult.OK)
                 {
                     _directoryTextBox.Text = dialog.FileName;
+                }
+            }
+        }
+
+        private void LauncherBrowseButton_Click(object sender, EventArgs e)
+        {
+            using (OpenFileDialog dialog = new OpenFileDialog())
+            {
+                dialog.Filter = "Launcher Files (*.exe;*.bat;*.cmd;*.vbs;*.ps1)|*.exe;*.bat;*.cmd;*.vbs;*.ps1|Executable Files (*.exe)|*.exe|Batch Files (*.bat;*.cmd)|*.bat;*.cmd|VBScript Files (*.vbs)|*.vbs|PowerShell Scripts (*.ps1)|*.ps1|All Files (*.*)|*.*";
+                dialog.Title = "Select Launcher Script or Executable";
+                if (!string.IsNullOrEmpty(_launcherTextBox.Text) && File.Exists(_launcherTextBox.Text))
+                {
+                    dialog.FileName = _launcherTextBox.Text;
+                }
+
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    _launcherTextBox.Text = dialog.FileName;
                 }
             }
         }
@@ -627,6 +729,43 @@ namespace IntelligentMutexExecutionEnvironment
             }
         }
 
+        private void LauncherOpenButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                string path = _launcherTextBox.Text.Trim();
+                if (string.IsNullOrEmpty(path))
+                {
+                    MessageBox.Show(this, "Launcher path is empty.", "Open Path",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                if (File.Exists(path))
+                {
+                    Process.Start("explorer.exe", "/select, \"" + path + "\"");
+                }
+                else
+                {
+                    string dir = Path.GetDirectoryName(path);
+                    if (!string.IsNullOrEmpty(dir) && System.IO.Directory.Exists(dir))
+                    {
+                        Process.Start("explorer.exe", "\"" + dir + "\"");
+                    }
+                    else
+                    {
+                        MessageBox.Show(this, "The specified path does not exist.", "Open Path",
+                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Error opening path: {ex.Message}", "Open Path",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         private void OkButton_Click(object sender, EventArgs e)
         {
             if (string.IsNullOrEmpty(_directoryTextBox.Text.Trim()))
@@ -636,15 +775,136 @@ namespace IntelligentMutexExecutionEnvironment
                 return;
             }
 
-            _app.KeepOpen = _keepOpenCheckBox.Checked;
-            _app.HealthMonitoringEnabled = _healthMonitoringCheckBox.Checked;
-            _app.MaxRetries = (int)_maxRetriesNumeric.Value;
-            _app.StartDelaySeconds = (int)_startDelayNumeric.Value;
-            _app.StartupDelaySeconds = (int)_startupDelayNumeric.Value;
-            _app.StableRunPeriodSeconds = (int)_stableRunNumeric.Value;
-            _app.NotRespondingTimeoutSeconds = (int)_notRespondingTimeoutNumeric.Value;
-            _app.MemoryLimitMB = (int)_memoryLimitNumeric.Value;
-            _app.DetectTitleChange = _detectTitleChangeCheckBox.Checked;
+            // Validate launcher path if set
+            string launcherPath = _launcherTextBox.Text.Trim();
+            if (!string.IsNullOrEmpty(launcherPath) && !File.Exists(launcherPath))
+            {
+                MessageBox.Show(this, "Launcher path does not exist:\n\n" + launcherPath, "Validation",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Capture new values
+            bool newKeepOpen = _keepOpenCheckBox.Checked;
+            bool newHealthMonitoringEnabled = _keepOpenCheckBox.Checked;
+            int newMaxRetries = (int)_maxRetriesNumeric.Value;
+            int newStartDelaySeconds = (int)_startDelayNumeric.Value;
+            int newStartupDelaySeconds = (int)_startupDelayNumeric.Value;
+            int newStableRunPeriodSeconds = (int)_stableRunNumeric.Value;
+            int newNotRespondingTimeoutSeconds = (int)_notRespondingTimeoutNumeric.Value;
+            int newMemoryLimitMB = (int)_memoryLimitNumeric.Value;
+            bool newDetectTitleChange = _detectTitleChangeCheckBox.Checked;
+            string newLauncherPath = string.IsNullOrEmpty(launcherPath) ? null : launcherPath;
+
+            // Log each individual change for traceability and accountability
+            string appName = _app.AppName ?? "(unknown)";
+            int changeCount = 0;
+
+            string newDirectory = _directoryTextBox.Text.Trim();
+            if (_app.Directory != newDirectory)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' Directory changed: \"{Path.GetFileName(_app.Directory)}\" to \"{Path.GetFileName(newDirectory)}\"");
+                changeCount++;
+            }
+
+            if (_app.KeepOpen != newKeepOpen)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' KeepOpen changed: {_app.KeepOpen} to {newKeepOpen}");
+                changeCount++;
+            }
+            if (_app.HealthMonitoringEnabled != newHealthMonitoringEnabled)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' HealthMonitoringEnabled changed: {_app.HealthMonitoringEnabled} to {newHealthMonitoringEnabled}");
+                changeCount++;
+            }
+            if (_app.MaxRetries != newMaxRetries)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' MaxRetries changed: {_app.MaxRetries} to {newMaxRetries}");
+                changeCount++;
+            }
+            if (_app.StartDelaySeconds != newStartDelaySeconds)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' StartDelaySeconds changed: {_app.StartDelaySeconds} to {newStartDelaySeconds}");
+                changeCount++;
+            }
+            if (_app.StartupDelaySeconds != newStartupDelaySeconds)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' StartupDelaySeconds changed: {_app.StartupDelaySeconds} to {newStartupDelaySeconds}");
+                changeCount++;
+            }
+            if (_app.StableRunPeriodSeconds != newStableRunPeriodSeconds)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' StableRunPeriodSeconds changed: {_app.StableRunPeriodSeconds} to {newStableRunPeriodSeconds}");
+                changeCount++;
+            }
+            if (_app.NotRespondingTimeoutSeconds != newNotRespondingTimeoutSeconds)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' NotRespondingTimeoutSeconds changed: {_app.NotRespondingTimeoutSeconds} to {newNotRespondingTimeoutSeconds}");
+                changeCount++;
+            }
+            if (_app.MemoryLimitMB != newMemoryLimitMB)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' MemoryLimitMB changed: {_app.MemoryLimitMB} to {newMemoryLimitMB}");
+                changeCount++;
+            }
+            if (_app.DetectTitleChange != newDetectTitleChange)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' DetectTitleChange changed: {_app.DetectTitleChange} to {newDetectTitleChange}");
+                changeCount++;
+            }
+            if (_app.LauncherPath != newLauncherPath)
+            {
+                string oldLauncher = string.IsNullOrEmpty(_app.LauncherPath) ? "(none)" : Path.GetFileName(_app.LauncherPath);
+                string newLauncher = string.IsNullOrEmpty(newLauncherPath) ? "(none)" : Path.GetFileName(newLauncherPath);
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' LauncherPath changed: {oldLauncher} to {newLauncher}");
+                changeCount++;
+            }
+            if (_originalCrashCount != int.Parse(_crashCountLabel.Text))
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' CrashCount reset: {_originalCrashCount} to {_crashCountLabel.Text}");
+                changeCount++;
+            }
+            if (_originalRetryCount != int.Parse(_retryCountLabel.Text.Split('/')[0].Trim()))
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' RetryCount reset: {_originalRetryCount} to {_retryCountLabel.Text.Split('/')[0].Trim()}");
+                changeCount++;
+            }
+
+            if (changeCount == 0)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' edit dialog closed with OK — no settings changes detected");
+            }
+            else
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' total settings changed: {changeCount}");
+            }
+
+            // Apply the new values
+            _app.KeepOpen = newKeepOpen;
+            _app.HealthMonitoringEnabled = newHealthMonitoringEnabled;
+            _app.MaxRetries = newMaxRetries;
+            _app.StartDelaySeconds = newStartDelaySeconds;
+            _app.StartupDelaySeconds = newStartupDelaySeconds;
+            _app.StableRunPeriodSeconds = newStableRunPeriodSeconds;
+            _app.NotRespondingTimeoutSeconds = newNotRespondingTimeoutSeconds;
+            _app.MemoryLimitMB = newMemoryLimitMB;
+            _app.DetectTitleChange = newDetectTitleChange;
+            _app.LauncherPath = newLauncherPath;
             this.DialogResult = DialogResult.OK;
             this.Close();
         }
@@ -652,13 +912,6 @@ namespace IntelligentMutexExecutionEnvironment
         private void InitializeComponent()
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(EditAppDialog));
-            this.SuspendLayout();
-            // 
-            // EditAppDialog
-            // 
-            this.ClientSize = new System.Drawing.Size(284, 261);
-            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
-            this.Name = "EditAppDialog";
             this.ResumeLayout(false);
 
         }

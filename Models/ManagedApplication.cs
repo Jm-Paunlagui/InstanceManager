@@ -9,6 +9,16 @@ namespace IntelligentMutexExecutionEnvironment.Models
         public int GroupId { get; set; }
         public string AppName { get; set; }
         public string Directory { get; set; }
+
+        /// <summary>
+        /// Optional path to a launcher script (.vbs, .bat, .ps1, .cmd) or launcher executable
+        /// that is used to start the application instead of launching the primary exe directly.
+        /// When set, IMEE will execute this launcher to start the app, but will still monitor
+        /// the primary exe (Directory) for running status detection.
+        /// Null or empty means the app is launched directly from Directory.
+        /// </summary>
+        public string LauncherPath { get; set; }
+
         public DateTime AddedDate { get; set; }
         public bool IsRunning { get; set; }
         public DateTime? LastStart { get; set; }
@@ -68,13 +78,14 @@ namespace IntelligentMutexExecutionEnvironment.Models
             RetryCount = 0;
             MaxRetries = 3;
             StartDelaySeconds = 5;
-            StartupDelaySeconds = 0;
+            StartupDelaySeconds = 10;
             StableRunPeriodSeconds = 30;
             NotRespondingTimeoutSeconds = 0;
             MemoryLimitMB = 0;
             LastExitCode = null;
             DetectTitleChange = false;
             HealthMonitoringEnabled = false; // default: disabled (opt-in is off)
+            LauncherPath = null;
         }
 
         public string GetLastStartDisplay()

@@ -12,11 +12,18 @@ namespace IntelligentMutexExecutionEnvironment.Services
 
         // === General Settings ===
         private string _stationName;
+        private bool _runOnStartup;
 
         public string StationName
         {
             get { return _stationName ?? ""; }
             set { _stationName = value ?? ""; Save(); }
+        }
+
+        public bool RunOnStartup
+        {
+            get { return _runOnStartup; }
+            set { _runOnStartup = value; Save(); }
         }
 
         // === Performance Settings ===
@@ -113,6 +120,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
         private void SetDefaults()
         {
             _stationName = "";
+            _runOnStartup = false;
             _statusPollIntervalMs = DefaultStatusPollIntervalMs;
             _startGracePeriodSeconds = DefaultStartGracePeriodSeconds;
             _gcCollectIntervalMinutes = DefaultGcCollectIntervalMinutes;
@@ -125,19 +133,100 @@ namespace IntelligentMutexExecutionEnvironment.Services
         /// <summary>
         /// Saves all settings without triggering individual property Save() calls.
         /// Use this when updating multiple settings at once from a dialog.
+        /// Logs every individual setting change for traceability and accountability.
         /// </summary>
-        public void SaveAll(string stationName, int statusPollIntervalMs, int startGracePeriodSeconds,
+        public void SaveAll(string stationName, bool runOnStartup, int statusPollIntervalMs, int startGracePeriodSeconds,
             int gcCollectIntervalMinutes, int storageSaveIntervalSeconds,
             int logFlushIntervalSeconds, int logBufferSize, int logRetentionDays)
         {
-            _stationName = stationName ?? "";
-            _statusPollIntervalMs = Clamp(statusPollIntervalMs, 1000, 60000);
-            _startGracePeriodSeconds = Clamp(startGracePeriodSeconds, 1, 120);
-            _gcCollectIntervalMinutes = Clamp(gcCollectIntervalMinutes, 5, 1440);
-            _storageSaveIntervalSeconds = Clamp(storageSaveIntervalSeconds, 5, 300);
-            _logFlushIntervalSeconds = Clamp(logFlushIntervalSeconds, 1, 120);
-            _logBufferSize = Clamp(logBufferSize, 10, 1000);
-            _logRetentionDays = Clamp(logRetentionDays, 1, 365);
+            // Clamp new values first
+            string newStationName = stationName ?? "";
+            bool newRunOnStartup = runOnStartup;
+            int newStatusPollIntervalMs = Clamp(statusPollIntervalMs, 1000, 60000);
+            int newStartGracePeriodSeconds = Clamp(startGracePeriodSeconds, 1, 120);
+            int newGcCollectIntervalMinutes = Clamp(gcCollectIntervalMinutes, 5, 1440);
+            int newStorageSaveIntervalSeconds = Clamp(storageSaveIntervalSeconds, 5, 300);
+            int newLogFlushIntervalSeconds = Clamp(logFlushIntervalSeconds, 1, 120);
+            int newLogBufferSize = Clamp(logBufferSize, 10, 1000);
+            int newLogRetentionDays = Clamp(logRetentionDays, 1, 365);
+
+            // Log each individual change for traceability and accountability
+            int changeCount = 0;
+            if (_stationName != newStationName)
+            {
+                SimpleLogger.Info("SettingsChanged @ SettingsService.cs",
+                    $"StationName changed: \"{_stationName}\" to \"{newStationName}\"");
+                changeCount++;
+            }
+            if (_runOnStartup != newRunOnStartup)
+            {
+                SimpleLogger.Info("SettingsChanged @ SettingsService.cs",
+                    $"RunOnStartup changed: {_runOnStartup} to {newRunOnStartup}");
+                changeCount++;
+            }
+            if (_statusPollIntervalMs != newStatusPollIntervalMs)
+            {
+                SimpleLogger.Info("SettingsChanged @ SettingsService.cs",
+                    $"StatusPollIntervalMs changed: {_statusPollIntervalMs} to {newStatusPollIntervalMs}");
+                changeCount++;
+            }
+            if (_startGracePeriodSeconds != newStartGracePeriodSeconds)
+            {
+                SimpleLogger.Info("SettingsChanged @ SettingsService.cs",
+                    $"StartGracePeriodSeconds changed: {_startGracePeriodSeconds} to {newStartGracePeriodSeconds}");
+                changeCount++;
+            }
+            if (_gcCollectIntervalMinutes != newGcCollectIntervalMinutes)
+            {
+                SimpleLogger.Info("SettingsChanged @ SettingsService.cs",
+                    $"GcCollectIntervalMinutes changed: {_gcCollectIntervalMinutes} to {newGcCollectIntervalMinutes}");
+                changeCount++;
+            }
+            if (_storageSaveIntervalSeconds != newStorageSaveIntervalSeconds)
+            {
+                SimpleLogger.Info("SettingsChanged @ SettingsService.cs",
+                    $"StorageSaveIntervalSeconds changed: {_storageSaveIntervalSeconds} to {newStorageSaveIntervalSeconds}");
+                changeCount++;
+            }
+            if (_logFlushIntervalSeconds != newLogFlushIntervalSeconds)
+            {
+                SimpleLogger.Info("SettingsChanged @ SettingsService.cs",
+                    $"LogFlushIntervalSeconds changed: {_logFlushIntervalSeconds} to {newLogFlushIntervalSeconds}");
+                changeCount++;
+            }
+            if (_logBufferSize != newLogBufferSize)
+            {
+                SimpleLogger.Info("SettingsChanged @ SettingsService.cs",
+                    $"LogBufferSize changed: {_logBufferSize} to {newLogBufferSize}");
+                changeCount++;
+            }
+            if (_logRetentionDays != newLogRetentionDays)
+            {
+                SimpleLogger.Info("SettingsChanged @ SettingsService.cs",
+                    $"LogRetentionDays changed: {_logRetentionDays} to {newLogRetentionDays}");
+                changeCount++;
+            }
+
+            if (changeCount == 0)
+            {
+                SimpleLogger.Info("SettingsChanged @ SettingsService.cs", "Settings dialog closed with OK — no changes detected");
+            }
+            else
+            {
+                SimpleLogger.Info("SettingsChanged @ SettingsService.cs",
+                    $"Total settings changed: {changeCount}");
+            }
+
+            // Apply the new values
+            _stationName = newStationName;
+            _runOnStartup = newRunOnStartup;
+            _statusPollIntervalMs = newStatusPollIntervalMs;
+            _startGracePeriodSeconds = newStartGracePeriodSeconds;
+            _gcCollectIntervalMinutes = newGcCollectIntervalMinutes;
+            _storageSaveIntervalSeconds = newStorageSaveIntervalSeconds;
+            _logFlushIntervalSeconds = newLogFlushIntervalSeconds;
+            _logBufferSize = newLogBufferSize;
+            _logRetentionDays = newLogRetentionDays;
             Save();
         }
 
@@ -198,6 +287,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 StringBuilder sb = new StringBuilder();
                 sb.AppendLine("{");
                 sb.AppendLine($"  \"StationName\": \"{EscapeJson(_stationName)}\",");
+                sb.AppendLine($"  \"RunOnStartup\": {(_runOnStartup ? "true" : "false")},");
                 sb.AppendLine($"  \"StatusPollIntervalMs\": {_statusPollIntervalMs},");
                 sb.AppendLine($"  \"StartGracePeriodSeconds\": {_startGracePeriodSeconds},");
                 sb.AppendLine($"  \"GcCollectIntervalMinutes\": {_gcCollectIntervalMinutes},");
@@ -207,16 +297,18 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 sb.AppendLine($"  \"LogRetentionDays\": {_logRetentionDays}");
                 sb.AppendLine("}");
 
-                // Write to temp file first, then replace to avoid corruption on crash
+                // Write to temp file first, then atomically replace to avoid corruption on crash
                 string tempPath = _settingsPath + ".tmp";
                 File.WriteAllText(tempPath, sb.ToString());
 
                 if (File.Exists(_settingsPath))
                 {
-                    File.Delete(_settingsPath);
+                    File.Replace(tempPath, _settingsPath, null);
                 }
-
-                File.Move(tempPath, _settingsPath);
+                else
+                {
+                    File.Move(tempPath, _settingsPath);
+                }
 
                 SimpleLogger.Debug("Save @ SettingsService.cs", "Settings saved");
             }
@@ -260,6 +352,9 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 {
                     case "StationName":
                         _stationName = value;
+                        break;
+                    case "RunOnStartup":
+                        _runOnStartup = value.Equals("true", StringComparison.OrdinalIgnoreCase);
                         break;
                     case "StatusPollIntervalMs":
                         int spim;
@@ -346,11 +441,42 @@ namespace IntelligentMutexExecutionEnvironment.Services
         private string UnescapeJson(string value)
         {
             if (string.IsNullOrEmpty(value)) return "";
-            return value.Replace("\\\\", "\x00")
-                        .Replace("\\\"", "\"")
-                        .Replace("\\n", "\n")
-                        .Replace("\\r", "\r")
-                        .Replace("\x00", "\\");
+
+            StringBuilder sb = new StringBuilder(value.Length);
+            for (int i = 0; i < value.Length; i++)
+            {
+                if (value[i] == '\\' && i + 1 < value.Length)
+                {
+                    char next = value[i + 1];
+                    switch (next)
+                    {
+                        case '\\':
+                            sb.Append('\\');
+                            i++;
+                            break;
+                        case '"':
+                            sb.Append('"');
+                            i++;
+                            break;
+                        case 'n':
+                            sb.Append('\n');
+                            i++;
+                            break;
+                        case 'r':
+                            sb.Append('\r');
+                            i++;
+                            break;
+                        default:
+                            sb.Append('\\');
+                            break;
+                    }
+                }
+                else
+                {
+                    sb.Append(value[i]);
+                }
+            }
+            return sb.ToString();
         }
     }
 }
