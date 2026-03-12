@@ -173,59 +173,90 @@ Every poll interval (default: 10 seconds, configurable via Settings):
        → Timer expired? → AttemptAutoRestart
        → Otherwise: skip (countdown handled by 1-second timer)
 
-     Pending Stop?
+     Pending Stop? (user-initiated)
        → Process exited? → Clean up (kill zombies), show "Stopped"
        → Still running? → Show "Stopping..."
 
      Failed (max retries)?
        → Show "Failed" in red
 
-     In Grace Period?
-       → Window appeared? → Show "Running"
+     Pending Sequential Start? (Start All with delays)
+       → Skip (countdown handled by sequential launch timer)
+
+     In Grace Period? (startup window detection delay)
+       → Window appeared? → Track actual app process, show "Running", end grace period
+       → Period expired + running? → Show "Running"
+       → Period expired + not running? → Extend grace for launcher-based apps
        → Still waiting? → Show "Starting..."
 
-     Stable Run Check?
-       → Period elapsed? → Reset retry count to 0
+     Stable Run Check? (auto-restart retry count reset)
+       → Period elapsed? → Reset retry count to 0, clear last exit code
 
      Not Responding? (KeepOpen)
        → First detection? → Start tracking
-       → Timeout elapsed? → Force-kill
+       → Timeout elapsed? (configurable or 2 poll cycles)
+         → HealthMonitoring=On? → Force-kill, record reason
+         → HealthMonitoring=Off? → Notify user once
 
-     Error Dialog? (KeepOpen)
-       → Title matches pattern? → Confirm on next tick → Force-kill
+     Error Dialog? (KeepOpen, title pattern matching)
+       → Title matches pattern? → First detection: confirm on next tick
+       → Second consecutive detection?
+         → HealthMonitoring=On? → Force-kill, record reason
+         → HealthMonitoring=Off? → Notify user once
 
      Title Changed? (KeepOpen + DetectTitleChange)
-       → Title differs from baseline? → Confirm on next tick → Force-kill
+       → Title differs from baseline? → First detection: confirm on next tick
+       → Second consecutive detection?
+         → HealthMonitoring=On? → Force-kill, record reason
+         → HealthMonitoring=Off? → Notify user once
 
-     Memory Limit? (KeepOpen)
-       → WorkingSet64 > limit? → Force-kill immediately
+     Memory Limit? (KeepOpen, WorkingSet64 > configured limit)
+       → Limit breached?
+         → HealthMonitoring=On? → Force-kill immediately, record reason
+         → HealthMonitoring=Off? → Notify user once
 
-     CPU-Hung? (KeepOpen)
-       → >95% CPU for 3 ticks? → Force-kill
-
-     Background Zombie?
-       → Window gone but process alive? → Kill zombies
+     CPU-Hung? (KeepOpen, >95% CPU for 3 consecutive ticks)
+       → High CPU detected? → Increment streak counter
+       → Streak >= 3?
+         → HealthMonitoring=On? → Force-kill, record reason
+         → HealthMonitoring=Off? → Notify user once, reset streak
+       → CPU normal? → Reset streak counter
 
      Unauthorized Launch? (cross-group aware)
-       → Authorized sibling in another group? → "Running (Other Group)"
-       → No authorized sibling? → Kill + notify user
+       → Running but not authorized?
+         → Authorized sibling in another group? → Show "Running (Other Group)"
+         → No authorized sibling + new detection? → Kill process + notify user once
 
      Was Running → Now Stopped? (crash or external close)
-       → KeepOpen? → Schedule restart with countdown
-       → No KeepOpen? → Record stop time
+       → Retrieve exit code from tracked process handle
+       → Check if exit was from health monitoring force-kill
+       → Clean up any lingering background/zombie processes
+       → KeepOpen=Yes?
+         → Retry count >= MaxRetries?
+           → Mark as "Failed", notify user once, no further restarts
+         → Retry count < MaxRetries?
+           → HealthMonitoring=On?
+             → Schedule restart with countdown
+             → Start 1-second countdown timer
+           → HealthMonitoring=Off?
+             → Increment crash count, show "Stopped (Issue Detected)", notify user once
+       → KeepOpen=No?
+         → Exit code non-zero or unavailable?
+           → Increment crash count, show "Stopped (Crashed)", notify user once
+         → Exit code = 0?
+           → Show "Stopped"
 
-     State changed? → Update storage
-     Update ListView display
+     Catch-all: ensure running, authorized apps display "Running" (green)
+       → Handles edge cases where status text was left in transitional state
 
-  4. FlushPendingChanges()
-  5. UpdateGroupIndicators()
+  4. Update group indicators (owner-drawn colored circles with count suffixes)
 ```
 
 ## Technical Details
 
 | Detail | Value |
 |--------|-------|
-| .NET Target | .NET Framework 4.0 |
+| .NET Target | .NET Framework 4.8 |
 | C# Version | 7.3 |
 | UI Framework | Windows Forms |
 | External Dependencies | **0** (zero) |
@@ -237,7 +268,7 @@ Every poll interval (default: 10 seconds, configurable via Settings):
 | Not Responding Timeout | 0 = 2 poll cycles (configurable: 0–600s per app) |
 | Memory Limit | 0 = disabled (configurable: 0–65536 MB per app) |
 | CPU-Hung Threshold | 95% for 3 consecutive ticks |
-| Error Dialog Patterns | 27+ patterns (always active) |
+| Error Dialog Patterns | 27 patterns (always active) |
 | GC Collect Interval | 30 minutes (configurable: 5–1440 min) |
 | Storage Save Interval | 30 seconds (configurable: 5–300s) |
 | Default Max Retries | 3 |
@@ -250,7 +281,7 @@ Every poll interval (default: 10 seconds, configurable via Settings):
 
 ### Requirements
 - Visual Studio 2010 or later
-- .NET Framework 4.0 or higher
+- .NET Framework 4.8 or higher
 - Windows XP SP3 or later
 
 ### Building
