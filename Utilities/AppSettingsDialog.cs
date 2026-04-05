@@ -68,11 +68,11 @@ namespace IntelligentMutexExecutionEnvironment
             _originalCrashCount = app.CrashCount;
             _originalRetryCount = app.RetryCount;
 
-            // Create shared fonts once
-            _normalFont = new Font("AUMOVIO Screen", 9F);
-            _boldFont = new Font("AUMOVIO Screen", 9F, FontStyle.Bold);
-            _smallBoldFont = new Font("AUMOVIO Screen", 7F, FontStyle.Bold);
-            _buttonFont = new Font("AUMOVIO Screen", 8F, FontStyle.Bold);
+            // Create shared fonts once (scaled by user font size preference)
+            _normalFont = DpiScaler.CreateFont("AUMOVIO Screen", 9F);
+            _boldFont = DpiScaler.CreateFont("AUMOVIO Screen", 9F, FontStyle.Bold);
+            _smallBoldFont = DpiScaler.CreateFont("AUMOVIO Screen", 7F, FontStyle.Bold);
+            _buttonFont = DpiScaler.CreateFont("AUMOVIO Screen", 8F, FontStyle.Bold);
 
             InitializeControls();
         }
@@ -80,17 +80,19 @@ namespace IntelligentMutexExecutionEnvironment
         private void InitializeControls()
         {
             this.Text = $"Edit - {_app.AppName}";
-            this.Size = new Size(600, 740);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.StartPosition = FormStartPosition.CenterParent;
             this.Font = _normalFont;
+            this.AutoScaleMode = AutoScaleMode.None;
 
-            int labelX = 20;
-            int controlX = 170;
-            int y = 20;
-            int rowHeight = 32;
+            int labelX = DpiScaler.Scale(20);
+            int controlX = DpiScaler.Scale(170);
+            int y = DpiScaler.Scale(20);
+            int rowHeight = DpiScaler.Scale(32);
+            int textBoxWidth = controlX + DpiScaler.Scale(220);
+            int hintX = controlX + DpiScaler.Scale(85);
 
             // --- Directory Section ---
             var dirSectionLabel = new Label
@@ -102,22 +104,22 @@ namespace IntelligentMutexExecutionEnvironment
             };
             this.Controls.Add(dirSectionLabel);
 
-            y += 22;
+            y += DpiScaler.Scale(22);
 
             _directoryTextBox = new TextBox
             {
                 Text = _app.Directory ?? "",
                 Location = new Point(labelX, y),
-                // Wider textbox to use dialog width better
-                Size = new Size(controlX + 220, 23),
+                Size = new Size(textBoxWidth, DpiScaler.Scale(23)),
                 Font = _normalFont
             };
+            int btnSmallWidth = DpiScaler.Scale(75);
+            int btnSmallHeight = DpiScaler.Scale(25);
             _browseButton = new Button
             {
                 Text = "Browse",
-                // position buttons to the right of the widened textbox
-                Location = new Point(labelX + (controlX + 220) + 10, y - 1),
-                Size = new Size(75, 25),
+                Location = new Point(labelX + textBoxWidth + DpiScaler.Scale(10), y - 1),
+                Size = new Size(btnSmallWidth, btnSmallHeight),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(52, 152, 219),
                 ForeColor = Color.White,
@@ -127,8 +129,8 @@ namespace IntelligentMutexExecutionEnvironment
             _openPathButton = new Button
             {
                 Text = "Open",
-                Location = new Point(labelX + (controlX + 220) + 95, y - 1),
-                Size = new Size(75, 25),
+                Location = new Point(labelX + textBoxWidth + DpiScaler.Scale(95), y - 1),
+                Size = new Size(btnSmallWidth, btnSmallHeight),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(155, 89, 182),
                 ForeColor = Color.White,
@@ -139,7 +141,7 @@ namespace IntelligentMutexExecutionEnvironment
             this.Controls.Add(_browseButton);
             this.Controls.Add(_openPathButton);
 
-            y += rowHeight + 10;
+            y += rowHeight + DpiScaler.Scale(10);
 
             // --- Launcher Script/Exe Section ---
             var launcherSectionLabel = new Label
@@ -151,8 +153,9 @@ namespace IntelligentMutexExecutionEnvironment
             };
             this.Controls.Add(launcherSectionLabel);
 
-            y += 22;
+            y += DpiScaler.Scale(22);
 
+            int clientWidth = labelX + textBoxWidth + DpiScaler.Scale(200);
             var launcherHint = new Label
             {
                 Text = "If set, IMEE will launch via this script/exe instead of the application path directly. Process detection still uses the application path above.",
@@ -160,24 +163,26 @@ namespace IntelligentMutexExecutionEnvironment
                 AutoSize = true,
                 ForeColor = Color.Gray,
                 Font = _normalFont,
-                MaximumSize = new Size(this.ClientSize.Width - (labelX * 2), 0)
+                MaximumSize = new Size(clientWidth - (labelX * 2), 0)
             };
             this.Controls.Add(launcherHint);
 
-            y += launcherHint.PreferredSize.Height + 6;
+            y += launcherHint.PreferredSize.Height + DpiScaler.Scale(6);
 
+            int launcherBtnWidth = DpiScaler.Scale(55);
+            int launcherBtnSmall = DpiScaler.Scale(50);
             _launcherTextBox = new TextBox
             {
                 Text = _app.LauncherPath ?? "",
                 Location = new Point(labelX, y),
-                Size = new Size(controlX + 220, 23),
+                Size = new Size(textBoxWidth, DpiScaler.Scale(23)),
                 Font = _normalFont
             };
             _launcherBrowseButton = new Button
             {
                 Text = "Browse",
-                Location = new Point(labelX + (controlX + 220) + 10, y - 1),
-                Size = new Size(55, 25),
+                Location = new Point(labelX + textBoxWidth + DpiScaler.Scale(10), y - 1),
+                Size = new Size(launcherBtnWidth, btnSmallHeight),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(52, 152, 219),
                 ForeColor = Color.White,
@@ -187,8 +192,8 @@ namespace IntelligentMutexExecutionEnvironment
             _launcherOpenButton = new Button
             {
                 Text = "Open",
-                Location = new Point(labelX + (controlX + 220) + 70, y - 1),
-                Size = new Size(50, 25),
+                Location = new Point(labelX + textBoxWidth + DpiScaler.Scale(70), y - 1),
+                Size = new Size(launcherBtnSmall, btnSmallHeight),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(155, 89, 182),
                 ForeColor = Color.White,
@@ -198,8 +203,8 @@ namespace IntelligentMutexExecutionEnvironment
             _launcherClearButton = new Button
             {
                 Text = "Clear",
-                Location = new Point(labelX + (controlX + 220) + 125, y - 1),
-                Size = new Size(50, 25),
+                Location = new Point(labelX + textBoxWidth + DpiScaler.Scale(125), y - 1),
+                Size = new Size(launcherBtnSmall, btnSmallHeight),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(192, 57, 43),
                 ForeColor = Color.White,
@@ -211,7 +216,7 @@ namespace IntelligentMutexExecutionEnvironment
             this.Controls.Add(_launcherOpenButton);
             this.Controls.Add(_launcherClearButton);
 
-            y += rowHeight + 10;
+            y += rowHeight + DpiScaler.Scale(10);
 
             // --- Startup Settings Section ---
             var startupSectionLabel = new Label
@@ -223,7 +228,7 @@ namespace IntelligentMutexExecutionEnvironment
             };
             this.Controls.Add(startupSectionLabel);
 
-            y += 22;
+            y += DpiScaler.Scale(22);
 
             // Startup Delay
             var startupDelayLabel = new Label
@@ -238,12 +243,12 @@ namespace IntelligentMutexExecutionEnvironment
                 Maximum = 300,
                 Value = Math.Max(0, _app.StartupDelaySeconds),
                 Location = new Point(controlX, y),
-                Size = new Size(80, 23)
+                Size = new Size(DpiScaler.Scale(80), DpiScaler.Scale(23))
             };
             var startupDelayHint = new Label
             {
                 Text = "Wait time before launching in Start All",
-                Location = new Point(controlX + 85, y + 2),
+                Location = new Point(hintX, y + 2),
                 AutoSize = true,
                 ForeColor = Color.Gray,
                 Font = _normalFont
@@ -252,7 +257,7 @@ namespace IntelligentMutexExecutionEnvironment
             this.Controls.Add(_startupDelayNumeric);
             this.Controls.Add(startupDelayHint);
 
-            y += rowHeight + 10;
+            y += rowHeight + DpiScaler.Scale(10);
 
             // --- Crash Recovery & Health Monitoring Section ---
             var settingsSectionLabel = new Label
@@ -264,7 +269,7 @@ namespace IntelligentMutexExecutionEnvironment
             };
             this.Controls.Add(settingsSectionLabel);
 
-            y += 22;
+            y += DpiScaler.Scale(22);
 
             // Hint text for the section
             var sectionHint = new Label
@@ -274,11 +279,14 @@ namespace IntelligentMutexExecutionEnvironment
                 AutoSize = true,
                 ForeColor = Color.Gray,
                 Font = _normalFont,
-                MaximumSize = new Size(this.ClientSize.Width - (labelX * 2), 0)
+                MaximumSize = new Size(clientWidth - (labelX * 2), 0)
             };
             this.Controls.Add(sectionHint);
 
-            y += sectionHint.PreferredSize.Height + 8;
+            y += sectionHint.PreferredSize.Height + DpiScaler.Scale(8);
+
+            int numericWidth = DpiScaler.Scale(80);
+            int numericHeight = DpiScaler.Scale(23);
 
             // Keep Open
             var keepOpenLabel = new Label
@@ -290,7 +298,7 @@ namespace IntelligentMutexExecutionEnvironment
             _keepOpenCheckBox = new CheckBox
             {
                 Checked = _app.KeepOpen,
-                Location = new Point(controlX + 8, y),
+                Location = new Point(controlX + DpiScaler.Scale(8), y),
                 AutoSize = true,
                 Text = _app.KeepOpen ? "Yes" : "No"
             };
@@ -312,7 +320,7 @@ namespace IntelligentMutexExecutionEnvironment
                 Maximum = 100,
                 Value = Math.Max(1, _app.MaxRetries),
                 Location = new Point(controlX, y),
-                Size = new Size(80, 23)
+                Size = new Size(numericWidth, numericHeight)
             };
             this.Controls.Add(maxRetriesLabel);
             this.Controls.Add(_maxRetriesNumeric);
@@ -332,7 +340,7 @@ namespace IntelligentMutexExecutionEnvironment
                 Maximum = 300,
                 Value = Math.Max(1, _app.StartDelaySeconds),
                 Location = new Point(controlX, y),
-                Size = new Size(80, 23)
+                Size = new Size(numericWidth, numericHeight)
             };
             this.Controls.Add(startDelayLabel);
             this.Controls.Add(_startDelayNumeric);
@@ -352,12 +360,12 @@ namespace IntelligentMutexExecutionEnvironment
                 Maximum = 600,
                 Value = Math.Max(5, _app.StableRunPeriodSeconds),
                 Location = new Point(controlX, y),
-                Size = new Size(80, 23)
+                Size = new Size(numericWidth, numericHeight)
             };
             var stableRunHint = new Label
             {
                 Text = "Run time before retry count resets",
-                Location = new Point(controlX + 85, y + 2),
+                Location = new Point(hintX, y + 2),
                 AutoSize = true,
                 ForeColor = Color.Gray,
                 Font = _normalFont
@@ -381,12 +389,12 @@ namespace IntelligentMutexExecutionEnvironment
                 Maximum = 600,
                 Value = Math.Max(0, Math.Min(600, _app.NotRespondingTimeoutSeconds)),
                 Location = new Point(controlX, y),
-                Size = new Size(80, 23)
+                Size = new Size(numericWidth, numericHeight)
             };
             var nrtHint = new Label
             {
                 Text = "0 = default (2 poll cycles)",
-                Location = new Point(controlX + 85, y + 2),
+                Location = new Point(hintX, y + 2),
                 AutoSize = true,
                 ForeColor = Color.Gray,
                 Font = _normalFont
@@ -410,12 +418,12 @@ namespace IntelligentMutexExecutionEnvironment
                 Maximum = 65536,
                 Value = Math.Max(0, Math.Min(65536, _app.MemoryLimitMB)),
                 Location = new Point(controlX, y),
-                Size = new Size(80, 23)
+                Size = new Size(numericWidth, numericHeight)
             };
             var memHint = new Label
             {
                 Text = "0 = no limit (disabled)",
-                Location = new Point(controlX + 85, y + 2),
+                Location = new Point(hintX, y + 2),
                 AutoSize = true,
                 ForeColor = Color.Gray,
                 Font = _normalFont
@@ -436,7 +444,7 @@ namespace IntelligentMutexExecutionEnvironment
             _detectTitleChangeCheckBox = new CheckBox
             {
                 Checked = _app.DetectTitleChange,
-                Location = new Point(controlX + 8, y),
+                Location = new Point(controlX + DpiScaler.Scale(8), y),
                 AutoSize = true,
                 Text = _app.DetectTitleChange ? "Yes" : "No"
             };
@@ -447,7 +455,7 @@ namespace IntelligentMutexExecutionEnvironment
             var dtcHint = new Label
             {
                 Text = "Kill if window title changes",
-                Location = new Point(controlX + 85, y + 2),
+                Location = new Point(hintX, y + 2),
                 AutoSize = true,
                 ForeColor = Color.Gray,
                 Font = _normalFont
@@ -456,7 +464,7 @@ namespace IntelligentMutexExecutionEnvironment
             this.Controls.Add(_detectTitleChangeCheckBox);
             this.Controls.Add(dtcHint);
 
-            y += rowHeight + 10;
+            y += rowHeight + DpiScaler.Scale(10);
 
             // Set initial enabled state for sub-controls based on Keep Open
             UpdateKeepOpenDependentControls(_keepOpenCheckBox.Checked);
@@ -478,7 +486,10 @@ namespace IntelligentMutexExecutionEnvironment
             };
             this.Controls.Add(statsSectionLabel);
 
-            y += 22;
+            y += DpiScaler.Scale(22);
+
+            int resetBtnWidth = DpiScaler.Scale(60);
+            int resetBtnHeight = DpiScaler.Scale(23);
 
             // Crash Count
             var crashLabel = new Label
@@ -497,8 +508,8 @@ namespace IntelligentMutexExecutionEnvironment
             _resetCrashButton = new Button
             {
                 Text = "Reset",
-                Location = new Point(controlX + 60, y),
-                Size = new Size(60, 23),
+                Location = new Point(controlX + DpiScaler.Scale(60), y),
+                Size = new Size(resetBtnWidth, resetBtnHeight),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(243, 156, 18),
                 ForeColor = Color.White,
@@ -532,8 +543,8 @@ namespace IntelligentMutexExecutionEnvironment
             _resetRetryButton = new Button
             {
                 Text = "Reset",
-                Location = new Point(controlX + 60, y),
-                Size = new Size(60, 23),
+                Location = new Point(controlX + DpiScaler.Scale(60), y),
+                Size = new Size(resetBtnWidth, resetBtnHeight),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(243, 156, 18),
                 ForeColor = Color.White,
@@ -570,8 +581,8 @@ namespace IntelligentMutexExecutionEnvironment
             _copyExitCodeButton = new Button
             {
                 Text = "Copy",
-                Location = new Point(controlX + 100, y),
-                Size = new Size(60, 23),
+                Location = new Point(controlX + DpiScaler.Scale(100), y),
+                Size = new Size(resetBtnWidth, resetBtnHeight),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(52, 152, 219),
                 ForeColor = Color.White,
@@ -589,19 +600,22 @@ namespace IntelligentMutexExecutionEnvironment
             this.Controls.Add(_lastExitCodeLabel);
             this.Controls.Add(_copyExitCodeButton);
 
-            y += rowHeight + 15;
+            y += rowHeight + DpiScaler.Scale(15);
 
             // OK / Cancel buttons
-            // Place OK/Cancel on the right edge
-            int btnWidth = 80;
-            int btnHeight = 30;
-            int btnSpacing = 10;
-            int rightMargin = 20;
+            int btnWidth = DpiScaler.Scale(80);
+            int btnHeight = DpiScaler.Scale(30);
+            int btnSpacing = DpiScaler.Scale(10);
+            int rightMargin = DpiScaler.Scale(20);
+
+            // Calculate form width to fit all controls
+            int formWidth = Math.Max(clientWidth, labelX + textBoxWidth + DpiScaler.Scale(200));
+            this.Size = new Size(formWidth, y + btnHeight + DpiScaler.Scale(45));
 
             _okButton = new Button
             {
                 Text = "OK",
-                Location = new Point(this.ClientSize.Width - rightMargin - btnWidth * 2 - btnSpacing, y - 8),
+                Location = new Point(this.ClientSize.Width - rightMargin - btnWidth * 2 - btnSpacing, y - DpiScaler.Scale(8)),
                 Size = new Size(btnWidth, btnHeight),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(46, 204, 113),
@@ -615,7 +629,7 @@ namespace IntelligentMutexExecutionEnvironment
             {
                 Text = "Cancel",
                 DialogResult = DialogResult.Cancel,
-                Location = new Point(this.ClientSize.Width - rightMargin - btnWidth, y - 8),
+                Location = new Point(this.ClientSize.Width - rightMargin - btnWidth, y - DpiScaler.Scale(8)),
                 Size = new Size(btnWidth, btnHeight),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(192, 57, 43),

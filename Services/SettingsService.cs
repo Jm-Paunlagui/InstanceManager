@@ -13,6 +13,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
         // === General Settings ===
         private string _stationName;
         private bool _runOnStartup;
+        private int _fontSizePercent;
 
         public string StationName
         {
@@ -24,6 +25,16 @@ namespace IntelligentMutexExecutionEnvironment.Services
         {
             get { return _runOnStartup; }
             set { _runOnStartup = value; Save(); }
+        }
+
+        /// <summary>
+        /// User font size preference as a percentage (75 - 200). Default: 100.
+        /// Controls how large fonts and UI elements render, independent of system DPI scaling.
+        /// </summary>
+        public int FontSizePercent
+        {
+            get { return _fontSizePercent; }
+            set { _fontSizePercent = Clamp(value, 75, 200); Save(); }
         }
 
         // === Performance Settings ===
@@ -109,6 +120,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
         public const int DefaultLogFlushIntervalSeconds = 10;
         public const int DefaultLogBufferSize = 100;
         public const int DefaultLogRetentionDays = 7;
+        public const int DefaultFontSizePercent = 100;
 
         public SettingsService()
         {
@@ -121,6 +133,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
         {
             _stationName = "";
             _runOnStartup = false;
+            _fontSizePercent = DefaultFontSizePercent;
             _statusPollIntervalMs = DefaultStatusPollIntervalMs;
             _startGracePeriodSeconds = DefaultStartGracePeriodSeconds;
             _gcCollectIntervalMinutes = DefaultGcCollectIntervalMinutes;
@@ -135,13 +148,15 @@ namespace IntelligentMutexExecutionEnvironment.Services
         /// Use this when updating multiple settings at once from a dialog.
         /// Logs every individual setting change for traceability and accountability.
         /// </summary>
-        public void SaveAll(string stationName, bool runOnStartup, int statusPollIntervalMs, int startGracePeriodSeconds,
+        public void SaveAll(string stationName, bool runOnStartup, int fontSizePercent,
+            int statusPollIntervalMs, int startGracePeriodSeconds,
             int gcCollectIntervalMinutes, int storageSaveIntervalSeconds,
             int logFlushIntervalSeconds, int logBufferSize, int logRetentionDays)
         {
             // Clamp new values first
             string newStationName = stationName ?? "";
             bool newRunOnStartup = runOnStartup;
+            int newFontSizePercent = Clamp(fontSizePercent, 75, 200);
             int newStatusPollIntervalMs = Clamp(statusPollIntervalMs, 1000, 60000);
             int newStartGracePeriodSeconds = Clamp(startGracePeriodSeconds, 1, 120);
             int newGcCollectIntervalMinutes = Clamp(gcCollectIntervalMinutes, 5, 1440);
@@ -162,6 +177,12 @@ namespace IntelligentMutexExecutionEnvironment.Services
             {
                 SimpleLogger.Info("SettingsChanged @ SettingsService.cs",
                     $"RunOnStartup changed: {_runOnStartup} to {newRunOnStartup}");
+                changeCount++;
+            }
+            if (_fontSizePercent != newFontSizePercent)
+            {
+                SimpleLogger.Info("SettingsChanged @ SettingsService.cs",
+                    $"FontSizePercent changed: {_fontSizePercent} to {newFontSizePercent}");
                 changeCount++;
             }
             if (_statusPollIntervalMs != newStatusPollIntervalMs)
@@ -220,6 +241,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
             // Apply the new values
             _stationName = newStationName;
             _runOnStartup = newRunOnStartup;
+            _fontSizePercent = newFontSizePercent;
             _statusPollIntervalMs = newStatusPollIntervalMs;
             _startGracePeriodSeconds = newStartGracePeriodSeconds;
             _gcCollectIntervalMinutes = newGcCollectIntervalMinutes;
@@ -288,6 +310,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 sb.AppendLine("{");
                 sb.AppendLine($"  \"StationName\": \"{EscapeJson(_stationName)}\",");
                 sb.AppendLine($"  \"RunOnStartup\": {(_runOnStartup ? "true" : "false")},");
+                sb.AppendLine($"  \"FontSizePercent\": {_fontSizePercent},");
                 sb.AppendLine($"  \"StatusPollIntervalMs\": {_statusPollIntervalMs},");
                 sb.AppendLine($"  \"StartGracePeriodSeconds\": {_startGracePeriodSeconds},");
                 sb.AppendLine($"  \"GcCollectIntervalMinutes\": {_gcCollectIntervalMinutes},");
@@ -355,6 +378,11 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         break;
                     case "RunOnStartup":
                         _runOnStartup = value.Equals("true", StringComparison.OrdinalIgnoreCase);
+                        break;
+                    case "FontSizePercent":
+                        int fsp;
+                        if (int.TryParse(value, out fsp))
+                            _fontSizePercent = Clamp(fsp, 75, 200);
                         break;
                     case "StatusPollIntervalMs":
                         int spim;

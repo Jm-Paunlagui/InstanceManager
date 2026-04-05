@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
+using IntelligentMutexExecutionEnvironment.Services;
 using IntelligentMutexExecutionEnvironment.Utilities;
 
 namespace IntelligentMutexExecutionEnvironment
@@ -53,7 +54,17 @@ namespace IntelligentMutexExecutionEnvironment
 
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                
+
+                // Initialize DPI awareness and read the user font size preference
+                DpiScaler.Initialize();
+
+                // Read font size setting before creating any forms
+                var tempSettings = new SettingsService();
+                DpiScaler.SetFontSizePercent(tempSettings.FontSizePercent);
+
+                SimpleLogger.Info("Main @ Program.cs",
+                    $"DPI={DpiScaler.SystemDpi}, FontSize={tempSettings.FontSizePercent}%, ScaleFactor={DpiScaler.ScaleFactor:F2}");
+
                 SimpleLogger.Info("Main @ Program.cs", "Running main form");
                 Application.Run(new Main());
                 

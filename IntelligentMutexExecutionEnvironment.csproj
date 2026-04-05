@@ -105,6 +105,7 @@
     <Compile Include="Utilities\CustomMessageBox.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Utilities\DpiScaler.cs" />
     <Compile Include="Utilities\InputDialog.cs">
       <SubType>Form</SubType>
     </Compile>

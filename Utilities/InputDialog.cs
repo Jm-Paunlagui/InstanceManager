@@ -18,9 +18,9 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
 
         public InputDialog(string title, string prompt, string defaultValue)
         {
-            _normalFont = new Font("AUMOVIO Screen", 9F);
-            _buttonFont = new Font("AUMOVIO Screen", 8F, FontStyle.Bold);
-            _cancelFont = new Font("AUMOVIO Screen", 8F);
+            _normalFont = DpiScaler.CreateFont("AUMOVIO Screen", 9F);
+            _buttonFont = DpiScaler.CreateFont("AUMOVIO Screen", 8F, FontStyle.Bold);
+            _cancelFont = DpiScaler.CreateFont("AUMOVIO Screen", 8F);
 
             this.Text = title;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -28,12 +28,13 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.BackColor = Color.White;
-            this.Size = new Size(380, 160);
+            this.AutoScaleMode = AutoScaleMode.None;
+            this.Size = DpiScaler.ScaleSize(380, 160);
 
             promptLabel = new Label
             {
                 Text = prompt,
-                Location = new Point(15, 15),
+                Location = DpiScaler.ScalePoint(15, 15),
                 AutoSize = true,
                 Font = _normalFont
             };
@@ -41,8 +42,8 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
 
             inputTextBox = new TextBox
             {
-                Location = new Point(15, 40),
-                Size = new Size(335, 23),
+                Location = DpiScaler.ScalePoint(15, 40),
+                Size = DpiScaler.ScaleSize(335, 23),
                 Font = _normalFont,
                 Text = defaultValue ?? ""
             };
@@ -51,8 +52,8 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             okButton = new Button
             {
                 Text = "OK",
-                Location = new Point(190, 80),
-                Size = new Size(75, 28),
+                Location = DpiScaler.ScalePoint(190, 80),
+                Size = DpiScaler.ScaleSize(75, 28),
                 DialogResult = DialogResult.OK,
                 BackColor = Color.FromArgb(41, 128, 185),
                 FlatStyle = FlatStyle.Flat,
@@ -64,8 +65,8 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             cancelButton = new Button
             {
                 Text = "Cancel",
-                Location = new Point(275, 80),
-                Size = new Size(75, 28),
+                Location = DpiScaler.ScalePoint(275, 80),
+                Size = DpiScaler.ScaleSize(75, 28),
                 DialogResult = DialogResult.Cancel,
                 FlatStyle = FlatStyle.Flat,
                 Font = _cancelFont
