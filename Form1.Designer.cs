@@ -86,6 +86,7 @@
             this.LogsButton = new System.Windows.Forms.Button();
             this.RefreshButton = new System.Windows.Forms.Button();
             this.SelectedGroupLabel = new System.Windows.Forms.Label();
+            this.trayContextMenu.SuspendLayout();
             this.HeaderPanel.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.LogoPictureBox)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.MainSplitContainer)).BeginInit();
@@ -99,6 +100,35 @@
             this.GroupActionsGroupBox.SuspendLayout();
             this.ToolsGroupBox.SuspendLayout();
             this.SuspendLayout();
+            // 
+            // trayContextMenu
+            // 
+            this.trayContextMenu.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.trayRestoreMenuItem,
+            this.trayExitMenuItem});
+            this.trayContextMenu.Name = "trayContextMenu";
+            this.trayContextMenu.Size = new System.Drawing.Size(114, 48);
+            // 
+            // trayRestoreMenuItem
+            // 
+            this.trayRestoreMenuItem.Name = "trayRestoreMenuItem";
+            this.trayRestoreMenuItem.Size = new System.Drawing.Size(113, 22);
+            this.trayRestoreMenuItem.Text = "Restore";
+            this.trayRestoreMenuItem.Click += new System.EventHandler(this.TrayRestoreMenuItem_Click);
+            // 
+            // trayExitMenuItem
+            // 
+            this.trayExitMenuItem.Name = "trayExitMenuItem";
+            this.trayExitMenuItem.Size = new System.Drawing.Size(113, 22);
+            this.trayExitMenuItem.Text = "Exit";
+            this.trayExitMenuItem.Click += new System.EventHandler(this.TrayExitMenuItem_Click);
+            // 
+            // notifyIcon
+            // 
+            this.notifyIcon.ContextMenuStrip = this.trayContextMenu;
+            this.notifyIcon.Icon = ((System.Drawing.Icon)(resources.GetObject("notifyIcon.Icon")));
+            this.notifyIcon.Text = "IMEE";
+            this.notifyIcon.DoubleClick += new System.EventHandler(this.NotifyIcon_DoubleClick);
             // 
             // HeaderPanel
             // 
@@ -114,7 +144,7 @@
             this.HeaderPanel.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             this.HeaderPanel.Name = "HeaderPanel";
             this.HeaderPanel.Padding = new System.Windows.Forms.Padding(10, 8, 10, 8);
-            this.HeaderPanel.Size = new System.Drawing.Size(1231, 60);
+            this.HeaderPanel.Size = new System.Drawing.Size(1237, 60);
             this.HeaderPanel.TabIndex = 52;
             // 
             // UserGuideButton
@@ -124,7 +154,7 @@
             this.UserGuideButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.UserGuideButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.UserGuideButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
-            this.UserGuideButton.Location = new System.Drawing.Point(1052, 16);
+            this.UserGuideButton.Location = new System.Drawing.Point(1058, 16);
             this.UserGuideButton.Name = "UserGuideButton";
             this.UserGuideButton.Size = new System.Drawing.Size(83, 28);
             this.UserGuideButton.TabIndex = 5;
@@ -139,7 +169,7 @@
             this.SettingsButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
             this.SettingsButton.Font = new System.Drawing.Font("AUMOVIO Screen", 8.249999F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
             this.SettingsButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(243)))), ((int)(((byte)(156)))), ((int)(((byte)(18)))));
-            this.SettingsButton.Location = new System.Drawing.Point(1141, 16);
+            this.SettingsButton.Location = new System.Drawing.Point(1147, 16);
             this.SettingsButton.Name = "SettingsButton";
             this.SettingsButton.Size = new System.Drawing.Size(75, 28);
             this.SettingsButton.TabIndex = 4;
@@ -214,7 +244,7 @@
             this.MainSplitContainer.Panel2.Controls.Add(this.AppListView);
             this.MainSplitContainer.Panel2.Controls.Add(this.ButtonPanel);
             this.MainSplitContainer.Panel2.Controls.Add(this.SelectedGroupLabel);
-            this.MainSplitContainer.Size = new System.Drawing.Size(1231, 340);
+            this.MainSplitContainer.Size = new System.Drawing.Size(1237, 340);
             this.MainSplitContainer.SplitterDistance = 200;
             this.MainSplitContainer.TabIndex = 53;
             // 
@@ -322,7 +352,7 @@
             this.AppListView.Location = new System.Drawing.Point(0, 28);
             this.AppListView.MultiSelect = false;
             this.AppListView.Name = "AppListView";
-            this.AppListView.Size = new System.Drawing.Size(1027, 242);
+            this.AppListView.Size = new System.Drawing.Size(1033, 242);
             this.AppListView.TabIndex = 1;
             this.AppListView.UseCompatibleStateImageBehavior = false;
             this.AppListView.View = System.Windows.Forms.View.Details;
@@ -375,7 +405,7 @@
             // ExitCodeColumn
             // 
             this.ExitCodeColumn.Text = "Exit Code";
-            this.ExitCodeColumn.Width = 75;
+            this.ExitCodeColumn.Width = 89;
             // 
             // ButtonPanel
             // 
@@ -388,7 +418,7 @@
             this.ButtonPanel.Location = new System.Drawing.Point(0, 270);
             this.ButtonPanel.Name = "ButtonPanel";
             this.ButtonPanel.Padding = new System.Windows.Forms.Padding(5);
-            this.ButtonPanel.Size = new System.Drawing.Size(1027, 70);
+            this.ButtonPanel.Size = new System.Drawing.Size(1033, 70);
             this.ButtonPanel.TabIndex = 2;
             // 
             // ManageAppsGroupBox
@@ -583,7 +613,7 @@
             this.SelectedGroupLabel.Location = new System.Drawing.Point(0, 0);
             this.SelectedGroupLabel.Name = "SelectedGroupLabel";
             this.SelectedGroupLabel.Padding = new System.Windows.Forms.Padding(8, 0, 0, 0);
-            this.SelectedGroupLabel.Size = new System.Drawing.Size(1027, 28);
+            this.SelectedGroupLabel.Size = new System.Drawing.Size(1033, 28);
             this.SelectedGroupLabel.TabIndex = 0;
             this.SelectedGroupLabel.Text = "Select a group to manage applications";
             this.SelectedGroupLabel.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
@@ -593,7 +623,7 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackgroundImageLayout = System.Windows.Forms.ImageLayout.None;
-            this.ClientSize = new System.Drawing.Size(1231, 400);
+            this.ClientSize = new System.Drawing.Size(1237, 400);
             this.Controls.Add(this.MainSplitContainer);
             this.Controls.Add(this.HeaderPanel);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
@@ -601,36 +631,7 @@
             this.StartPosition = System.Windows.Forms.FormStartPosition.Manual;
             this.Text = "Local Manufacturing Application";
             this.Load += new System.EventHandler(this.Main_Load);
-            // 
-            // trayContextMenu
-            // 
-            this.trayContextMenu.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.trayRestoreMenuItem,
-            this.trayExitMenuItem});
-            this.trayContextMenu.Name = "trayContextMenu";
-            this.trayContextMenu.Size = new System.Drawing.Size(117, 48);
-            // 
-            // trayRestoreMenuItem
-            // 
-            this.trayRestoreMenuItem.Name = "trayRestoreMenuItem";
-            this.trayRestoreMenuItem.Size = new System.Drawing.Size(116, 22);
-            this.trayRestoreMenuItem.Text = "Restore";
-            this.trayRestoreMenuItem.Click += new System.EventHandler(this.TrayRestoreMenuItem_Click);
-            // 
-            // trayExitMenuItem
-            // 
-            this.trayExitMenuItem.Name = "trayExitMenuItem";
-            this.trayExitMenuItem.Size = new System.Drawing.Size(116, 22);
-            this.trayExitMenuItem.Text = "Exit";
-            this.trayExitMenuItem.Click += new System.EventHandler(this.TrayExitMenuItem_Click);
-            // 
-            // notifyIcon
-            // 
-            this.notifyIcon.ContextMenuStrip = this.trayContextMenu;
-            this.notifyIcon.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
-            this.notifyIcon.Text = "IMEE";
-            this.notifyIcon.Visible = false;
-            this.notifyIcon.DoubleClick += new System.EventHandler(this.NotifyIcon_DoubleClick);
+            this.trayContextMenu.ResumeLayout(false);
             this.HeaderPanel.ResumeLayout(false);
             this.HeaderPanel.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.LogoPictureBox)).EndInit();
