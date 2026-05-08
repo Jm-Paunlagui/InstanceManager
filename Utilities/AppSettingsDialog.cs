@@ -886,7 +886,7 @@ namespace IntelligentMutexExecutionEnvironment
             if (changeCount == 0)
             {
                 SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
-                    $"'{appName}' edit dialog closed with OK — no settings changes detected");
+                    $"'{appName}' edit dialog closed with OK ~ no settings changes detected");
             }
             else
             {

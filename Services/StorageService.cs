@@ -886,13 +886,16 @@ namespace IntelligentMutexExecutionEnvironment.Services
             {
                 char c = json[i];
 
-                if (c == '{') {
+                if (c == '{')
+                {
                     if (bracketDepth == 0) startIndex = i;
                     bracketDepth++;
                 }
-                else if (c == '}') {
+                else if (c == '}')
+                {
                     bracketDepth--;
-                    if (bracketDepth == 0) {
+                    if (bracketDepth == 0)
+                    {
                         objects.Add(json.Substring(startIndex, i - startIndex + 1));
                     }
                 }
@@ -973,7 +976,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                             i++;
                             break;
                         default:
-                            // Not a recognized escape sequence � keep the backslash as-is.
+                            // Not a recognized escape sequence ~ keep the backslash as-is.
                             // This handles old data where backslashes were stored raw
                             // (e.g., D:\Projects instead of D:\\Projects).
                             sb.Append('\\');

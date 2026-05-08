@@ -260,7 +260,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
 
             if (changeCount == 0)
             {
-                SimpleLogger.Info("SettingsChanged @ SettingsService.cs", "Settings dialog closed with OK � no changes detected");
+                SimpleLogger.Info("SettingsChanged @ SettingsService.cs", "Settings dialog closed with OK ~ no changes detected");
             }
             else
             {
