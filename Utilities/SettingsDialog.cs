@@ -19,6 +19,9 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
         private NumericUpDown _logBufferSizeNumeric;
         private NumericUpDown _logRetentionDaysNumeric;
 
+        private ComboBox _profileComboBox;
+        private bool _applyingProfile; // guard: prevent ValueChanged feedback loop
+
         private Button _okButton;
         private Button _cancelButton;
         private Button _resetDefaultsButton;
@@ -27,6 +30,38 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
         private Font _boldFont;
         private Font _smallBoldFont;
         private Font _buttonFont;
+
+        // ── Profile presets ──────────────────────────────────────────────────────
+        // Order: PollMs, GraceS, GcMin, SaveS, FlushS, BufSize
+        // "Custom" has no preset values (null).
+        private static readonly string[] ProfileNames =
+        {
+            "Custom",
+            "Very High",
+            "High",
+            "High-Low",
+            "Med-High",
+            "Med (Default)",
+            "Med-Low",
+            "Low-High",
+            "Low",
+            "Very Low"
+        };
+
+        private static readonly int[][] ProfileValues =
+        {
+            null,                                   // Custom
+            new int[] {  2000,  5, 10,  10,  2,  50 },  // Very High
+            new int[] {  3000,  7, 15,  15,  5,  75 },  // High
+            new int[] {  5000,  8, 20,  20,  7, 100 },  // High-Low
+            new int[] {  7000, 10, 25,  25,  8, 100 },  // Med-High
+            new int[] { 10000, 10, 30,  30, 10, 100 },  // Med (Default)
+            new int[] { 12000, 12, 40,  45, 12, 150 },  // Med-Low
+            new int[] { 15000, 15, 50,  60, 15, 200 },  // Low-High
+            new int[] { 20000, 20, 60,  90, 20, 300 },  // Low
+            new int[] { 30000, 30, 90, 120, 30, 500 },  // Very Low
+        };
+        // ────────────────────────────────────────────────────────────────────────
 
         // Public properties for retrieving values after OK
         public string StationName { get { return _stationNameTextBox.Text.Trim(); } }
@@ -52,7 +87,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
         private void InitializeControls(SettingsService settings)
         {
             this.Text = "Settings";
-            this.Size = new Size(520, 505);
+            this.Size = new Size(520, 545);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
@@ -129,6 +164,36 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             };
             this.Controls.Add(perfLabel);
             y += 22;
+
+            // Performance Profile picker
+            var profileLabel = new Label
+            {
+                Text = "Performance Profile:",
+                Location = new Point(labelX, y + 3),
+                AutoSize = true
+            };
+            _profileComboBox = new ComboBox
+            {
+                Location = new Point(controlX, y),
+                Size = new Size(80, 23),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Font = _normalFont
+            };
+            _profileComboBox.Items.AddRange(ProfileNames);
+
+            var profileHint = new Label
+            {
+                Text = "Preset tuning",
+                Location = new Point(controlX + 85, y + 3),
+                AutoSize = true,
+                ForeColor = Color.Gray,
+                Font = _normalFont
+            };
+
+            this.Controls.Add(profileLabel);
+            this.Controls.Add(_profileComboBox);
+            this.Controls.Add(profileHint);
+            y += rowHeight + 4;
 
             // Status Poll Interval
             AddNumericRow(ref y, labelX, controlX, "Status Poll Interval (ms):",
@@ -220,6 +285,75 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
 
             this.AcceptButton = _okButton;
             this.CancelButton = _cancelButton;
+
+            // Wire profile events AFTER all controls are created
+            _profileComboBox.SelectedIndexChanged += ProfileComboBox_SelectedIndexChanged;
+            _statusPollIntervalNumeric.ValueChanged += PerformanceNumeric_ValueChanged;
+            _startGracePeriodNumeric.ValueChanged += PerformanceNumeric_ValueChanged;
+            _gcCollectIntervalNumeric.ValueChanged += PerformanceNumeric_ValueChanged;
+            _storageSaveIntervalNumeric.ValueChanged += PerformanceNumeric_ValueChanged;
+            _logFlushIntervalNumeric.ValueChanged += PerformanceNumeric_ValueChanged;
+            _logBufferSizeNumeric.ValueChanged += PerformanceNumeric_ValueChanged;
+
+            // Select the profile that matches the current settings (or "Custom")
+            _profileComboBox.SelectedIndex = DetectCurrentProfile();
+        }
+
+        /// <summary>
+        /// Returns the profile index whose values match the current numeric settings,
+        /// or 0 (Custom) if no profile matches.
+        /// </summary>
+        private int DetectCurrentProfile()
+        {
+            int poll = (int)_statusPollIntervalNumeric.Value;
+            int grace = (int)_startGracePeriodNumeric.Value;
+            int gc = (int)_gcCollectIntervalNumeric.Value;
+            int save = (int)_storageSaveIntervalNumeric.Value;
+            int flush = (int)_logFlushIntervalNumeric.Value;
+            int buf = (int)_logBufferSizeNumeric.Value;
+
+            for (int i = 1; i < ProfileValues.Length; i++)
+            {
+                int[] p = ProfileValues[i];
+                if (p[0] == poll && p[1] == grace && p[2] == gc &&
+                    p[3] == save && p[4] == flush && p[5] == buf)
+                    return i;
+            }
+            return 0; // Custom
+        }
+
+        private void ProfileComboBox_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            int idx = _profileComboBox.SelectedIndex;
+            if (idx <= 0 || ProfileValues[idx] == null)
+                return; // Custom selected — leave numerics as-is
+
+            _applyingProfile = true;
+            try
+            {
+                int[] p = ProfileValues[idx];
+                _statusPollIntervalNumeric.Value = p[0];
+                _startGracePeriodNumeric.Value = p[1];
+                _gcCollectIntervalNumeric.Value = p[2];
+                _storageSaveIntervalNumeric.Value = p[3];
+                _logFlushIntervalNumeric.Value = p[4];
+                _logBufferSizeNumeric.Value = p[5];
+            }
+            finally
+            {
+                _applyingProfile = false;
+            }
+        }
+
+        private void PerformanceNumeric_ValueChanged(object sender, EventArgs e)
+        {
+            // If a profile is being applied, don't interfere
+            if (_applyingProfile) return;
+
+            // Switch dropdown to "Custom" if values no longer match any profile
+            int matched = DetectCurrentProfile();
+            if (_profileComboBox.SelectedIndex != matched)
+                _profileComboBox.SelectedIndex = matched;
         }
 
         private void AddNumericRow(ref int y, int labelX, int controlX, string labelText,
@@ -287,9 +421,9 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(SettingsDialog));
             this.SuspendLayout();
-            // 
+            //
             // SettingsDialog
-            // 
+            //
             this.ClientSize = new System.Drawing.Size(284, 261);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Name = "SettingsDialog";
