@@ -1,0 +1,4 @@
+.pdb
+.application
+.manifest
+app.publish

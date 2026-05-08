@@ -88,7 +88,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
         private readonly Dictionary<int, ProcessSnapshot> _snapshotResultsCache = new Dictionary<int, ProcessSnapshot>();
 
         /// <summary>
-        /// Reusable HashSet for batched EnumWindows — stores PIDs that own at least one top-level window.
+        /// Reusable HashSet for batched EnumWindows ï¿½ stores PIDs that own at least one top-level window.
         /// Avoids per-tick allocation in GetBatchProcessSnapshot.
         /// </summary>
         private readonly HashSet<uint> _pidsWithWindowsCache = new HashSet<uint>();
@@ -182,7 +182,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         return proc.ExitCode;
                     }
 
-                    // Process may have just exited — wait briefly for it to register
+                    // Process may have just exited ï¿½ wait briefly for it to register
                     try
                     {
                         if (proc.WaitForExit(500))
@@ -192,7 +192,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     }
                     catch { }
 
-                    // Still running — no exit code yet
+                    // Still running ï¿½ no exit code yet
                     return null;
                 }
                 catch (InvalidOperationException)
@@ -214,7 +214,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
             if (!_appPidMap.TryGetValue(appIndex, out pid))
                 return null;
 
-            // Try to open the process by PID — if it still exists, no exit code yet.
+            // Try to open the process by PID ï¿½ if it still exists, no exit code yet.
             // If it no longer exists, we can't retrieve the exit code without the original handle.
             try
             {
@@ -222,12 +222,12 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 try
                 {
                     procById = Process.GetProcessById(pid);
-                    // Process is still alive — no exit code yet
+                    // Process is still alive ï¿½ no exit code yet
                     return null;
                 }
                 catch (ArgumentException)
                 {
-                    // Process has exited — cannot retrieve exit code without the original handle
+                    // Process has exited ï¿½ cannot retrieve exit code without the original handle
                     return null;
                 }
                 finally
@@ -252,6 +252,15 @@ namespace IntelligentMutexExecutionEnvironment.Services
         }
 
         /// <summary>
+        /// Returns true if a Process handle is currently tracked for the given app index.
+        /// This indicates we kept the Process object alive (used for ExitCode retrieval).
+        /// </summary>
+        public bool HasTrackedHandle(int appIndex)
+        {
+            return _appProcessHandles.ContainsKey(appIndex);
+        }
+
+        /// <summary>
         /// Checks whether a process owns any top-level window (visible or hidden).
         /// Apps minimized to the system tray close their main window but still own
         /// hidden top-level windows. Process.MainWindowHandle returns IntPtr.Zero
@@ -262,7 +271,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
             bool found = false;
             uint targetPid = (uint)processId;
 
-            EnumWindows(delegate(IntPtr hWnd, IntPtr lParam)
+            EnumWindows(delegate (IntPtr hWnd, IntPtr lParam)
             {
                 uint windowPid;
                 GetWindowThreadProcessId(hWnd, out windowPid);
@@ -285,7 +294,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
         private void BuildPidsWithWindows(HashSet<uint> result)
         {
             result.Clear();
-            EnumWindows(delegate(IntPtr hWnd, IntPtr lParam)
+            EnumWindows(delegate (IntPtr hWnd, IntPtr lParam)
             {
                 uint windowPid;
                 GetWindowThreadProcessId(hWnd, out windowPid);
@@ -698,7 +707,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                             {
                                 // Check for hidden top-level windows before killing.
                                 // Apps minimized to the system tray have no MainWindowHandle
-                                // but still own hidden top-level windows — these are not zombies.
+                                // but still own hidden top-level windows ï¿½ these are not zombies.
                                 int pid = processes[i].Id;
                                 if (HasAnyTopLevelWindow(pid))
                                 {
@@ -811,11 +820,11 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         {
                             // The PID here belongs to the launcher process (e.g. cmd.exe, powershell.exe, cscript.exe),
                             // not the actual application. Track the launcher PID for identification but
-                            // we cannot track the launcher handle for exit code — it will exit with 0
+                            // we cannot track the launcher handle for exit code ï¿½ it will exit with 0
                             // after spawning the app. The actual app's Process handle will be tracked
                             // later when the watchdog detects it running (via TrackActualAppProcess).
                             TrackLaunchedPid(app.Index, pid);
-                            // Dispose the launcher Process handle — we don't need it for exit code
+                            // Dispose the launcher Process handle ï¿½ we don't need it for exit code
                             process.Dispose();
 
                             string monitoredProcessName = Path.GetFileNameWithoutExtension(app.Directory);
@@ -839,7 +848,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                                             catch (InvalidOperationException) { pids[i] = "?"; }
                                         }
                                         SimpleLogger.Info("StartApplication @ ProcessManager.cs",
-                                            $"Found {appProcesses.Length} '{monitoredProcessName}' process(es) — App PID(s): {string.Join(", ", pids)}");
+                                            $"Found {appProcesses.Length} '{monitoredProcessName}' process(es) ï¿½ App PID(s): {string.Join(", ", pids)}");
 
                                         // Get the PID of the first process, then dispose all
                                         // GetProcessesByName handles (they have limited access rights)
@@ -877,7 +886,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                                     else
                                     {
                                         SimpleLogger.Info("StartApplication @ ProcessManager.cs",
-                                            $"No '{monitoredProcessName}' process found yet — it may still be starting via the launcher. Exit code tracking will be attempted when the process appears.");
+                                            $"No '{monitoredProcessName}' process found yet ï¿½ it may still be starting via the launcher. Exit code tracking will be attempted when the process appears.");
                                     }
                                 }
                                 finally
@@ -899,7 +908,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         }
                         else
                         {
-                            // Direct launch — track both PID and Process handle for exit code retrieval
+                            // Direct launch ï¿½ track both PID and Process handle for exit code retrieval
                             TrackLaunchedPid(app.Index, pid);
                             TrackLaunchedProcess(app.Index, process);
                             SimpleLogger.Info("StartApplication @ ProcessManager.cs",
@@ -910,7 +919,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     {
                         if (!useLauncher)
                         {
-                            // PID unavailable but process started — still keep the handle
+                            // PID unavailable but process started ï¿½ still keep the handle
                             TrackLaunchedProcess(app.Index, process);
                         }
                         SimpleLogger.Info("StartApplication @ ProcessManager.cs",
@@ -971,7 +980,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     };
 
                 default:
-                    // .exe or any other file type — use CreateProcess (UseShellExecute = false)
+                    // .exe or any other file type ï¿½ use CreateProcess (UseShellExecute = false)
                     // so the returned Process handle properly supports ExitCode retrieval.
                     // UseShellExecute = true uses ShellExecuteEx which does not always provide
                     // a process handle that supports GetExitCodeProcess on .NET Framework 4.0.
@@ -1023,7 +1032,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
 
                     if (processes.Length == 0)
                     {
-                        // Process already exited — try to read exit code from tracked handle before cleanup
+                        // Process already exited ï¿½ try to read exit code from tracked handle before cleanup
                         exitCode = GetTrackedExitCode(app.Index);
                         UntrackPid(app.Index);
                         SimpleLogger.Warn("StopApplication @ ProcessManager.cs", $"Cannot stop {app.AppName}: Not running");
@@ -1160,7 +1169,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         return true;
                 }
                 catch { }
-                // Handle is stale — fall through to find a new one
+                // Handle is stale ï¿½ fall through to find a new one
             }
 
             try
@@ -1185,7 +1194,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                             return false;
                         }
 
-                        // Dispose the GetProcessesByName handles — they have limited access rights
+                        // Dispose the GetProcessesByName handles ï¿½ they have limited access rights
                         // on .NET Framework 4.0 and cannot reliably read ExitCode after the process exits.
                         for (int i = 0; i < processes.Length; i++)
                         {
@@ -1210,7 +1219,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         }
                         catch (System.ComponentModel.Win32Exception)
                         {
-                            // Access denied — still track it, ExitCode may work via fallback
+                            // Access denied ï¿½ still track it, ExitCode may work via fallback
                             // (tracked handle is usable, just EnableRaisingEvents failed)
                         }
                         catch (InvalidOperationException)
@@ -1259,12 +1268,12 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 try
                 {
                     proc = Process.GetProcessById(pid);
-                    // Still running — no exit code available
+                    // Still running ï¿½ no exit code available
                     return null;
                 }
                 catch (ArgumentException)
                 {
-                    // Process does not exist (already exited) — we cannot retrieve exit code
+                    // Process does not exist (already exited) ï¿½ we cannot retrieve exit code
                     // from a disposed handle on .NET 4.0 without keeping the Process object alive.
                     return null;
                 }

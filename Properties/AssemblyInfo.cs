@@ -5,9 +5,9 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("IntelligentMutexExecutionEnvironment")]
 [assembly: AssemblyDescription("Prevents simultaneous application launches")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("Aumovio SE")]
-[assembly: AssemblyProduct("IntelligentMutexExecutionEnvironment")]
-[assembly: AssemblyCopyright("Copyright © Aumovio SE 2026")]
+[assembly: AssemblyCompany("John Moises Paunlagui")]
+[assembly: AssemblyProduct("Intelligent Mutex Execution Environment")]
+[assembly: AssemblyCopyright("Copyright © 2026 John Moises Paunlagui")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

@@ -8,7 +8,7 @@
     <OutputType>WinExe</OutputType>
     <RootNamespace>IntelligentMutexExecutionEnvironment</RootNamespace>
     <AssemblyName>IntelligentMutexExecutionEnvironment</AssemblyName>
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
     <ApplicationIcon>Resources\watchdog-icon.ico</ApplicationIcon>
@@ -28,6 +28,7 @@
     <UseApplicationTrust>false</UseApplicationTrust>
     <PublishWizardCompleted>true</PublishWizardCompleted>
     <BootstrapperEnabled>true</BootstrapperEnabled>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -38,6 +39,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -47,9 +49,10 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup>
-    <ManifestCertificateThumbprint>67C6B43D32A7EA13FD0DE28C9A9E010E8A04645A</ManifestCertificateThumbprint>
+    <ManifestCertificateThumbprint>1B234D3653EC80B425C6F44B01D3D9DF979DD886</ManifestCertificateThumbprint>
   </PropertyGroup>
   <PropertyGroup>
     <ManifestKeyFile>IntelligentMutexExecutionEnvironment_TemporaryKey.pfx</ManifestKeyFile>
@@ -140,11 +143,12 @@
     <EmbeddedResource Include="Utilities\SettingsDialog.resx">
       <DependentUpon>SettingsDialog.cs</DependentUpon>
     </EmbeddedResource>
+    <None Include="app.config" />
     <None Include="Form1.cs.fixed" />
     <None Include="IMPLEMENTATION_SUMMARY.md" />
-    <None Include="Intelligent Mutex Execution Environment - User Guide Presntation.pdf">
+    <Content Include="Intelligent Mutex Execution Environment - User Guide Presntation.pdf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    </Content>
     <None Include="IntelligentMutexExecutionEnvironment_TemporaryKey.pfx" />
     <None Include="NLog.config" />
     <None Include="packages.config" />
@@ -176,4 +180,12 @@
     </BootstrapperPackage>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- Post-build: auto-deploy to %LOCALAPPDATA%\MES\IMEEv1.0.0.17 on Release builds -->
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <PostBuildEvent>
+      if not exist "%LOCALAPPDATA%\MES\IMEEv1.0.0.17" mkdir "%LOCALAPPDATA%\MES\IMEEv1.0.0.17"
+      xcopy "$(TargetDir)*.*" "%LOCALAPPDATA%\MES\IMEEv1.0.0.17\" /E /Y /I /EXCLUDE:$(ProjectDir)xcopy-exclude.txt
+      echo Deployed to %LOCALAPPDATA%\MES\IMEEv1.0.0.17
+    </PostBuildEvent>
+  </PropertyGroup>
 </Project>
