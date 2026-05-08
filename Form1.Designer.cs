@@ -356,6 +356,11 @@
             this.AppListView.TabIndex = 1;
             this.AppListView.UseCompatibleStateImageBehavior = false;
             this.AppListView.View = System.Windows.Forms.View.Details;
+            this.AppListView.AllowDrop = true;
+            this.AppListView.ItemDrag += new System.Windows.Forms.ItemDragEventHandler(this.AppListView_ItemDrag);
+            this.AppListView.DragEnter += new System.Windows.Forms.DragEventHandler(this.AppListView_DragEnter);
+            this.AppListView.DragOver += new System.Windows.Forms.DragEventHandler(this.AppListView_DragOver);
+            this.AppListView.DragDrop += new System.Windows.Forms.DragEventHandler(this.AppListView_DragDrop);
             // 
             // IndexColumn
             // 
@@ -631,6 +636,7 @@
             this.StartPosition = System.Windows.Forms.FormStartPosition.Manual;
             this.Text = "Local Manufacturing Application";
             this.Load += new System.EventHandler(this.Main_Load);
+            this.Shown += new System.EventHandler(this.Main_Shown);
             this.trayContextMenu.ResumeLayout(false);
             this.HeaderPanel.ResumeLayout(false);
             this.HeaderPanel.PerformLayout();

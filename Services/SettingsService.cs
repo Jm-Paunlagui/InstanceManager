@@ -69,6 +69,50 @@ namespace IntelligentMutexExecutionEnvironment.Services
             set { _storageSaveIntervalSeconds = Clamp(value, 5, 300); Save(); }
         }
 
+        // === Server Mode Settings ===
+        private bool _isServerMode;
+        private int _serverAutoRunMode;   // 0=Disabled, 1=AllGroups, 2=SelectedGroups
+        private string _serverAutoRunGroupIds; // comma-separated group IDs
+
+        public bool IsServerMode
+        {
+            get { return _isServerMode; }
+            set { _isServerMode = value; Save(); }
+        }
+
+        /// <summary>
+        /// 0 = Disabled, 1 = All Groups, 2 = Selected Groups only.
+        /// </summary>
+        public int ServerAutoRunMode
+        {
+            get { return _serverAutoRunMode; }
+            set { _serverAutoRunMode = Clamp(value, 0, 2); Save(); }
+        }
+
+        /// <summary>
+        /// Comma-separated list of GroupId values to auto-start when ServerAutoRunMode = 2.
+        /// </summary>
+        public string ServerAutoRunGroupIds
+        {
+            get { return _serverAutoRunGroupIds ?? ""; }
+            set { _serverAutoRunGroupIds = value ?? ""; Save(); }
+        }
+
+        public List<int> ServerAutoRunGroupIdList
+        {
+            get
+            {
+                var result = new List<int>();
+                foreach (var part in (_serverAutoRunGroupIds ?? "").Split(','))
+                {
+                    int id;
+                    if (int.TryParse(part.Trim(), out id))
+                        result.Add(id);
+                }
+                return result;
+            }
+        }
+
         // === Logging Settings ===
         private int _logFlushIntervalSeconds;
         private int _logBufferSize;
@@ -102,6 +146,10 @@ namespace IntelligentMutexExecutionEnvironment.Services
         }
 
         // === Defaults ===
+        public const bool DefaultIsServerMode = false;
+        public const int DefaultServerAutoRunMode = 0;
+        public const string DefaultServerAutoRunGroupIds = "";
+
         public const int DefaultStatusPollIntervalMs = 10000;
         public const int DefaultStartGracePeriodSeconds = 10;
         public const int DefaultGcCollectIntervalMinutes = 30;
@@ -121,6 +169,9 @@ namespace IntelligentMutexExecutionEnvironment.Services
         {
             _stationName = "";
             _runOnStartup = false;
+            _isServerMode = DefaultIsServerMode;
+            _serverAutoRunMode = DefaultServerAutoRunMode;
+            _serverAutoRunGroupIds = DefaultServerAutoRunGroupIds;
             _statusPollIntervalMs = DefaultStatusPollIntervalMs;
             _startGracePeriodSeconds = DefaultStartGracePeriodSeconds;
             _gcCollectIntervalMinutes = DefaultGcCollectIntervalMinutes;
@@ -209,7 +260,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
 
             if (changeCount == 0)
             {
-                SimpleLogger.Info("SettingsChanged @ SettingsService.cs", "Settings dialog closed with OK — no changes detected");
+                SimpleLogger.Info("SettingsChanged @ SettingsService.cs", "Settings dialog closed with OK ï¿½ no changes detected");
             }
             else
             {
@@ -227,6 +278,29 @@ namespace IntelligentMutexExecutionEnvironment.Services
             _logFlushIntervalSeconds = newLogFlushIntervalSeconds;
             _logBufferSize = newLogBufferSize;
             _logRetentionDays = newLogRetentionDays;
+            Save();
+        }
+
+        /// <summary>
+        /// Saves server startup settings in one call from the ServerConfigDialog.
+        /// </summary>
+        public void SaveServerSettings(bool isServerMode, int serverAutoRunMode, string serverAutoRunGroupIds)
+        {
+            bool modeChanged = _isServerMode != isServerMode;
+            bool runModeChanged = _serverAutoRunMode != serverAutoRunMode;
+            bool groupsChanged = _serverAutoRunGroupIds != (serverAutoRunGroupIds ?? "");
+
+            _isServerMode = isServerMode;
+            _serverAutoRunMode = Clamp(serverAutoRunMode, 0, 2);
+            _serverAutoRunGroupIds = serverAutoRunGroupIds ?? "";
+
+            if (modeChanged)
+                SimpleLogger.Info("SettingsChanged @ SettingsService.cs", $"IsServerMode changed to {isServerMode}");
+            if (runModeChanged)
+                SimpleLogger.Info("SettingsChanged @ SettingsService.cs", $"ServerAutoRunMode changed to {serverAutoRunMode}");
+            if (groupsChanged)
+                SimpleLogger.Info("SettingsChanged @ SettingsService.cs", $"ServerAutoRunGroupIds changed to '{serverAutoRunGroupIds}'");
+
             Save();
         }
 
@@ -288,6 +362,9 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 sb.AppendLine("{");
                 sb.AppendLine($"  \"StationName\": \"{EscapeJson(_stationName)}\",");
                 sb.AppendLine($"  \"RunOnStartup\": {(_runOnStartup ? "true" : "false")},");
+                sb.AppendLine($"  \"IsServerMode\": {(_isServerMode ? "true" : "false")},");
+                sb.AppendLine($"  \"ServerAutoRunMode\": {_serverAutoRunMode},");
+                sb.AppendLine($"  \"ServerAutoRunGroupIds\": \"{EscapeJson(_serverAutoRunGroupIds)}\",");
                 sb.AppendLine($"  \"StatusPollIntervalMs\": {_statusPollIntervalMs},");
                 sb.AppendLine($"  \"StartGracePeriodSeconds\": {_startGracePeriodSeconds},");
                 sb.AppendLine($"  \"GcCollectIntervalMinutes\": {_gcCollectIntervalMinutes},");
@@ -355,6 +432,17 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         break;
                     case "RunOnStartup":
                         _runOnStartup = value.Equals("true", StringComparison.OrdinalIgnoreCase);
+                        break;
+                    case "IsServerMode":
+                        _isServerMode = value.Equals("true", StringComparison.OrdinalIgnoreCase);
+                        break;
+                    case "ServerAutoRunMode":
+                        int sarm;
+                        if (int.TryParse(value, out sarm))
+                            _serverAutoRunMode = Clamp(sarm, 0, 2);
+                        break;
+                    case "ServerAutoRunGroupIds":
+                        _serverAutoRunGroupIds = value;
                         break;
                     case "StatusPollIntervalMs":
                         int spim;

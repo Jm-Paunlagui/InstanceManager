@@ -117,12 +117,29 @@ namespace IntelligentMutexExecutionEnvironment.Services
 
         public List<ManagedApplication> GetApplicationsByGroup(int groupId)
         {
-            return _applications.Where(a => a.GroupId == groupId).ToList();
+            return _applications.Where(a => a.GroupId == groupId).OrderBy(a => a.SortOrder).ToList();
+        }
+
+        /// <summary>
+        /// Persists a new display order for applications within a group after a drag-to-reorder operation.
+        /// orderedAppIndices contains the app Index values in their new visual order (top to bottom).
+        /// </summary>
+        public void UpdateApplicationSortOrders(int groupId, List<int> orderedAppIndices)
+        {
+            for (int i = 0; i < orderedAppIndices.Count; i++)
+            {
+                var app = _applications.FirstOrDefault(a => a.Index == orderedAppIndices[i]);
+                if (app != null) app.SortOrder = i;
+            }
+            SaveApplications();
+            SimpleLogger.Info("UpdateApplicationSortOrders @ StorageService.cs",
+                $"Reordered {orderedAppIndices.Count} apps in group {groupId}");
         }
 
         public void AddApplication(ManagedApplication app)
         {
             app.Index = _applications.Count > 0 ? _applications.Max(a => a.Index) + 1 : 1;
+            app.SortOrder = _applications.Count(a => a.GroupId == app.GroupId);
             _applications.Add(app);
             SaveApplications();
             SimpleLogger.Info("AddApplication @ StorageService.cs", $"Added application: {app.AppName} (Index: {app.Index}, GroupId: {app.GroupId})");
@@ -642,7 +659,8 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 sb.AppendLine($"    \"MemoryLimitMB\": {app.MemoryLimitMB},");
                 sb.AppendLine($"    \"DetectTitleChange\": {app.DetectTitleChange.ToString().ToLower()},");
                 sb.AppendLine($"    \"HealthMonitoringEnabled\": {app.HealthMonitoringEnabled.ToString().ToLower()},");
-                sb.AppendLine($"    \"LastExitCode\": {(app.LastExitCode.HasValue ? app.LastExitCode.Value.ToString() : "null")}");
+                sb.AppendLine($"    \"LastExitCode\": {(app.LastExitCode.HasValue ? app.LastExitCode.Value.ToString() : "null")},");
+                sb.AppendLine($"    \"SortOrder\": {app.SortOrder}");
                 sb.Append("  }");
                 if (i < apps.Count - 1) sb.AppendLine(",");
                 else sb.AppendLine();
@@ -794,6 +812,11 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         int lastExitCode;
                         if (int.TryParse(value, out lastExitCode))
                             app.LastExitCode = lastExitCode;
+                        break;
+                    case "SortOrder":
+                        int sortOrder;
+                        if (int.TryParse(value, out sortOrder))
+                            app.SortOrder = sortOrder;
                         break;
                 }
             }
@@ -950,7 +973,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                             i++;
                             break;
                         default:
-                            // Not a recognized escape sequence — keep the backslash as-is.
+                            // Not a recognized escape sequence ï¿½ keep the backslash as-is.
                             // This handles old data where backslashes were stored raw
                             // (e.g., D:\Projects instead of D:\\Projects).
                             sb.Append('\\');

@@ -67,6 +67,12 @@ namespace IntelligentMutexExecutionEnvironment.Models
         /// </summary>
         public int? LastExitCode { get; set; }
 
+        /// <summary>
+        /// Display order within the group. Lower values appear first.
+        /// Set automatically when the app is added; updated by drag-to-reorder.
+        /// </summary>
+        public int SortOrder { get; set; }
+
         public ManagedApplication()
         {
             AddedDate = DateTime.Now;
@@ -83,6 +89,7 @@ namespace IntelligentMutexExecutionEnvironment.Models
             NotRespondingTimeoutSeconds = 0;
             MemoryLimitMB = 0;
             LastExitCode = null;
+            SortOrder = 0;
             DetectTitleChange = false;
             HealthMonitoringEnabled = false; // default: disabled (opt-in is off)
             LauncherPath = null;

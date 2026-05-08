@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -149,6 +149,63 @@ namespace IntelligentMutexExecutionEnvironment
             catch (Exception ex)
             {
                 SimpleLogger.Error("Main_Load @ Form1.cs", $"Error positioning form: {ex.Message}");
+            }
+        }
+
+        private void Main_Shown(object sender, EventArgs e)
+        {
+            if (!_settingsService.IsServerMode || _settingsService.ServerAutoRunMode == 0)
+                return;
+
+            try
+            {
+                List<ApplicationGroup> groupsToStart;
+                if (_settingsService.ServerAutoRunMode == 1)
+                {
+                    groupsToStart = _storageService.GetAllGroups();
+                }
+                else
+                {
+                    var selectedIds = new HashSet<int>(_settingsService.ServerAutoRunGroupIdList);
+                    groupsToStart = _storageService.GetAllGroups()
+                        .FindAll(g => selectedIds.Contains(g.GroupId));
+                }
+
+                SimpleLogger.Info("Main_Shown @ Form1.cs",
+                    $"Server mode: auto-starting {groupsToStart.Count} group(s)");
+
+                foreach (var group in groupsToStart)
+                {
+                    var apps = _storageService.GetApplicationsByGroup(group.GroupId);
+                    foreach (var app in apps)
+                    {
+                        if (!_processManager.IsApplicationRunning(app))
+                            ServerStartApplication(app);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                SimpleLogger.Error("Main_Shown @ Form1.cs", $"Server auto-start error: {ex.Message}");
+            }
+        }
+
+        private void ServerStartApplication(ManagedApplication app)
+        {
+            if (string.IsNullOrEmpty(app.Directory) || !File.Exists(app.Directory))
+                return;
+
+            if (_processManager.StartApplication(app))
+            {
+                _authorizedApps.Add(app.Index);
+                _pendingStop.Remove(app.Index);
+                _failedApps.Remove(app.Index);
+                _forceKillReason.Remove(app.Index);
+                _startGracePeriod[app.Index] = DateTime.Now.AddSeconds(_settingsService.StartGracePeriodSeconds);
+                int stablePeriod = Math.Max(app.StableRunPeriodSeconds, 5);
+                _stableRunCheck[app.Index] = DateTime.Now.AddSeconds(stablePeriod);
+                _storageService.UpdateApplicationFields(app.Index, isRunning: true, lastStart: DateTime.Now);
+                SimpleLogger.Info("ServerStartApplication @ Form1.cs", $"Server auto-started '{app.AppName}'");
             }
         }
 
@@ -3099,7 +3156,7 @@ namespace IntelligentMutexExecutionEnvironment
         {
             try
             {
-                using (var dialog = new SettingsDialog(_settingsService))
+                using (var dialog = new SettingsDialog(_settingsService, _storageService.GetAllGroups()))
                 {
                     if (dialog.ShowDialog(this) == DialogResult.OK)
                     {
@@ -3564,6 +3621,93 @@ namespace IntelligentMutexExecutionEnvironment
                 return;
             }
             base.WndProc(ref m);
+        }
+
+        // ===== Drag-to-Reorder App List =====
+
+        private void AppListView_ItemDrag(object sender, ItemDragEventArgs e)
+        {
+            AppListView.DoDragDrop(e.Item, DragDropEffects.Move);
+        }
+
+        private void AppListView_DragEnter(object sender, DragEventArgs e)
+        {
+            e.Effect = e.Data.GetDataPresent(typeof(ListViewItem))
+                ? DragDropEffects.Move
+                : DragDropEffects.None;
+        }
+
+        private void AppListView_DragOver(object sender, DragEventArgs e)
+        {
+            if (!e.Data.GetDataPresent(typeof(ListViewItem)))
+            {
+                e.Effect = DragDropEffects.None;
+                return;
+            }
+
+            e.Effect = DragDropEffects.Move;
+
+            Point clientPoint = AppListView.PointToClient(new Point(e.X, e.Y));
+            int targetIndex = AppListView.InsertionMark.NearestIndex(clientPoint);
+            if (targetIndex >= 0)
+            {
+                Rectangle bounds = AppListView.GetItemRect(targetIndex);
+                AppListView.InsertionMark.AppearsAfterItem = clientPoint.Y > bounds.Top + bounds.Height / 2;
+                AppListView.InsertionMark.Index = targetIndex;
+            }
+            else
+            {
+                AppListView.InsertionMark.Index = -1;
+            }
+        }
+
+        private void AppListView_DragDrop(object sender, DragEventArgs e)
+        {
+            AppListView.InsertionMark.Index = -1;
+
+            if (!e.Data.GetDataPresent(typeof(ListViewItem)))
+                return;
+
+            var draggedItem = (ListViewItem)e.Data.GetData(typeof(ListViewItem));
+            Point clientPoint = AppListView.PointToClient(new Point(e.X, e.Y));
+            int targetIndex = AppListView.InsertionMark.NearestIndex(clientPoint);
+
+            if (targetIndex < 0)
+                targetIndex = AppListView.Items.Count - 1;
+
+            int clampedTarget = Math.Max(0, Math.Min(targetIndex, AppListView.Items.Count - 1));
+            Rectangle bounds = AppListView.GetItemRect(clampedTarget);
+            bool insertAfter = clientPoint.Y > bounds.Top + bounds.Height / 2;
+
+            int draggedIndex = draggedItem.Index;
+            int insertAt = insertAfter ? targetIndex + 1 : targetIndex;
+
+            if (draggedIndex == insertAt || draggedIndex == insertAt - 1)
+                return;
+
+            var clone = (ListViewItem)draggedItem.Clone();
+            AppListView.Items.RemoveAt(draggedIndex);
+
+            if (draggedIndex < insertAt) insertAt--;
+            insertAt = Math.Max(0, Math.Min(insertAt, AppListView.Items.Count));
+
+            AppListView.Items.Insert(insertAt, clone);
+            AppListView.SelectedItems.Clear();
+            clone.Selected = true;
+
+            if (_selectedGroupId > 0)
+                PersistAppListOrder(_selectedGroupId);
+        }
+
+        private void PersistAppListOrder(int groupId)
+        {
+            var orderedIndices = new List<int>();
+            foreach (ListViewItem item in AppListView.Items)
+            {
+                var app = item.Tag as ManagedApplication;
+                if (app != null) orderedIndices.Add(app.Index);
+            }
+            _storageService.UpdateApplicationSortOrders(groupId, orderedIndices);
         }
     }
 }

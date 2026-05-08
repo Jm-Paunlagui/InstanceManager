@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using IntelligentMutexExecutionEnvironment.Models;
 using IntelligentMutexExecutionEnvironment.Services;
 
 namespace IntelligentMutexExecutionEnvironment.Utilities
@@ -25,6 +27,10 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
         private Button _okButton;
         private Button _cancelButton;
         private Button _resetDefaultsButton;
+        private Button _serverConfigButton;
+
+        private List<ApplicationGroup> _allGroups;
+        private readonly SettingsService _settings;
 
         private Font _normalFont;
         private Font _boldFont;
@@ -74,8 +80,11 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
         public int LogBufferSize { get { return (int)_logBufferSizeNumeric.Value; } }
         public int LogRetentionDays { get { return (int)_logRetentionDaysNumeric.Value; } }
 
-        public SettingsDialog(SettingsService settings)
+        public SettingsDialog(SettingsService settings, List<ApplicationGroup> allGroups = null)
         {
+            _settings = settings;
+            _allGroups = allGroups ?? new List<ApplicationGroup>();
+
             _normalFont = new Font("AUMOVIO Screen", 9F);
             _boldFont = new Font("AUMOVIO Screen", 9F, FontStyle.Bold);
             _smallBoldFont = new Font("AUMOVIO Screen", 7F, FontStyle.Bold);
@@ -259,6 +268,19 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             _resetDefaultsButton.Click += ResetDefaultsButton_Click;
             this.Controls.Add(_resetDefaultsButton);
 
+            _serverConfigButton = new Button
+            {
+                Text = "Server Startup...",
+                Location = new Point(labelX + 118, y),
+                Size = new Size(120, 30),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(52, 152, 219),
+                ForeColor = Color.White,
+                Font = _smallBoldFont
+            };
+            _serverConfigButton.Click += ServerConfigButton_Click;
+            this.Controls.Add(_serverConfigButton);
+
             _okButton = new Button
             {
                 Text = "OK",
@@ -397,6 +419,21 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             _logBufferSizeNumeric.Value = SettingsService.DefaultLogBufferSize;
             _logRetentionDaysNumeric.Value = SettingsService.DefaultLogRetentionDays;
             // Station name is intentionally NOT reset
+        }
+
+        private void ServerConfigButton_Click(object sender, EventArgs e)
+        {
+            using (var dlg = new ServerConfigDialog(
+                _allGroups,
+                _settings.IsServerMode,
+                _settings.ServerAutoRunMode,
+                _settings.ServerAutoRunGroupIdList))
+            {
+                if (dlg.ShowDialog(this) == DialogResult.OK)
+                {
+                    _settings.SaveServerSettings(dlg.IsServerMode, dlg.ServerAutoRunMode, dlg.ServerAutoRunGroupIds);
+                }
+            }
         }
 
         private void OkButton_Click(object sender, EventArgs e)
