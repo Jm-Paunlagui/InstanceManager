@@ -44,6 +44,8 @@ namespace IntelligentMutexExecutionEnvironment
         // Tracks apps that are pending sequential startup launch (Start All with delays)
         // so the status update timer doesn't overwrite their countdown text
         private HashSet<int> _pendingSequentialStart = new HashSet<int>();
+        // Tracks the scheduled launch time for each pending sequential app so countdown can be displayed
+        private Dictionary<int, DateTime> _pendingSequentialStartAt = new Dictionary<int, DateTime>();
         // Tracks the sequential launch timer so it can be disposed on form close
         private Timer _sequentialLaunchTimer;
         // Tracks apps that were recently started and are in a grace period
@@ -171,18 +173,26 @@ namespace IntelligentMutexExecutionEnvironment
                         .FindAll(g => selectedIds.Contains(g.GroupId));
                 }
 
-                SimpleLogger.Info("Main_Shown @ Form1.cs",
-                    $"Server mode: auto-starting {groupsToStart.Count} group(s)");
-
+                // Collect all apps to start across all configured groups (in SortOrder)
+                var appsToStart = new List<ManagedApplication>();
                 foreach (var group in groupsToStart)
                 {
-                    var apps = _storageService.GetApplicationsByGroup(group.GroupId);
-                    foreach (var app in apps)
+                    foreach (var app in _storageService.GetApplicationsByGroup(group.GroupId))
                     {
-                        if (!_processManager.IsApplicationRunning(app))
-                            ServerStartApplication(app);
+                        if (!string.IsNullOrEmpty(app.Directory) &&
+                            File.Exists(app.Directory) &&
+                            !_processManager.IsApplicationRunning(app))
+                        {
+                            appsToStart.Add(app);
+                        }
                     }
                 }
+
+                SimpleLogger.Info("Main_Shown @ Form1.cs",
+                    $"Server mode: auto-starting {appsToStart.Count} app(s) across {groupsToStart.Count} group(s)");
+
+                if (appsToStart.Count > 0)
+                    ServerStartSequential(appsToStart);
             }
             catch (Exception ex)
             {
@@ -190,23 +200,137 @@ namespace IntelligentMutexExecutionEnvironment
             }
         }
 
-        private void ServerStartApplication(ManagedApplication app)
+        /// <summary>
+        /// Launches apps sequentially for server auto-start, respecting each app's StartupDelaySeconds.
+        /// Uses 1-second tick timers to show live countdowns in the ListView, matching StartAllSequential.
+        /// </summary>
+        private void ServerStartSequential(List<ManagedApplication> appsToStart)
         {
-            if (string.IsNullOrEmpty(app.Directory) || !File.Exists(app.Directory))
-                return;
+            int currentIndex = 0;
 
-            if (_processManager.StartApplication(app))
+            // Mark all queued apps so the watchdog doesn't overwrite their countdown text
+            foreach (var app in appsToStart)
+                _pendingSequentialStart.Add(app.Index);
+
+            Action<ManagedApplication, int> beginCountdown = null;
+            Action launchNext = null;
+
+            beginCountdown = (targetApp, delaySeconds) =>
             {
-                _authorizedApps.Add(app.Index);
-                _pendingStop.Remove(app.Index);
-                _failedApps.Remove(app.Index);
-                _forceKillReason.Remove(app.Index);
-                _startGracePeriod[app.Index] = DateTime.Now.AddSeconds(_settingsService.StartGracePeriodSeconds);
-                int stablePeriod = Math.Max(app.StableRunPeriodSeconds, 5);
-                _stableRunCheck[app.Index] = DateTime.Now.AddSeconds(stablePeriod);
-                _storageService.UpdateApplicationFields(app.Index, isRunning: true, lastStart: DateTime.Now);
-                SimpleLogger.Info("ServerStartApplication @ Form1.cs", $"Server auto-started '{app.AppName}'");
-            }
+                _pendingSequentialStartAt[targetApp.Index] = DateTime.Now.AddSeconds(delaySeconds);
+                int secondsLeft = delaySeconds;
+
+                // Show initial countdown on the app's ListView item if it's currently visible
+                ListViewItem targetItem;
+                if (_listViewIndex.TryGetValue(targetApp.Index, out targetItem) && targetItem != null)
+                {
+                    targetItem.SubItems[3].Text = $"Waiting ({secondsLeft}s)";
+                    targetItem.ForeColor = Color.DarkOrange;
+                }
+
+                if (_sequentialLaunchTimer != null)
+                {
+                    _sequentialLaunchTimer.Stop();
+                    _sequentialLaunchTimer.Dispose();
+                }
+
+                _sequentialLaunchTimer = new Timer { Interval = 1000 };
+                ManagedApplication capturedApp = targetApp;
+                _sequentialLaunchTimer.Tick += (s, ev) =>
+                {
+                    secondsLeft--;
+                    if (secondsLeft <= 0 || _isClosing)
+                    {
+                        if (_sequentialLaunchTimer != null)
+                            _sequentialLaunchTimer.Stop();
+                        launchNext();
+                    }
+                    else
+                    {
+                        ListViewItem tickItem;
+                        if (_listViewIndex.TryGetValue(capturedApp.Index, out tickItem) && tickItem != null)
+                            tickItem.SubItems[3].Text = $"Waiting ({secondsLeft}s)";
+                    }
+                };
+                _sequentialLaunchTimer.Start();
+            };
+
+            launchNext = () =>
+            {
+                if (_isClosing || currentIndex >= appsToStart.Count)
+                {
+                    if (_sequentialLaunchTimer != null)
+                    {
+                        _sequentialLaunchTimer.Stop();
+                        _sequentialLaunchTimer.Dispose();
+                        _sequentialLaunchTimer = null;
+                    }
+                    return;
+                }
+
+                var app = appsToStart[currentIndex];
+                _pendingSequentialStart.Remove(app.Index);
+                _pendingSequentialStartAt.Remove(app.Index);
+
+                // Launch the current app
+                if (_processManager.StartApplication(app))
+                {
+                    _authorizedApps.Add(app.Index);
+                    _notifiedUnauthorized.Remove(app.Index);
+                    _notifiedHealthIssues.Remove(app.Index);
+                    _pendingStop.Remove(app.Index);
+                    _failedApps.Remove(app.Index);
+                    _forceKillReason.Remove(app.Index);
+                    _startGracePeriod[app.Index] = DateTime.Now.AddSeconds(_settingsService.StartGracePeriodSeconds);
+                    int stablePeriod = Math.Max(app.StableRunPeriodSeconds, 5);
+                    _stableRunCheck[app.Index] = DateTime.Now.AddSeconds(stablePeriod);
+                    _storageService.UpdateApplicationFields(app.Index, isRunning: true, lastStart: DateTime.Now);
+
+                    // Update the launched app's ListView item immediately
+                    ListViewItem launchedItem;
+                    if (_listViewIndex.TryGetValue(app.Index, out launchedItem) && launchedItem != null)
+                    {
+                        launchedItem.SubItems[3].Text = "Starting...";
+                        launchedItem.SubItems[7].Text = app.GetLastStartDisplay();
+                        launchedItem.ForeColor = Color.DarkOrange;
+                    }
+
+                    SimpleLogger.Info("ServerStartSequential @ Form1.cs",
+                        $"Server auto-started '{app.AppName}' ({currentIndex + 1}/{appsToStart.Count})");
+                }
+                else
+                {
+                    SimpleLogger.Error("ServerStartSequential @ Form1.cs",
+                        $"Failed to auto-start '{app.AppName}' ({currentIndex + 1}/{appsToStart.Count})");
+                }
+
+                currentIndex++;
+
+                if (currentIndex < appsToStart.Count)
+                {
+                    int nextDelay = appsToStart[currentIndex].StartupDelaySeconds;
+                    if (nextDelay > 0)
+                        beginCountdown(appsToStart[currentIndex], nextDelay);
+                    else
+                        launchNext();
+                }
+                else
+                {
+                    if (_sequentialLaunchTimer != null)
+                    {
+                        _sequentialLaunchTimer.Stop();
+                        _sequentialLaunchTimer.Dispose();
+                        _sequentialLaunchTimer = null;
+                    }
+                }
+            };
+
+            // Kick off: delay first app if it has StartupDelaySeconds configured, otherwise launch immediately
+            int firstDelay = appsToStart[0].StartupDelaySeconds;
+            if (firstDelay > 0)
+                beginCountdown(appsToStart[0], firstDelay);
+            else
+                launchNext();
         }
 
         private void InitializeServices()
@@ -711,7 +835,16 @@ namespace IntelligentMutexExecutionEnvironment
             }
             else if (_pendingSequentialStart.Contains(app.Index))
             {
-                statusText = "Waiting...";
+                DateTime target;
+                if (_pendingSequentialStartAt.TryGetValue(app.Index, out target))
+                {
+                    int sLeft = (int)Math.Ceiling((target - DateTime.Now).TotalSeconds);
+                    statusText = sLeft > 0 ? $"Waiting ({sLeft}s)" : "Waiting...";
+                }
+                else
+                {
+                    statusText = "Waiting...";
+                }
                 statusColor = Color.DarkOrange;
             }
             else
@@ -838,9 +971,25 @@ namespace IntelligentMutexExecutionEnvironment
                         continue;
                     }
 
-                    // Skip status updates for apps waiting in sequential Start All
+                    // Keep countdown display current for apps waiting in sequential start queue
                     if (_pendingSequentialStart.Contains(app.Index))
+                    {
+                        if (item != null)
+                        {
+                            DateTime target;
+                            if (_pendingSequentialStartAt.TryGetValue(app.Index, out target))
+                            {
+                                int sLeft = (int)Math.Ceiling((target - DateTime.Now).TotalSeconds);
+                                item.SubItems[3].Text = sLeft > 0 ? $"Waiting ({sLeft}s)" : "Waiting...";
+                            }
+                            else
+                            {
+                                item.SubItems[3].Text = "Waiting...";
+                            }
+                            item.ForeColor = Color.DarkOrange;
+                        }
                         continue;
+                    }
 
                     // Skip watchdog checks for apps still in their startup grace period
                     // (window may not have appeared yet)
@@ -2917,6 +3066,7 @@ namespace IntelligentMutexExecutionEnvironment
                 foreach (var kvp in appsToStart)
                 {
                     _pendingSequentialStart.Remove(kvp.Key.Index);
+                    _pendingSequentialStartAt.Remove(kvp.Key.Index);
                 }
 
                 StartAllButton.Enabled = true;
@@ -2949,6 +3099,7 @@ namespace IntelligentMutexExecutionEnvironment
 
                 // Remove from sequential tracking before launch so watchdog can monitor it
                 _pendingSequentialStart.Remove(app.Index);
+                _pendingSequentialStartAt.Remove(app.Index);
 
                 // Launch the current app
                 if (StartSingleApplication(app, item))
@@ -3470,9 +3621,18 @@ namespace IntelligentMutexExecutionEnvironment
                     // Empty group � gray, no suffix
                     newStatus = new GroupDisplayStatus { IndicatorColor = Color.Gray, Suffix = "" };
                 }
+                else if (c.Failed == 0 && c.Running == c.Total)
+                {
+                    // All apps running (even during startup grace periods) — green
+                    newStatus = new GroupDisplayStatus
+                    {
+                        IndicatorColor = Color.Green,
+                        Suffix = c.Running + " / " + c.Total
+                    };
+                }
                 else if (c.Failed > 0)
                 {
-                    // Has failed apps � red indicator
+                    // Has failed apps� red indicator
                     if (c.Failed >= c.Total)
                     {
                         // All failed � no suffix needed

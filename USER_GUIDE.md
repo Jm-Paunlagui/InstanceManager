@@ -361,20 +361,22 @@ The following table shows which types of application failures IMEE can detect an
 
 ### Application Status
 
-| Status | Color | What It Means | What to Do |
-|--------|-------|---------------|------------|
+| Status | Color | What It Means | How Long / What to Do |
+|--------|-------|---------------|-----------------------|
 | **Stopped** | Black | Application is not running | Click Start to launch |
 | **Stopped (Crashed)** | Orange | Application crashed unexpectedly (non-KeepOpen apps) | Investigate the crash, then click Start to relaunch |
 | **Stopped (Issue Detected)** | Orange | Health issue detected but automatic action is disabled | Check logs for details, then take manual action |
-| **Starting...** | Orange | Application was just launched, waiting for its window to appear | Wait — will change to Running |
+| **Starting...** | Orange | Application was just launched; grace period is running while the window appears | Waits for the **Start Grace Period** (default 10 s). Changes to **Running** once the window is confirmed. |
 | **Running** | Green | Application is running normally | No action needed |
-| **Running (Other Group)** | Dark Cyan | Application is running, but it was started from a different group | Stop it in the other group first if you want to start it here |
-| **Stopping...** | Orange | Stop command was sent, waiting for the process to exit | Wait — will change to Stopped |
-| **Restarting (Ns)** | Orange | Application crashed, auto-restart countdown in progress | Wait for countdown to finish |
-| **Starting...** | Orange | Restart countdown finished, application is being relaunched | Wait — will change to Running |
-| **Waiting (Ns)** | Orange | Sequential Start All — this app is next in line | Wait for countdown to finish |
-| **Warning** | Orange | Health issue detected but automatic corrective action is disabled | Check logs for details; acknowledge the notification |
-| **Failed** | Red | Auto-restart gave up after max retries | Check the app, then Start manually or reset retries |
+| **Running (Other Group)** | Dark Cyan | This entry's executable path is already running, started from a different group | Stop it in the other group first before starting it here |
+| **Stopping...** | Orange | Stop command was sent, waiting for the process to exit | Usually resolves in under 5 s. Changes to **Stopped** automatically. |
+| **Restarting (Ns)** | Orange | Application crashed (KeepOpen); counting down before relaunch. **N** = seconds remaining | Countdown is the app's **Start Delay** setting (default 5 s). When it hits 0 it changes to **Starting...** |
+| **Starting...** | Orange | Restart countdown finished; relaunching now | Same grace period as a manual start (see **Starting...** above) |
+| **Waiting (Ns)** | Orange | Sequential Start All (or Server Mode auto-start); this app is queued. **N** = seconds remaining until launch | Countdown is this app's **Startup Delay** setting. When it hits 0 the app launches and shows **Starting...** |
+| **Warning** | Orange | Health issue detected but automatic corrective action is disabled | Check logs for details; take manual action if needed |
+| **Failed** | Red | Auto-restart gave up after reaching **Max Retries** | Check the application for errors, then click Start to relaunch manually |
+
+**Timed status note:** The countdown shown in `Restarting (Ns)` and `Waiting (Ns)` updates every second via a dedicated display timer, independent of the main poll interval. The actual seconds shown are exact — "0s" means the action will fire on the next timer tick (within 1 second).
 
 ### Group Status Indicators
 
@@ -390,6 +392,18 @@ Each group in the left panel displays a colored circle indicator that summarizes
 | ● | Red | Some applications have failed | "N / T" (failed / total) |
 
 **Priority**: If a group has apps in multiple states, the indicator shows the highest-priority state: **Red** (failed) > **Orange** (transitional) > **Green** (running) > **Gray** (stopped/empty).
+
+### Same-Name Applications (Different Directories)
+
+IMEE detects running processes by **executable file name** (e.g., `launcher.exe`), not by full path. This means:
+
+- If you have `C:\App1\launcher.exe` and `C:\App2\launcher.exe` as two separate entries, IMEE **cannot tell them apart at the OS level**.
+- If one is running, IMEE will show **both** entries as **Running**, even though only one process is actually active.
+- Stopping one will not automatically affect the other, but the watchdog may attempt to restart the wrong one.
+
+**Recommendation:** If you must monitor two different programs that happen to share the same `.exe` filename, place them in **separate groups** and only start one group at a time, or rename one of the executables before adding it to IMEE.
+
+The **Running (Other Group)** status is a specific case of this: it means the **exact same directory path** is running but was started by another group. Two apps with the same filename but *different* directories do not trigger this status — they simply both appear Running simultaneously, which is the known same-name limitation described above.
 
 ---
 
@@ -420,6 +434,20 @@ The Settings dialog lets you configure the station name, startup behavior, and t
 | **Log Flush Interval (seconds)** | 1–120 | 10 | How often buffered log entries are written to disk. |
 | **Log Buffer Size (entries)** | 10–1000 | 100 | Maximum buffered entries before a flush is forced. |
 | **Log Retention (days)** | 1–365 | 7 | Log files older than this are automatically deleted. |
+
+### Server Startup
+
+Click **Server Startup...** in the Settings dialog to configure automatic group launching when the machine starts. This is intended for Windows Server deployments where IMEE should bring managed applications online without any user interaction.
+
+| Setting | Description |
+|---------|-------------|
+| **Enable Server Mode** | When checked, IMEE auto-starts the configured groups when the form first appears after launch. Requires **Run on Windows Startup** to be enabled so IMEE itself starts with the machine. |
+| **Auto-run all groups** | Every group is started on launch. |
+| **Auto-run selected groups only** | Only the groups you check in the list are started. All other groups remain stopped. |
+
+**Startup order and delays:** Server Mode uses the same sequential launch engine as **Start All**. Each application's **Startup Delay** (configured per-app in App Settings) is respected — applications launch one after another with the configured gap between them. The status column shows `Waiting (Ns)` for queued apps and `Starting...` while the grace period runs, exactly as it does for a manual Start All.
+
+**Important:** Server Mode only fires once per IMEE session (when the form is first shown). It does not re-trigger if IMEE is minimized to tray and restored.
 
 ### Reset Defaults
 
