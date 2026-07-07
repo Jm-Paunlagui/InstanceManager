@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using IntelligentMutexExecutionEnvironment.Models;
 using IntelligentMutexExecutionEnvironment.Utilities;
 
@@ -23,6 +24,55 @@ namespace IntelligentMutexExecutionEnvironment.Services
         private static extern bool IsWindowVisible(IntPtr hWnd);
 
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        // Win32 API imports for cross-bitness process path retrieval (Patch 0)
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern bool QueryFullProcessImageName(
+            IntPtr hProcess, uint flags, StringBuilder exeName, ref uint size);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool CloseHandle(IntPtr h);
+
+        private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+
+        private readonly SettingsService _settingsService;
+
+        public ProcessManager(SettingsService settingsService)
+        {
+            _settingsService = settingsService;
+        }
+
+        /// <summary>Full image path of a PID, or null if unavailable. Never throws.</summary>
+        public static string TryGetProcessPath(int pid)
+        {
+            IntPtr h = IntPtr.Zero;
+            try
+            {
+                h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+                if (h == IntPtr.Zero) return null;
+                var sb = new StringBuilder(1024);
+                uint size = (uint)sb.Capacity;
+                return QueryFullProcessImageName(h, 0, sb, ref size) ? sb.ToString() : null;
+            }
+            catch { return null; }
+            finally { if (h != IntPtr.Zero) CloseHandle(h); }
+        }
+
+        /// <summary>True only when the PID's image path provably matches expectedPath.
+        /// Unknown path => NOT a match (fail-safe: never kill what you can't identify).</summary>
+        public static bool ProcessPathMatches(int pid, string expectedPath)
+        {
+            string actual = TryGetProcessPath(pid);
+            if (string.IsNullOrEmpty(actual) || string.IsNullOrEmpty(expectedPath))
+                return false;
+            return string.Equals(
+                Path.GetFullPath(actual).TrimEnd('\\'),
+                Path.GetFullPath(expectedPath).TrimEnd('\\'),
+                StringComparison.OrdinalIgnoreCase);
+        }
 
         /// <summary>
         /// Holds the result of a single GetProcessesByName snapshot to avoid
@@ -86,6 +136,10 @@ namespace IntelligentMutexExecutionEnvironment.Services
         /// </summary>
         private readonly Dictionary<string, List<int>> _nameToAppsCache = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<int, ProcessSnapshot> _snapshotResultsCache = new Dictionary<int, ProcessSnapshot>();
+        /// <summary>
+        /// Reusable lookup from app Index to app.Directory for path-based filtering in batch snapshot (Patch 2).
+        /// </summary>
+        private readonly Dictionary<int, string> _appIndexToDirectoryCache = new Dictionary<int, string>();
 
         /// <summary>
         /// Reusable HashSet for batched EnumWindows ~ stores PIDs that own at least one top-level window.
@@ -329,6 +383,10 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 kvp.Value.Clear();
             }
 
+            // Build index -> directory lookup for path-based filtering (Patch 2)
+            var indexToDir = _appIndexToDirectoryCache;
+            indexToDir.Clear();
+
             for (int i = 0; i < apps.Count; i++)
             {
                 var app = apps[i];
@@ -346,6 +404,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     nameToApps[procName] = indices;
                 }
                 indices.Add(app.Index);
+                indexToDir[app.Index] = app.Directory;
 
                 // Initialize empty snapshot for each app
                 results[app.Index] = new ProcessSnapshot();
@@ -464,9 +523,33 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         }
                     }
 
+                    // PATH FILTER (Patch 2): resolve the process path once per process,
+                    // then check it per-app in the inner loop. Detection is permissive:
+                    // unknown path (null) counts as a match so IMEE doesn't go blind to
+                    // its own app when access is denied. Only the KILL side is strict (Patch 1).
+                    int processPid;
+                    try { processPid = allProcesses[i].Id; }
+                    catch (InvalidOperationException) { continue; }
+                    string processPath = TryGetProcessPath(processPid);
+
                     for (int j = 0; j < appIndices.Count; j++)
                     {
                         int idx = appIndices[j];
+
+                        // Path filter: if we know the process path AND it doesn't match this app's
+                        // directory, skip it — this process belongs to a different install/line.
+                        string appDir;
+                        if (processPath != null && indexToDir.TryGetValue(idx, out appDir))
+                        {
+                            if (!string.Equals(
+                                Path.GetFullPath(processPath).TrimEnd('\\'),
+                                Path.GetFullPath(appDir).TrimEnd('\\'),
+                                StringComparison.OrdinalIgnoreCase))
+                            {
+                                continue;
+                            }
+                        }
+
                         var snap = results[idx];
                         snap.TotalCount++;
                         if (hasWindow || isTrayApp)
@@ -474,8 +557,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                             snap.HasWindowedProcess = true;
                             if (snap.FirstWindowedPid == 0)
                             {
-                                try { snap.FirstWindowedPid = allProcesses[i].Id; }
-                                catch (InvalidOperationException) { }
+                                snap.FirstWindowedPid = processPid;
                             }
                             if (!responding)
                                 snap.HasNotRespondingProcess = true;
@@ -545,6 +627,15 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     {
                         try
                         {
+                            int pid;
+                            try { pid = processes[i].Id; } catch (InvalidOperationException) { continue; }
+
+                            // PATH FILTER (Patch 2): a same-name process from a different install path
+                            // is NOT this app. Detection is permissive: unknown path counts as a match.
+                            string path = TryGetProcessPath(pid);
+                            if (path != null && !ProcessPathMatches(pid, app.Directory))
+                                continue;
+
                             bool hasVisibleWindow = processes[i].MainWindowHandle != IntPtr.Zero;
 
                             // If no visible main window, check for hidden top-level windows (system tray apps).
@@ -553,7 +644,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                             {
                                 try
                                 {
-                                    isTrayApp = HasAnyTopLevelWindow(processes[i].Id);
+                                    isTrayApp = HasAnyTopLevelWindow(pid);
                                 }
                                 catch (InvalidOperationException)
                                 {
@@ -566,8 +657,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                                 snapshot.HasWindowedProcess = true;
                                 if (snapshot.FirstWindowedPid == 0)
                                 {
-                                    try { snapshot.FirstWindowedPid = processes[i].Id; }
-                                    catch (InvalidOperationException) { }
+                                    snapshot.FirstWindowedPid = pid;
                                 }
 
                                 if (hasVisibleWindow)
@@ -716,10 +806,26 @@ namespace IntelligentMutexExecutionEnvironment.Services
                                     continue;
                                 }
 
+                                // PATH GATE (Patch 1): never kill a name-match whose image path isn't this app's exe.
+                                if (!ProcessPathMatches(pid, app.Directory))
+                                {
+                                    SimpleLogger.Warn("KillBackgroundProcesses @ ProcessManager.cs",
+                                        $"Skipping same-name process (PID {pid}) — image path does not match '{app.Directory}'");
+                                    continue;
+                                }
+
+                                // ENFORCEMENT GATE (Patch 5): in LogOnly mode, record and skip.
+                                if (!_settingsService.EnforcementEnabled)
+                                {
+                                    SimpleLogger.Warn("KillBackgroundProcesses @ ProcessManager.cs",
+                                        $"[DRY-RUN] Would kill background process for {app.AppName} (PID {pid})");
+                                    continue;
+                                }
+
                                 processes[i].Kill();
                                 killed++;
                                 SimpleLogger.Warn("KillBackgroundProcesses @ ProcessManager.cs",
-                                    $"Killed background process for {app.AppName} (PID: {pid})");
+                                    $"Killed background process for {app.AppName} (PID: {pid}), image path: {TryGetProcessPath(pid) ?? "(unknown)"}");
                             }
                         }
                         catch (InvalidOperationException)
@@ -773,8 +879,8 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     return false;
                 }
 
-                // Kill any lingering background processes before starting fresh
-                int bgKilled = KillBackgroundProcesses(app);
+                // Only clean up lingering processes for apps NOT flagged as service-style (Patch 1/3).
+                int bgKilled = app.TreatAsService ? 0 : KillBackgroundProcesses(app);
                 if (bgKilled > 0)
                 {
                     SimpleLogger.Info("StartApplication @ ProcessManager.cs",
@@ -1044,6 +1150,8 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         try
                         {
                             int pid = processes[i].Id;
+                            // Patch 4: capture image path for kill attribution logging
+                            string imagePath = TryGetProcessPath(pid) ?? "(unknown)";
                             bool hasWindow = processes[i].MainWindowHandle != IntPtr.Zero;
 
                             if (hasWindow)
@@ -1056,16 +1164,16 @@ namespace IntelligentMutexExecutionEnvironment.Services
                                     {
                                         processes[i].Kill();
                                         processes[i].WaitForExit(2000);
-                                        SimpleLogger.Warn("StopApplication @ ProcessManager.cs", $"Force killed {app.AppName} (PID: {pid}) - graceful shutdown timed out");
+                                        SimpleLogger.Warn("StopApplication @ ProcessManager.cs", $"Force killed {app.AppName} (PID: {pid}, Path: {imagePath}) - graceful shutdown timed out");
                                     }
                                     catch (System.ComponentModel.Win32Exception killEx)
                                     {
-                                        SimpleLogger.Error("StopApplication @ ProcessManager.cs", $"Access denied killing {app.AppName} (PID: {pid}): {killEx.Message}");
+                                        SimpleLogger.Error("StopApplication @ ProcessManager.cs", $"Access denied killing {app.AppName} (PID: {pid}, Path: {imagePath}): {killEx.Message}");
                                     }
                                 }
                                 else
                                 {
-                                    SimpleLogger.Info("StopApplication @ ProcessManager.cs", $"Gracefully stopped {app.AppName} (PID: {pid})");
+                                    SimpleLogger.Info("StopApplication @ ProcessManager.cs", $"Gracefully stopped {app.AppName} (PID: {pid}, Path: {imagePath})");
                                 }
                             }
                             else
@@ -1074,11 +1182,11 @@ namespace IntelligentMutexExecutionEnvironment.Services
                                 {
                                     processes[i].Kill();
                                     processes[i].WaitForExit(2000);
-                                    SimpleLogger.Warn("StopApplication @ ProcessManager.cs", $"Force killed background process {app.AppName} (PID: {pid}) - no main window");
+                                    SimpleLogger.Warn("StopApplication @ ProcessManager.cs", $"Force killed background process {app.AppName} (PID: {pid}, Path: {imagePath}) - no main window");
                                 }
                                 catch (System.ComponentModel.Win32Exception killEx)
                                 {
-                                    SimpleLogger.Error("StopApplication @ ProcessManager.cs", $"Access denied killing background {app.AppName} (PID: {pid}): {killEx.Message}");
+                                    SimpleLogger.Error("StopApplication @ ProcessManager.cs", $"Access denied killing background {app.AppName} (PID: {pid}, Path: {imagePath}): {killEx.Message}");
                                 }
                             }
 

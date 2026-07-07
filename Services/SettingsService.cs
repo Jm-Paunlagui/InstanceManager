@@ -113,6 +113,20 @@ namespace IntelligentMutexExecutionEnvironment.Services
             }
         }
 
+        // === Enforcement Settings (Patch 5) ===
+        private bool _enforcementEnabled;
+
+        /// <summary>
+        /// false = LogOnly: watchdog logs "[DRY-RUN] Would kill ..." but never terminates.
+        /// true = watchdog actively kills processes when health issues are detected.
+        /// Ship as FALSE for safe production rollout.
+        /// </summary>
+        public bool EnforcementEnabled
+        {
+            get { return _enforcementEnabled; }
+            set { _enforcementEnabled = value; Save(); }
+        }
+
         // === Logging Settings ===
         private int _logFlushIntervalSeconds;
         private int _logBufferSize;
@@ -157,6 +171,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
         public const int DefaultLogFlushIntervalSeconds = 10;
         public const int DefaultLogBufferSize = 100;
         public const int DefaultLogRetentionDays = 7;
+        public const bool DefaultEnforcementEnabled = false;
 
         public SettingsService()
         {
@@ -179,6 +194,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
             _logFlushIntervalSeconds = DefaultLogFlushIntervalSeconds;
             _logBufferSize = DefaultLogBufferSize;
             _logRetentionDays = DefaultLogRetentionDays;
+            _enforcementEnabled = DefaultEnforcementEnabled;
         }
 
         /// <summary>
@@ -371,7 +387,8 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 sb.AppendLine($"  \"StorageSaveIntervalSeconds\": {_storageSaveIntervalSeconds},");
                 sb.AppendLine($"  \"LogFlushIntervalSeconds\": {_logFlushIntervalSeconds},");
                 sb.AppendLine($"  \"LogBufferSize\": {_logBufferSize},");
-                sb.AppendLine($"  \"LogRetentionDays\": {_logRetentionDays}");
+                sb.AppendLine($"  \"LogRetentionDays\": {_logRetentionDays},");
+                sb.AppendLine($"  \"EnforcementEnabled\": {(_enforcementEnabled ? "true" : "false")}");
                 sb.AppendLine("}");
 
                 // Write to temp file first, then atomically replace to avoid corruption on crash
@@ -478,6 +495,9 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         int lrd;
                         if (int.TryParse(value, out lrd))
                             _logRetentionDays = Clamp(lrd, 1, 365);
+                        break;
+                    case "EnforcementEnabled":
+                        _enforcementEnabled = value.Equals("true", StringComparison.OrdinalIgnoreCase);
                         break;
                 }
             }

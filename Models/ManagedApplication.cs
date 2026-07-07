@@ -62,6 +62,14 @@ namespace IntelligentMutexExecutionEnvironment.Models
         public bool HealthMonitoringEnabled { get; set; }
 
         /// <summary>
+        /// Service-style app: no window expected. Liveness = process exists.
+        /// Disables window-based health checks (not-responding, error-dialog, title-change)
+        /// and zombie cleanup. Memory/CPU checks remain valid.
+        /// Default: false — zero behavior change for existing apps.
+        /// </summary>
+        public bool TreatAsService { get; set; }
+
+        /// <summary>
         /// Stores the exit code of the last process termination.
         /// Null if no exit has been recorded yet.
         /// </summary>
@@ -92,6 +100,7 @@ namespace IntelligentMutexExecutionEnvironment.Models
             SortOrder = 0;
             DetectTitleChange = false;
             HealthMonitoringEnabled = false; // default: disabled (opt-in is off)
+            TreatAsService = false;
             LauncherPath = null;
         }
 

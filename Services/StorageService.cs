@@ -200,6 +200,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     existingApp.MemoryLimitMB != app.MemoryLimitMB ||
                     existingApp.DetectTitleChange != app.DetectTitleChange ||
                     existingApp.HealthMonitoringEnabled != app.HealthMonitoringEnabled ||
+                    existingApp.TreatAsService != app.TreatAsService ||
                     existingApp.LastExitCode != app.LastExitCode ||
                     existingApp.DetectTitleChange != app.DetectTitleChange ||
                     existingApp.LastStart != app.LastStart ||
@@ -223,6 +224,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 existingApp.MemoryLimitMB = app.MemoryLimitMB;
                 existingApp.DetectTitleChange = app.DetectTitleChange;
                 existingApp.HealthMonitoringEnabled = app.HealthMonitoringEnabled;
+                existingApp.TreatAsService = app.TreatAsService;
                 existingApp.LastExitCode = app.LastExitCode;
 
                 if (persistentChanged)
@@ -659,6 +661,7 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 sb.AppendLine($"    \"MemoryLimitMB\": {app.MemoryLimitMB},");
                 sb.AppendLine($"    \"DetectTitleChange\": {app.DetectTitleChange.ToString().ToLower()},");
                 sb.AppendLine($"    \"HealthMonitoringEnabled\": {app.HealthMonitoringEnabled.ToString().ToLower()},");
+                sb.AppendLine($"    \"TreatAsService\": {app.TreatAsService.ToString().ToLower()},");
                 sb.AppendLine($"    \"LastExitCode\": {(app.LastExitCode.HasValue ? app.LastExitCode.Value.ToString() : "null")},");
                 sb.AppendLine($"    \"SortOrder\": {app.SortOrder}");
                 sb.Append("  }");
@@ -807,6 +810,9 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         break;
                     case "HealthMonitoringEnabled":
                         app.HealthMonitoringEnabled = value.ToLower() == "true";
+                        break;
+                    case "TreatAsService":
+                        app.TreatAsService = value.ToLower() == "true";
                         break;
                     case "LastExitCode":
                         int lastExitCode;

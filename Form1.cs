@@ -352,8 +352,8 @@ namespace IntelligentMutexExecutionEnvironment
         private void InitializeServices()
         {
             _storageService = new StorageService();
-            _processManager = new ProcessManager();
             _settingsService = new SettingsService();
+            _processManager = new ProcessManager(_settingsService);
 
             // Apply configurable settings to services
             ApplySettingsToServices();
@@ -947,7 +947,10 @@ namespace IntelligentMutexExecutionEnvironment
                     {
                         snapshot = new ProcessManager.ProcessSnapshot();
                     }
-                    bool isRunning = snapshot.HasWindowedProcess;
+                    // Patch 3: TreatAsService apps have no window — liveness = process exists.
+                    bool isRunning = app.TreatAsService
+                        ? (snapshot.HasWindowedProcess || snapshot.HasBackgroundProcess)
+                        : snapshot.HasWindowedProcess;
 
                     // Skip watchdog checks for apps the user intentionally stopped
                     if (_pendingStop.Contains(app.Index))
@@ -1133,12 +1136,16 @@ namespace IntelligentMutexExecutionEnvironment
                         }
                     }
 
+                    // Patch 3: TreatAsService apps have no message pump — Process.Responding
+                    // is meaningless. Skip not-responding, error-dialog, and title-change checks.
+                    // Memory/CPU checks remain valid.
+
                     // Detect not-responding KeepOpen apps (e.g. unhandled exception dialog)
                     // If the app has a window but is not responding, it may be stuck on a crash dialog.
                     // Force-kill it so auto-restart can take over.
                     // Uses configurable NotRespondingTimeoutSeconds per app, or falls back to
                     // 2 consecutive poll cycles if not configured (timeout = 0).
-                    if (isRunning && wasRunning && snapshot.HasNotRespondingProcess)
+                    if (isRunning && wasRunning && snapshot.HasNotRespondingProcess && !app.TreatAsService)
                     {
                         if (!_notRespondingTracking.ContainsKey(app.Index))
                         {
@@ -1183,16 +1190,25 @@ namespace IntelligentMutexExecutionEnvironment
                             {
                                 if (app.HealthMonitoringEnabled)
                                 {
-                                    _notRespondingTracking.Remove(app.Index);
-                                    _stableRunCheck.Remove(app.Index);
-                                    _cpuTimeSamples.Remove(app.Index);
-                                    _highCpuStreak.Remove(app.Index);
+                                    // ENFORCEMENT GATE (Patch 5): in LogOnly mode, log but don't kill.
+                                    if (!_settingsService.EnforcementEnabled)
+                                    {
+                                        SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                            $"[DRY-RUN] Would force-kill '{app.AppName}' for not responding");
+                                    }
+                                    else
+                                    {
+                                        _notRespondingTracking.Remove(app.Index);
+                                        _stableRunCheck.Remove(app.Index);
+                                        _cpuTimeSamples.Remove(app.Index);
+                                        _highCpuStreak.Remove(app.Index);
 
-                                    SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                        $"'{app.AppName}' is still not responding ~ force-killing for auto-restart");
+                                        SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                            $"'{app.AppName}' is still not responding ~ force-killing for auto-restart");
 
-                                    _forceKillReason[app.Index] = "UI Freeze / Not Responding (force-killed by health monitor)";
-                                    _processManager.StopApplication(app);
+                                        _forceKillReason[app.Index] = "UI Freeze / Not Responding (force-killed by health monitor)";
+                                        _processManager.StopApplication(app);
+                                    }
                                 }
                                 else
                                 {
@@ -1215,7 +1231,8 @@ namespace IntelligentMutexExecutionEnvironment
                     // unhandled exception, crash, or error dialogs). These windows pump messages
                     // so Process.Responding returns true, but the app is effectively stuck.
                     // Only applies to KeepOpen apps that are running and authorized.
-                    if (isRunning && wasRunning && snapshot.HasErrorDialogWindow)
+                    // Patch 3: skip for TreatAsService apps (no window expected).
+                    if (isRunning && wasRunning && snapshot.HasErrorDialogWindow && !app.TreatAsService)
                     {
                         if (!_errorDialogTracking.ContainsKey(app.Index))
                         {
@@ -1233,16 +1250,25 @@ namespace IntelligentMutexExecutionEnvironment
                             // Second consecutive detection ~ force-kill
                             if (app.HealthMonitoringEnabled)
                             {
-                                _errorDialogTracking.Remove(app.Index);
-                                _stableRunCheck.Remove(app.Index);
-                                _cpuTimeSamples.Remove(app.Index);
-                                _highCpuStreak.Remove(app.Index);
+                                // ENFORCEMENT GATE (Patch 5): in LogOnly mode, log but don't kill.
+                                if (!_settingsService.EnforcementEnabled)
+                                {
+                                    SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                        $"[DRY-RUN] Would force-kill '{app.AppName}' for error dialog: \"{snapshot.ErrorDialogTitle}\"");
+                                }
+                                else
+                                {
+                                    _errorDialogTracking.Remove(app.Index);
+                                    _stableRunCheck.Remove(app.Index);
+                                    _cpuTimeSamples.Remove(app.Index);
+                                    _highCpuStreak.Remove(app.Index);
 
-                                SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                    $"'{app.AppName}' confirmed error dialog: \"{snapshot.ErrorDialogTitle}\" ~ force-killing for auto-restart");
+                                    SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                        $"'{app.AppName}' confirmed error dialog: \"{snapshot.ErrorDialogTitle}\" ~ force-killing for auto-restart");
 
-                                _forceKillReason[app.Index] = "Error dialog detected: \"" + (snapshot.ErrorDialogTitle ?? "unknown") + "\" (force-killed by health monitor)";
-                                _processManager.StopApplication(app);
+                                    _forceKillReason[app.Index] = "Error dialog detected: \"" + (snapshot.ErrorDialogTitle ?? "unknown") + "\" (force-killed by health monitor)";
+                                    _processManager.StopApplication(app);
+                                }
                             }
                             else
                             {
@@ -1267,7 +1293,7 @@ namespace IntelligentMutexExecutionEnvironment
                     // Requires 2 consecutive detections to avoid false positives from apps that
                     // legitimately change their title (e.g. showing a document name).
                     if (isRunning && wasRunning && app.DetectTitleChange
-                        && snapshot.MainWindowTitle != null)
+                        && snapshot.MainWindowTitle != null && !app.TreatAsService)
                     {
                         string knownTitle;
                         if (!_knownWindowTitles.TryGetValue(app.Index, out knownTitle))
@@ -1297,17 +1323,26 @@ namespace IntelligentMutexExecutionEnvironment
 
                                 if (app.HealthMonitoringEnabled)
                                 {
-                                    _titleChangeTracking.Remove(app.Index);
-                                    _knownWindowTitles.Remove(app.Index);
-                                    _stableRunCheck.Remove(app.Index);
-                                    _cpuTimeSamples.Remove(app.Index);
-                                    _highCpuStreak.Remove(app.Index);
+                                    // ENFORCEMENT GATE (Patch 5): in LogOnly mode, log but don't kill.
+                                    if (!_settingsService.EnforcementEnabled)
+                                    {
+                                        SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                            $"[DRY-RUN] Would force-kill '{app.AppName}' for title change to \"{changedTitle}\" (was \"{knownTitle}\")");
+                                    }
+                                    else
+                                    {
+                                        _titleChangeTracking.Remove(app.Index);
+                                        _knownWindowTitles.Remove(app.Index);
+                                        _stableRunCheck.Remove(app.Index);
+                                        _cpuTimeSamples.Remove(app.Index);
+                                        _highCpuStreak.Remove(app.Index);
 
-                                    SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                        $"'{app.AppName}' confirmed title change to \"{changedTitle}\" (was \"{knownTitle}\") ~ force-killing as suspected error dialog");
+                                        SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                            $"'{app.AppName}' confirmed title change to \"{changedTitle}\" (was \"{knownTitle}\") ~ force-killing as suspected error dialog");
 
-                                    _forceKillReason[app.Index] = "Window title change: \"" + (knownTitle ?? "") + "\" ? \"" + (changedTitle ?? "") + "\" (force-killed by health monitor)";
-                                    _processManager.StopApplication(app);
+                                        _forceKillReason[app.Index] = "Window title change: \"" + (knownTitle ?? "") + "\" ? \"" + (changedTitle ?? "") + "\" (force-killed by health monitor)";
+                                        _processManager.StopApplication(app);
+                                    }
                                 }
                                 else
                                 {
@@ -1345,11 +1380,20 @@ namespace IntelligentMutexExecutionEnvironment
 
                             if (app.HealthMonitoringEnabled)
                             {
-                                SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                    $"'{app.AppName}' exceeded memory limit ({usedMB}MB / {app.MemoryLimitMB}MB) ~ force-killing for auto-restart");
+                                // ENFORCEMENT GATE (Patch 5): in LogOnly mode, log but don't kill.
+                                if (!_settingsService.EnforcementEnabled)
+                                {
+                                    SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                        $"[DRY-RUN] Would force-kill '{app.AppName}' for memory limit ({usedMB}MB / {app.MemoryLimitMB}MB)");
+                                }
+                                else
+                                {
+                                    SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                        $"'{app.AppName}' exceeded memory limit ({usedMB}MB / {app.MemoryLimitMB}MB) ~ force-killing for auto-restart");
 
-                                _forceKillReason[app.Index] = "Memory limit exceeded (" + usedMB + "MB / " + app.MemoryLimitMB + "MB) (force-killed by health monitor)";
-                                _processManager.StopApplication(app);
+                                    _forceKillReason[app.Index] = "Memory limit exceeded (" + usedMB + "MB / " + app.MemoryLimitMB + "MB) (force-killed by health monitor)";
+                                    _processManager.StopApplication(app);
+                                }
                             }
                             else
                             {
@@ -1387,15 +1431,25 @@ namespace IntelligentMutexExecutionEnvironment
                                     {
                                         if (app.HealthMonitoringEnabled)
                                         {
-                                            _highCpuStreak.Remove(app.Index);
-                                            _cpuTimeSamples.Remove(app.Index);
-                                            _stableRunCheck.Remove(app.Index);
+                                            // ENFORCEMENT GATE (Patch 5): in LogOnly mode, log but don't kill.
+                                            if (!_settingsService.EnforcementEnabled)
+                                            {
+                                                SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                                    $"[DRY-RUN] Would force-kill '{app.AppName}' for CPU-hung ({(cpuUsage * 100):F0}% for {streak} checks)");
+                                                _highCpuStreak.Remove(app.Index);
+                                            }
+                                            else
+                                            {
+                                                _highCpuStreak.Remove(app.Index);
+                                                _cpuTimeSamples.Remove(app.Index);
+                                                _stableRunCheck.Remove(app.Index);
 
-                                            SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
-                                                $"'{app.AppName}' has been at {(cpuUsage * 100):F0}% CPU for {streak} consecutive checks ~ force-killing as CPU-hung");
+                                                SimpleLogger.Warn("UpdateApplicationStatuses @ Form1.cs",
+                                                    $"'{app.AppName}' has been at {(cpuUsage * 100):F0}% CPU for {streak} consecutive checks ~ force-killing as CPU-hung");
 
-                                            _forceKillReason[app.Index] = "CPU-hung (" + ((int)(cpuUsage * 100)) + "% for " + streak + " consecutive checks) (force-killed by health monitor)";
-                                            _processManager.StopApplication(app);
+                                                _forceKillReason[app.Index] = "CPU-hung (" + ((int)(cpuUsage * 100)) + "% for " + streak + " consecutive checks) (force-killed by health monitor)";
+                                                _processManager.StopApplication(app);
+                                            }
                                         }
                                         else
                                         {
@@ -1918,6 +1972,17 @@ namespace IntelligentMutexExecutionEnvironment
         {
             SimpleLogger.Warn("HandleUnauthorizedLaunch @ Form1.cs",
                 $"Unauthorized launch detected for '{app.AppName}' - killing process");
+
+            // ENFORCEMENT GATE (Patch 5): in LogOnly mode, log but don't kill.
+            if (!_settingsService.EnforcementEnabled)
+            {
+                SimpleLogger.Warn("HandleUnauthorizedLaunch @ Form1.cs",
+                    $"[DRY-RUN] Would kill unauthorized process for '{app.AppName}'");
+                return;
+            }
+
+            // Patch 4: Record kill attribution before stopping
+            _forceKillReason[app.Index] = "Terminated by IMEE: unauthorized/cross-detection";
 
             // Kill the unauthorized process
             _processManager.StopApplication(app);

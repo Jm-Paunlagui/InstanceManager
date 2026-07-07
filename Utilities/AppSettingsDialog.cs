@@ -26,6 +26,7 @@ namespace IntelligentMutexExecutionEnvironment
         private NumericUpDown _notRespondingTimeoutNumeric;
         private NumericUpDown _memoryLimitNumeric;
         private CheckBox _detectTitleChangeCheckBox;
+        private CheckBox _treatAsServiceCheckBox;
         private Button _resetCrashButton;
         private Button _resetRetryButton;
         private Label _crashCountLabel;
@@ -456,6 +457,38 @@ namespace IntelligentMutexExecutionEnvironment
             this.Controls.Add(_detectTitleChangeCheckBox);
             this.Controls.Add(dtcHint);
 
+            y += rowHeight;
+
+            // Treat As Service (Patch 3)
+            var tasLabel = new Label
+            {
+                Text = "Treat As Service:",
+                Location = new Point(labelX, y + 2),
+                AutoSize = true
+            };
+            _treatAsServiceCheckBox = new CheckBox
+            {
+                Checked = _app.TreatAsService,
+                Location = new Point(controlX + 8, y),
+                AutoSize = true,
+                Text = _app.TreatAsService ? "Yes" : "No"
+            };
+            _treatAsServiceCheckBox.CheckedChanged += (s, e) =>
+            {
+                _treatAsServiceCheckBox.Text = _treatAsServiceCheckBox.Checked ? "Yes" : "No";
+            };
+            var tasHint = new Label
+            {
+                Text = "Windowless/service app (liveness = process exists)",
+                Location = new Point(controlX + 85, y + 2),
+                AutoSize = true,
+                ForeColor = Color.Gray,
+                Font = _normalFont
+            };
+            this.Controls.Add(tasLabel);
+            this.Controls.Add(_treatAsServiceCheckBox);
+            this.Controls.Add(tasHint);
+
             y += rowHeight + 10;
 
             // Set initial enabled state for sub-controls based on Keep Open
@@ -794,6 +827,7 @@ namespace IntelligentMutexExecutionEnvironment
             int newNotRespondingTimeoutSeconds = (int)_notRespondingTimeoutNumeric.Value;
             int newMemoryLimitMB = (int)_memoryLimitNumeric.Value;
             bool newDetectTitleChange = _detectTitleChangeCheckBox.Checked;
+            bool newTreatAsService = _treatAsServiceCheckBox.Checked;
             string newLauncherPath = string.IsNullOrEmpty(launcherPath) ? null : launcherPath;
 
             // Log each individual change for traceability and accountability
@@ -862,6 +896,12 @@ namespace IntelligentMutexExecutionEnvironment
                     $"'{appName}' DetectTitleChange changed: {_app.DetectTitleChange} to {newDetectTitleChange}");
                 changeCount++;
             }
+            if (_app.TreatAsService != newTreatAsService)
+            {
+                SimpleLogger.Info("AppSettingsChanged @ EditAppDialog.cs",
+                    $"'{appName}' TreatAsService changed: {_app.TreatAsService} to {newTreatAsService}");
+                changeCount++;
+            }
             if (_app.LauncherPath != newLauncherPath)
             {
                 string oldLauncher = string.IsNullOrEmpty(_app.LauncherPath) ? "(none)" : Path.GetFileName(_app.LauncherPath);
@@ -904,6 +944,7 @@ namespace IntelligentMutexExecutionEnvironment
             _app.NotRespondingTimeoutSeconds = newNotRespondingTimeoutSeconds;
             _app.MemoryLimitMB = newMemoryLimitMB;
             _app.DetectTitleChange = newDetectTitleChange;
+            _app.TreatAsService = newTreatAsService;
             _app.LauncherPath = newLauncherPath;
             this.DialogResult = DialogResult.OK;
             this.Close();
