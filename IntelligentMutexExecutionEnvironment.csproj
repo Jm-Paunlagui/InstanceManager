@@ -113,7 +113,9 @@
     </Compile>
     <Compile Include="Utilities\MarkdownParser.cs" />
     <Compile Include="Utilities\MessageBoxHelper.cs" />
-    <Compile Include="Utilities\ServerConfigDialog.cs" />
+    <Compile Include="Utilities\ServerConfigDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Utilities\SettingsDialog.cs">
       <SubType>Form</SubType>
     </Compile>

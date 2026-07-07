@@ -108,7 +108,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             this.BackColor = Color.White;
 
             int labelX = 20;
-            int controlX = 270;
+            int controlX = 210;
             int hintX = controlX + 90;
             int y = 15;
             int rowHeight = 30;
@@ -278,7 +278,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             _enforcementEnabledCheckBox = new CheckBox
             {
                 Checked = settings.EnforcementEnabled,
-                Location = new Point(controlX + 8, y),
+                Location = new Point(labelX + 148, y),
                 AutoSize = true,
                 Text = settings.EnforcementEnabled ? "Active" : "Log Only"
             };
@@ -289,7 +289,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             var enfHint = new Label
             {
                 Text = "Off = dry-run (log only, no kills)",
-                Location = new Point(controlX + 130, y + 2),
+                Location = new Point(labelX + 148 + 85, y + 2),
                 AutoSize = true,
                 ForeColor = Color.Gray,
                 Font = _normalFont
