@@ -408,14 +408,23 @@ namespace IntelligentMutexExecutionEnvironment
                         // Only terminate once per process name (same exe in multiple groups)
                         if (!terminatedProcessNames.Contains(processName))
                         {
-                            SimpleLogger.Warn("TerminateAlreadyRunningApps @ Form1.cs",
-                                $"'{app.AppName}' was running before IMEE started - terminating")
+                            // ENFORCEMENT GATE: in LogOnly mode, log but don't kill at startup.
+                            if (!_settingsService.EnforcementEnabled)
+                            {
+                                SimpleLogger.Warn("TerminateAlreadyRunningApps @ Form1.cs",
+                                    $"[DRY-RUN] Would terminate '{app.AppName}' (was running before IMEE started)");
+                                terminatedProcessNames.Add(processName);
+                                // Don't add to terminatedApps — no MessageBox in dry-run mode
+                            }
+                            else
+                            {
+                                SimpleLogger.Warn("TerminateAlreadyRunningApps @ Form1.cs",
+                                    $"'{app.AppName}' was running before IMEE started - terminating");
 
-                            ;
-
-                            _processManager.StopApplication(app);
-                            terminatedProcessNames.Add(processName);
-                            terminatedApps.Add(app.AppName ?? "(unknown)");
+                                _processManager.StopApplication(app);
+                                terminatedProcessNames.Add(processName);
+                                terminatedApps.Add(app.AppName ?? "(unknown)");
+                            }
                         }
 
                         _storageService.UpdateApplicationFields(app.Index, isRunning: false, lastStop: DateTime.Now, retryCount: 0);
@@ -3399,6 +3408,14 @@ namespace IntelligentMutexExecutionEnvironment
                             dialog.LogFlushIntervalSeconds,
                             dialog.LogBufferSize,
                             dialog.LogRetentionDays);
+
+                        // Save EnforcementEnabled separately (not part of SaveAll)
+                        if (_settingsService.EnforcementEnabled != dialog.EnforcementEnabled)
+                        {
+                            SimpleLogger.Info("SettingsChanged @ Form1.cs",
+                                $"EnforcementEnabled changed: {_settingsService.EnforcementEnabled} to {dialog.EnforcementEnabled}");
+                            _settingsService.EnforcementEnabled = dialog.EnforcementEnabled;
+                        }
 
                         // Apply settings to running services
                         ApplySettingsToServices();

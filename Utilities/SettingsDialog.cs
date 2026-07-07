@@ -24,6 +24,8 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
         private ComboBox _profileComboBox;
         private bool _applyingProfile; // guard: prevent ValueChanged feedback loop
 
+        private CheckBox _enforcementEnabledCheckBox;
+
         private Button _okButton;
         private Button _cancelButton;
         private Button _resetDefaultsButton;
@@ -79,6 +81,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
         public int LogFlushIntervalSeconds { get { return (int)_logFlushIntervalNumeric.Value; } }
         public int LogBufferSize { get { return (int)_logBufferSizeNumeric.Value; } }
         public int LogRetentionDays { get { return (int)_logRetentionDaysNumeric.Value; } }
+        public bool EnforcementEnabled { get { return _enforcementEnabledCheckBox.Checked; } }
 
         public SettingsDialog(SettingsService settings, List<ApplicationGroup> allGroups = null)
         {
@@ -96,7 +99,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
         private void InitializeControls(SettingsService settings)
         {
             this.Text = "Settings";
-            this.Size = new Size(520, 545);
+            this.Size = new Size(520, 615);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
@@ -252,7 +255,51 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
                 1, 365, settings.LogRetentionDays, out _logRetentionDaysNumeric,
                 "1 - 365");
 
-            y += 20;
+            y += 10;
+
+            // ===== Watchdog Safety =====
+            var safetyLabel = new Label
+            {
+                Text = "Watchdog Safety",
+                Location = new Point(labelX, y),
+                AutoSize = true,
+                Font = _boldFont
+            };
+            this.Controls.Add(safetyLabel);
+            y += 22;
+
+            // Enforcement Enabled
+            var enfLabel = new Label
+            {
+                Text = "Enforcement Enabled:",
+                Location = new Point(labelX, y + 2),
+                AutoSize = true
+            };
+            _enforcementEnabledCheckBox = new CheckBox
+            {
+                Checked = settings.EnforcementEnabled,
+                Location = new Point(controlX + 8, y),
+                AutoSize = true,
+                Text = settings.EnforcementEnabled ? "Active" : "Log Only"
+            };
+            _enforcementEnabledCheckBox.CheckedChanged += (s, ev) =>
+            {
+                _enforcementEnabledCheckBox.Text = _enforcementEnabledCheckBox.Checked ? "Active" : "Log Only";
+            };
+            var enfHint = new Label
+            {
+                Text = "Off = dry-run (log only, no kills)",
+                Location = new Point(controlX + 130, y + 2),
+                AutoSize = true,
+                ForeColor = Color.Gray,
+                Font = _normalFont
+            };
+            this.Controls.Add(enfLabel);
+            this.Controls.Add(_enforcementEnabledCheckBox);
+            this.Controls.Add(enfHint);
+            y += 30;
+
+            y += 10;
 
             // ===== Buttons =====
             _resetDefaultsButton = new Button
@@ -418,6 +465,7 @@ namespace IntelligentMutexExecutionEnvironment.Utilities
             _logFlushIntervalNumeric.Value = SettingsService.DefaultLogFlushIntervalSeconds;
             _logBufferSizeNumeric.Value = SettingsService.DefaultLogBufferSize;
             _logRetentionDaysNumeric.Value = SettingsService.DefaultLogRetentionDays;
+            _enforcementEnabledCheckBox.Checked = SettingsService.DefaultEnforcementEnabled;
             // Station name is intentionally NOT reset
         }
 

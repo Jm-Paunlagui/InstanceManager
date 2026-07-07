@@ -1152,6 +1152,18 @@ namespace IntelligentMutexExecutionEnvironment.Services
                             int pid = processes[i].Id;
                             // Patch 4: capture image path for kill attribution logging
                             string imagePath = TryGetProcessPath(pid) ?? "(unknown)";
+
+                            // PATH GATE: only kill processes whose image path matches this app's exe.
+                            // If path is unknown (access denied), still proceed — fail-open for stops
+                            // since the user/watchdog explicitly requested this app be stopped.
+                            // But if path IS known and DOESN'T match, skip it — it belongs to another install.
+                            if (imagePath != "(unknown)" && !ProcessPathMatches(pid, app.Directory))
+                            {
+                                SimpleLogger.Warn("StopApplication @ ProcessManager.cs",
+                                    $"Skipping same-name process (PID {pid}, Path: {imagePath}) — does not match '{app.Directory}'");
+                                continue;
+                            }
+
                             bool hasWindow = processes[i].MainWindowHandle != IntPtr.Zero;
 
                             if (hasWindow)
@@ -1292,14 +1304,28 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     processes = Process.GetProcessesByName(processName);
                     if (processes.Length > 0)
                     {
-                        int targetPid;
-                        try
+                        // PATH FILTER: find the first process whose path matches app.Directory.
+                        // Without this, IMEE could track the wrong PID when a same-named process
+                        // from a different install path exists.
+                        int targetPid = -1;
+                        for (int i = 0; i < processes.Length; i++)
                         {
-                            targetPid = processes[0].Id;
+                            try
+                            {
+                                int candidatePid = processes[i].Id;
+                                string candidatePath = TryGetProcessPath(candidatePid);
+                                // Accept if path is unknown (permissive) or matches
+                                if (candidatePath == null || ProcessPathMatches(candidatePid, app.Directory))
+                                {
+                                    targetPid = candidatePid;
+                                    break;
+                                }
+                            }
+                            catch (InvalidOperationException) { continue; }
                         }
-                        catch (InvalidOperationException)
+                        if (targetPid == -1)
                         {
-                            return false;
+                            return false; // No matching process found
                         }
 
                         // Dispose the GetProcessesByName handles ~ they have limited access rights
@@ -1412,7 +1438,21 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 try
                 {
                     processes = Process.GetProcessesByName(appName);
-                    return processes.Length;
+                    // PATH FILTER: only count processes whose path matches this app's exe.
+                    int count = 0;
+                    for (int i = 0; i < processes.Length; i++)
+                    {
+                        try
+                        {
+                            int pid = processes[i].Id;
+                            string path = TryGetProcessPath(pid);
+                            // Permissive: unknown path counts as a match
+                            if (path == null || ProcessPathMatches(pid, app.Directory))
+                                count++;
+                        }
+                        catch (InvalidOperationException) { }
+                    }
+                    return count;
                 }
                 finally
                 {
