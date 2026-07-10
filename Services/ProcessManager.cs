@@ -85,14 +85,17 @@ namespace IntelligentMutexExecutionEnvironment.Services
             public bool HasNotRespondingProcess;
             public int TotalCount;
             /// <summary>
-            /// Total processor time across all matching windowed processes at the time of snapshot.
+            /// Total processor time across all matching processes (windowed and background)
+            /// at the time of snapshot. Background processes are included so CPU health checks
+            /// work for TreatAsService apps (Hardening 4).
             /// Used by the caller to detect CPU-hung processes by comparing across ticks.
-            /// TimeSpan.Zero if no windowed process exists.
+            /// TimeSpan.Zero if no matching process exists.
             /// </summary>
             public TimeSpan TotalCpuTime;
             /// <summary>
-            /// Peak working set (bytes) across all matching windowed processes.
-            /// Used to detect runaway memory consumption.
+            /// Peak working set (bytes) across all matching processes (windowed and background).
+            /// Background processes are included so memory health checks work for
+            /// TreatAsService apps (Hardening 4). Used to detect runaway memory consumption.
             /// </summary>
             public long PeakWorkingSetBytes;
             /// <summary>
@@ -404,7 +407,22 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     nameToApps[procName] = indices;
                 }
                 indices.Add(app.Index);
-                indexToDir[app.Index] = app.Directory;
+
+                // (Hardening 3) Normalize once here instead of per (process x app) pair in the
+                // inner loop below. Path.GetFullPath can throw ArgumentException on a malformed
+                // stored path; if that happened inside the inner loop, the outer catch would abort
+                // the whole snapshot mid-build, leaving apps later in the loop with empty snapshots
+                // (false "crashed" detections). Fall back to the raw string on failure.
+                string normalizedDir;
+                try
+                {
+                    normalizedDir = Path.GetFullPath(app.Directory).TrimEnd('\\');
+                }
+                catch
+                {
+                    normalizedDir = app.Directory;
+                }
+                indexToDir[app.Index] = normalizedDir;
 
                 // Initialize empty snapshot for each app
                 results[app.Index] = new ProcessSnapshot();
@@ -471,6 +489,25 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     string windowTitle = null;
                     bool isErrorDialog = false;
 
+                    // (Hardening 4) Gather CPU time and working set for ALL matching processes,
+                    // not just windowed ones ~ otherwise memory/CPU health checks are inert for
+                    // TreatAsService (background-only) apps. These are cheap kernel queries with
+                    // no perf-counter overhead, so gathering them unconditionally is fine.
+                    try
+                    {
+                        cpuTime = allProcesses[i].TotalProcessorTime;
+                    }
+                    catch (InvalidOperationException) { }
+                    catch (System.ComponentModel.Win32Exception) { }
+
+                    try
+                    {
+                        // .NET 4.0: WorkingSet64 is available
+                        workingSet = allProcesses[i].WorkingSet64;
+                    }
+                    catch (InvalidOperationException) { }
+                    catch (System.ComponentModel.Win32Exception) { }
+
                     if (hasWindow || isTrayApp)
                     {
                         try
@@ -481,23 +518,6 @@ namespace IntelligentMutexExecutionEnvironment.Services
                         {
                             continue; // Process exited
                         }
-
-                        // Gather CPU time (lightweight kernel query, no perf counter overhead)
-                        try
-                        {
-                            cpuTime = allProcesses[i].TotalProcessorTime;
-                        }
-                        catch (InvalidOperationException) { }
-                        catch (System.ComponentModel.Win32Exception) { }
-
-                        // Gather working set
-                        try
-                        {
-                            // .NET 4.0: WorkingSet64 is available
-                            workingSet = allProcesses[i].WorkingSet64;
-                        }
-                        catch (InvalidOperationException) { }
-                        catch (System.ComponentModel.Win32Exception) { }
 
                         // Check window title for error dialog patterns
                         // Only if the window is responding (error dialogs pump messages)
@@ -530,7 +550,15 @@ namespace IntelligentMutexExecutionEnvironment.Services
                     int processPid;
                     try { processPid = allProcesses[i].Id; }
                     catch (InvalidOperationException) { continue; }
-                    string processPath = TryGetProcessPath(processPid);
+                    string rawProcessPath = TryGetProcessPath(processPid);
+                    // (Hardening 3) Normalize once per process instead of once per (process x app)
+                    // pair. On failure, treat as unknown (null) — permissive, same as before.
+                    string processPath = null;
+                    if (rawProcessPath != null)
+                    {
+                        try { processPath = Path.GetFullPath(rawProcessPath).TrimEnd('\\'); }
+                        catch { processPath = null; }
+                    }
 
                     for (int j = 0; j < appIndices.Count; j++)
                     {
@@ -538,13 +566,12 @@ namespace IntelligentMutexExecutionEnvironment.Services
 
                         // Path filter: if we know the process path AND it doesn't match this app's
                         // directory, skip it — this process belongs to a different install/line.
+                        // indexToDir already holds pre-normalized directories (built once above),
+                        // so this is a plain string comparison ~ no per-pair Path.GetFullPath call.
                         string appDir;
                         if (processPath != null && indexToDir.TryGetValue(idx, out appDir))
                         {
-                            if (!string.Equals(
-                                Path.GetFullPath(processPath).TrimEnd('\\'),
-                                Path.GetFullPath(appDir).TrimEnd('\\'),
-                                StringComparison.OrdinalIgnoreCase))
+                            if (!string.Equals(processPath, appDir, StringComparison.OrdinalIgnoreCase))
                             {
                                 continue;
                             }
@@ -577,7 +604,15 @@ namespace IntelligentMutexExecutionEnvironment.Services
                                 snap.MainWindowTitle = windowTitle;
                         }
                         else
+                        {
                             snap.HasBackgroundProcess = true;
+                            // (Hardening 4) Accumulate CPU/working-set for background (TreatAsService)
+                            // processes too. Responding/window-title logic stays windowed-only ~
+                            // meaningless without a message pump.
+                            snap.TotalCpuTime = snap.TotalCpuTime.Add(cpuTime);
+                            if (workingSet > snap.PeakWorkingSetBytes)
+                                snap.PeakWorkingSetBytes = workingSet;
+                        }
                         results[idx] = snap;
                     }
                 }
@@ -621,7 +656,6 @@ namespace IntelligentMutexExecutionEnvironment.Services
                 try
                 {
                     processes = Process.GetProcessesByName(appName);
-                    snapshot.TotalCount = processes.Length;
 
                     for (int i = 0; i < processes.Length; i++)
                     {
@@ -635,6 +669,10 @@ namespace IntelligentMutexExecutionEnvironment.Services
                             string path = TryGetProcessPath(pid);
                             if (path != null && !ProcessPathMatches(pid, app.Directory))
                                 continue;
+
+                            // (Hardening 5) Count only processes that pass the path filter above,
+                            // consistent with the batch snapshot variant (GetBatchProcessSnapshot).
+                            snapshot.TotalCount++;
 
                             bool hasVisibleWindow = processes[i].MainWindowHandle != IntPtr.Zero;
 
@@ -651,6 +689,25 @@ namespace IntelligentMutexExecutionEnvironment.Services
                                     continue; // Process exited
                                 }
                             }
+
+                            // (Hardening 4) Gather CPU time and working set for ALL matching
+                            // processes, not just windowed ones ~ otherwise memory/CPU health
+                            // checks are inert for TreatAsService (background-only) apps.
+                            try
+                            {
+                                snapshot.TotalCpuTime = snapshot.TotalCpuTime.Add(processes[i].TotalProcessorTime);
+                            }
+                            catch (InvalidOperationException) { }
+                            catch (System.ComponentModel.Win32Exception) { }
+
+                            try
+                            {
+                                long ws = processes[i].WorkingSet64;
+                                if (ws > snapshot.PeakWorkingSetBytes)
+                                    snapshot.PeakWorkingSetBytes = ws;
+                            }
+                            catch (InvalidOperationException) { }
+                            catch (System.ComponentModel.Win32Exception) { }
 
                             if (hasVisibleWindow || isTrayApp)
                             {
@@ -672,24 +729,6 @@ namespace IntelligentMutexExecutionEnvironment.Services
                                         // Process already exited
                                     }
                                 }
-
-                                // CPU time
-                                try
-                                {
-                                    snapshot.TotalCpuTime = snapshot.TotalCpuTime.Add(processes[i].TotalProcessorTime);
-                                }
-                                catch (InvalidOperationException) { }
-                                catch (System.ComponentModel.Win32Exception) { }
-
-                                // Working set
-                                try
-                                {
-                                    long ws = processes[i].WorkingSet64;
-                                    if (ws > snapshot.PeakWorkingSetBytes)
-                                        snapshot.PeakWorkingSetBytes = ws;
-                                }
-                                catch (InvalidOperationException) { }
-                                catch (System.ComponentModel.Win32Exception) { }
 
                                 // Error dialog title check (only meaningful if there is a visible window)
                                 if (hasVisibleWindow)
@@ -755,7 +794,13 @@ namespace IntelligentMutexExecutionEnvironment.Services
         public bool IsApplicationRunning(ManagedApplication app)
         {
             var snapshot = GetProcessSnapshot(app);
-            return snapshot.HasWindowedProcess;
+            // (Fix 1): TreatAsService apps run windowless, so liveness must also consider
+            // background processes ~ otherwise Start treats a running service as "not
+            // running" (duplicate launch) and Stop can't find it to kill.
+            bool treatAsService = app != null && app.TreatAsService;
+            return treatAsService
+                ? (snapshot.HasWindowedProcess || snapshot.HasBackgroundProcess)
+                : snapshot.HasWindowedProcess;
         }
 
         /// <summary>
@@ -1112,8 +1157,26 @@ namespace IntelligentMutexExecutionEnvironment.Services
 
         /// <summary>
         /// Stops the specified application and captures the exit code.
+        /// User-initiated call sites use this overload (fail-open on unknown path ~
+        /// the user explicitly asked for this app to be stopped).
         /// </summary>
         public bool StopApplication(ManagedApplication app, out int? exitCode)
+        {
+            return StopApplication(app, out exitCode, /* failOpenOnUnknownPath */ true);
+        }
+
+        /// <summary>
+        /// Stops the specified application and captures the exit code.
+        /// </summary>
+        /// <param name="failOpenOnUnknownPath">
+        /// (Fix 2) When the target process's image path can't be read (access denied /
+        /// process gone), this decides whether the kill still proceeds. User-initiated
+        /// stops pass true (fail-open ~ the user explicitly asked for this). Watchdog-initiated
+        /// stops (health monitor, unauthorized-launch handling, startup cleanup) must pass
+        /// false so IMEE never kills a same-name process it can't prove is its own
+        /// (fail-safe: enforcement is strict even though detection is permissive).
+        /// </param>
+        public bool StopApplication(ManagedApplication app, out int? exitCode, bool failOpenOnUnknownPath)
         {
             exitCode = null;
             try
@@ -1153,10 +1216,23 @@ namespace IntelligentMutexExecutionEnvironment.Services
                             // Patch 4: capture image path for kill attribution logging
                             string imagePath = TryGetProcessPath(pid) ?? "(unknown)";
 
+                            // (Fix 2) PATH GATE: if the image path is unknown (access denied /
+                            // process gone), watchdog-initiated stops fail CLOSED ~ skip rather
+                            // than risk killing a same-name process from another install.
+                            // User-initiated stops keep the old fail-open behavior (the user
+                            // explicitly asked for this app to be stopped).
+                            if (imagePath == "(unknown)" && !failOpenOnUnknownPath)
+                            {
+                                SimpleLogger.Warn("StopApplication @ ProcessManager.cs",
+                                    $"Skipping PID {pid} — image path unreadable and this is a watchdog-initiated stop (fail-safe)");
+                                continue;
+                            }
+
                             // PATH GATE: only kill processes whose image path matches this app's exe.
-                            // If path is unknown (access denied), still proceed — fail-open for stops
-                            // since the user/watchdog explicitly requested this app be stopped.
-                            // But if path IS known and DOESN'T match, skip it — it belongs to another install.
+                            // If path is unknown (access denied) and we got past the fail-safe check
+                            // above, proceed ~ fail-open for stops since the user/watchdog explicitly
+                            // requested this app be stopped. But if path IS known and DOESN'T match,
+                            // skip it — it belongs to another install.
                             if (imagePath != "(unknown)" && !ProcessPathMatches(pid, app.Directory))
                             {
                                 SimpleLogger.Warn("StopApplication @ ProcessManager.cs",

@@ -4,6 +4,13 @@
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
 # User-specific files
+.claude/
+
+# Copied into Tests/ so PatchTests.exe can resolve the main assembly at run time
+Tests/IntelligentMutexExecutionEnvironment.exe
+Tests/IntelligentMutexExecutionEnvironment.exe.config
+# Written by SettingsService during PatchTests runs
+Tests/settings.json
 *.rsuser
 *.suo
 *.user

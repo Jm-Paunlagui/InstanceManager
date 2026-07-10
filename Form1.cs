@@ -399,7 +399,11 @@ namespace IntelligentMutexExecutionEnvironment
                         continue;
 
                     ProcessManager.ProcessSnapshot snapshot;
-                    bool isRunning = snapshots.TryGetValue(app.Index, out snapshot) && snapshot.HasWindowedProcess;
+                    bool foundSnapshot = snapshots.TryGetValue(app.Index, out snapshot);
+                    // (Fix 1): TreatAsService apps have no window ~ a background-only match
+                    // still counts as "already running" so it gets cleaned up on startup.
+                    bool isRunning = foundSnapshot
+                        && (snapshot.HasWindowedProcess || (app.TreatAsService && snapshot.HasBackgroundProcess));
 
                     if (isRunning)
                     {
@@ -421,7 +425,8 @@ namespace IntelligentMutexExecutionEnvironment
                                 SimpleLogger.Warn("TerminateAlreadyRunningApps @ Form1.cs",
                                     $"'{app.AppName}' was running before IMEE started - terminating");
 
-                                _processManager.StopApplication(app);
+                                // (Fix 2) Watchdog-initiated stop: fail CLOSED on unknown path.
+                                _processManager.StopApplication(app, out _, failOpenOnUnknownPath: false);
                                 terminatedProcessNames.Add(processName);
                                 terminatedApps.Add(app.AppName ?? "(unknown)");
                             }
@@ -1216,7 +1221,8 @@ namespace IntelligentMutexExecutionEnvironment
                                             $"'{app.AppName}' is still not responding ~ force-killing for auto-restart");
 
                                         _forceKillReason[app.Index] = "UI Freeze / Not Responding (force-killed by health monitor)";
-                                        _processManager.StopApplication(app);
+                                        // (Fix 2) Watchdog-initiated stop: fail CLOSED on unknown path.
+                                        _processManager.StopApplication(app, out _, failOpenOnUnknownPath: false);
                                     }
                                 }
                                 else
@@ -1276,7 +1282,8 @@ namespace IntelligentMutexExecutionEnvironment
                                         $"'{app.AppName}' confirmed error dialog: \"{snapshot.ErrorDialogTitle}\" ~ force-killing for auto-restart");
 
                                     _forceKillReason[app.Index] = "Error dialog detected: \"" + (snapshot.ErrorDialogTitle ?? "unknown") + "\" (force-killed by health monitor)";
-                                    _processManager.StopApplication(app);
+                                    // (Fix 2) Watchdog-initiated stop: fail CLOSED on unknown path.
+                                    _processManager.StopApplication(app, out _, failOpenOnUnknownPath: false);
                                 }
                             }
                             else
@@ -1350,7 +1357,8 @@ namespace IntelligentMutexExecutionEnvironment
                                             $"'{app.AppName}' confirmed title change to \"{changedTitle}\" (was \"{knownTitle}\") ~ force-killing as suspected error dialog");
 
                                         _forceKillReason[app.Index] = "Window title change: \"" + (knownTitle ?? "") + "\" ? \"" + (changedTitle ?? "") + "\" (force-killed by health monitor)";
-                                        _processManager.StopApplication(app);
+                                        // (Fix 2) Watchdog-initiated stop: fail CLOSED on unknown path.
+                                        _processManager.StopApplication(app, out _, failOpenOnUnknownPath: false);
                                     }
                                 }
                                 else
@@ -1401,7 +1409,8 @@ namespace IntelligentMutexExecutionEnvironment
                                         $"'{app.AppName}' exceeded memory limit ({usedMB}MB / {app.MemoryLimitMB}MB) ~ force-killing for auto-restart");
 
                                     _forceKillReason[app.Index] = "Memory limit exceeded (" + usedMB + "MB / " + app.MemoryLimitMB + "MB) (force-killed by health monitor)";
-                                    _processManager.StopApplication(app);
+                                    // (Fix 2) Watchdog-initiated stop: fail CLOSED on unknown path.
+                                    _processManager.StopApplication(app, out _, failOpenOnUnknownPath: false);
                                 }
                             }
                             else
@@ -1457,7 +1466,8 @@ namespace IntelligentMutexExecutionEnvironment
                                                     $"'{app.AppName}' has been at {(cpuUsage * 100):F0}% CPU for {streak} consecutive checks ~ force-killing as CPU-hung");
 
                                                 _forceKillReason[app.Index] = "CPU-hung (" + ((int)(cpuUsage * 100)) + "% for " + streak + " consecutive checks) (force-killed by health monitor)";
-                                                _processManager.StopApplication(app);
+                                                // (Fix 2) Watchdog-initiated stop: fail CLOSED on unknown path.
+                                                _processManager.StopApplication(app, out _, failOpenOnUnknownPath: false);
                                             }
                                         }
                                         else
@@ -1994,7 +2004,8 @@ namespace IntelligentMutexExecutionEnvironment
             _forceKillReason[app.Index] = "Terminated by IMEE: unauthorized/cross-detection";
 
             // Kill the unauthorized process
-            _processManager.StopApplication(app);
+            // (Fix 2) Watchdog-initiated stop: fail CLOSED on unknown path.
+            _processManager.StopApplication(app, out _, failOpenOnUnknownPath: false);
 
             // Update state through StorageService (not direct mutation)
             _storageService.UpdateApplicationFields(app.Index, isRunning: false);

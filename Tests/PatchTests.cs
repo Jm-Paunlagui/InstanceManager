@@ -2,15 +2,21 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
+using IntelligentMutexExecutionEnvironment.Models;
+using IntelligentMutexExecutionEnvironment.Services;
 
 namespace IMEE.Tests
 {
     /// <summary>
     /// Comprehensive IMEE patch + gap verification test suite.
-    /// Covers Patches 0-5 and all critical/medium gaps identified in the audit.
-    /// Run: Roslyn\csc.exe /out:PatchTests.exe /target:exe /langversion:latest PatchTests.cs && PatchTests.exe
+    /// Covers Patches 0-5, all critical/medium gaps identified in the first audit, and the
+    /// review-round-2 fixes (Fix 1: TreatAsService liveness, Fix 2: StopApplication fail-closed
+    /// on unknown path for watchdog stops, Hardening 3-5).
+    /// Run: Roslyn\csc.exe /out:PatchTests.exe /target:exe /langversion:latest
+    ///      /reference:"..\bin\Debug\IntelligentMutexExecutionEnvironment.exe" PatchTests.cs && PatchTests.exe
     /// </summary>
     class PatchTests
     {
@@ -272,10 +278,87 @@ namespace IMEE.Tests
             Assert(!SimulateGate(false, true), "Enforcement OFF + issue = no kill (dry-run)");
             Assert(SimulateGate(true, true), "Enforcement ON + issue = kill proceeds");
             Assert(!SimulateGate(true, false), "Enforcement ON + no issue = no kill");
-            Assert(true, "User Stop bypasses enforcement gate (by design)");
+
+            // Real check (replaces a tautological Assert(true, ...)): StopApplication does not
+            // consult EnforcementEnabled at all ~ a user-initiated stop still kills the process
+            // even with enforcement OFF (LogOnly). Only watchdog kill paths (KillBackgroundProcesses,
+            // health-monitor force-kills, TerminateAlreadyRunningApps) are gated.
+            // Uses a uniquely-named copy of this test exe (see CreateUniqueSelfCopy), run in
+            // "--sleep-child" mode, rather than the shared System32\cmd.exe path or notepad.exe
+            // (an App Execution Alias stub on modern Windows that redirects to a packaged app at a
+            // different real path). A shared system path would make StopApplication's own path gate
+            // match ~ and kill ~ every other same-path instance on the machine (confirmed: this
+            // machine already had an unrelated cmd.exe running), and renaming/copying a system LOLBin
+            // like cmd.exe into %TEMP% gets silently blocked by EDR/Defender heuristics. A unique
+            // copy of our own harmless exe has neither problem.
+            Process proc = null;
+            string uniqueExe = null;
+            try
+            {
+                uniqueExe = CreateUniqueSelfCopy();
+                proc = Process.Start(new ProcessStartInfo
+                {
+                    FileName = uniqueExe,
+                    Arguments = "--sleep-child",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                });
+                System.Threading.Thread.Sleep(800);
+
+                if (proc == null || proc.HasExited)
+                {
+                    Skip("Patch 5 live user-stop test", "Could not start windowless test process");
+                }
+                else
+                {
+                    var settings = new SettingsService();
+                    settings.EnforcementEnabled = false; // LogOnly ~ watchdog kills gated, user stops are not
+                    var pm = new ProcessManager(settings);
+                    var app = new ManagedApplication { Index = 9102, AppName = "TestSelfCopyUserStop", Directory = uniqueExe };
+
+                    bool stopped = pm.StopApplication(app);
+                    System.Threading.Thread.Sleep(300);
+                    Assert(stopped && proc.HasExited,
+                        "User Stop bypasses enforcement gate: kills the process even with EnforcementEnabled = false");
+                }
+            }
+            catch (Exception ex)
+            {
+                Skip("Patch 5 live user-stop test", ex.Message);
+            }
+            finally
+            {
+                if (proc != null)
+                {
+                    try { if (!proc.HasExited) proc.Kill(); } catch { }
+                    try { proc.Dispose(); } catch { }
+                }
+                DeleteTestFile(uniqueExe);
+            }
         }
 
         static bool SimulateGate(bool enforcement, bool issue) { return enforcement && issue; }
+
+        /// <summary>
+        /// Copies this running test exe to a uniquely-named file in the temp directory so live
+        /// StopApplication tests can spawn (and kill) a single, unambiguous witness process without
+        /// any risk of matching unrelated same-name processes, and without impersonating a system
+        /// binary (which trips EDR/Defender heuristics when copied out of its expected location).
+        /// The copy is launched with "--sleep-child" so it just idles, windowless, until killed.
+        /// </summary>
+        static string CreateUniqueSelfCopy()
+        {
+            string src = Process.GetCurrentProcess().MainModule.FileName;
+            string dst = Path.Combine(Path.GetTempPath(), "IMEETest_" + Guid.NewGuid().ToString("N") + ".exe");
+            File.Copy(src, dst, true);
+            return dst;
+        }
+
+        static void DeleteTestFile(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return;
+            try { if (File.Exists(path)) File.Delete(path); } catch { }
+        }
 
         // ================================================================
         // GAP FIX 1: StopApplication path verification
@@ -383,10 +466,183 @@ namespace IMEE.Tests
         {
             Section("Gap Fix 5: EnforcementEnabled — UI toggle exists");
 
-            Assert(true, "EnforcementEnabled checkbox added to SettingsDialog");
-            Assert(true, "Changes saved via SettingsService.EnforcementEnabled setter");
-            Assert(true, "Takes effect immediately (no restart needed)");
-            Assert(true, "Reset Defaults resets to FALSE (safe)");
+            // Real check (replaces tautological Assert(true, ...) lines): the safe default /
+            // Reset Defaults target is the actual const consumed by SettingsDialog.
+            Assert(SettingsService.DefaultEnforcementEnabled == false,
+                "SettingsService.DefaultEnforcementEnabled is FALSE (safe default / Reset Defaults target)");
+
+            // Real check: EnforcementEnabled is a public, read+write bool property on SettingsService
+            // (the setter is what SettingsDialog's checkbox saves through).
+            PropertyInfo settingsProp = typeof(SettingsService).GetProperty("EnforcementEnabled");
+            Assert(settingsProp != null && settingsProp.PropertyType == typeof(bool)
+                && settingsProp.CanRead && settingsProp.CanWrite,
+                "SettingsService.EnforcementEnabled is a public, readable+writable bool property");
+
+            // Real check: the setter applies synchronously (Save() runs inline in the property
+            // setter) ~ no separate "Apply"/"Commit" step, so a toggle takes effect immediately.
+            var liveSettings = new SettingsService();
+            liveSettings.EnforcementEnabled = true;
+            bool afterOn = liveSettings.EnforcementEnabled;
+            liveSettings.EnforcementEnabled = false;
+            bool afterOff = liveSettings.EnforcementEnabled;
+            Assert(afterOn && !afterOff,
+                "EnforcementEnabled setter takes effect immediately (synchronous getter round-trip)");
+
+            // Real check: SettingsDialog exposes a checkbox-backed EnforcementEnabled property.
+            // Looked up via runtime reflection on the already-referenced assembly (not typeof)
+            // so this doesn't require a compile-time reference to System.Windows.Forms.
+            Type dialogType = typeof(SettingsService).Assembly.GetType(
+                "IntelligentMutexExecutionEnvironment.Utilities.SettingsDialog");
+            PropertyInfo dialogProp = dialogType != null ? dialogType.GetProperty("EnforcementEnabled") : null;
+            Assert(dialogProp != null && dialogProp.PropertyType == typeof(bool),
+                "SettingsDialog exposes a public bool EnforcementEnabled property (checkbox-backed)");
+        }
+
+        // ================================================================
+        // FIX 1: IsApplicationRunning is TreatAsService-aware (real process, real ProcessManager)
+        // ================================================================
+        static void TestFix1_TreatAsServiceLiveness_RealProcess()
+        {
+            Section("Fix 1: IsApplicationRunning — TreatAsService-aware liveness (real process)");
+
+            Process proc = null;
+            try
+            {
+                string cmdPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe");
+
+                proc = Process.Start(new ProcessStartInfo
+                {
+                    FileName = cmdPath,
+                    Arguments = "/c pause",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                });
+                System.Threading.Thread.Sleep(800);
+
+                if (proc == null || proc.HasExited)
+                {
+                    Skip("Fix 1 live test", "Could not start windowless cmd.exe process");
+                    return;
+                }
+
+                var settings = new SettingsService();
+                var pm = new ProcessManager(settings);
+
+                var serviceApp = new ManagedApplication { Index = 9001, AppName = "TestService", Directory = cmdPath, TreatAsService = true };
+                var normalApp = new ManagedApplication { Index = 9002, AppName = "TestNormal", Directory = cmdPath, TreatAsService = false };
+
+                // Sanity check: cmd.exe's console UI is owned by conhost.exe, not cmd.exe itself,
+                // so the spawned process should have no top-level window of its own ~ i.e. it's
+                // genuinely background-only, the exact scenario Fix 1 addresses.
+                var rawSnapshot = pm.GetProcessSnapshot(serviceApp);
+                if (rawSnapshot.HasWindowedProcess)
+                {
+                    Skip("Fix 1 live test", "Spawned cmd.exe unexpectedly owns a top-level window on this system");
+                    return;
+                }
+                Assert(rawSnapshot.HasBackgroundProcess, "Spawned cmd.exe is detected as a background (windowless) process");
+
+                Assert(pm.IsApplicationRunning(serviceApp),
+                    "TreatAsService=true: background-only process counts as running (Fix 1 ~ bug was: always false)");
+                Assert(!pm.IsApplicationRunning(normalApp),
+                    "TreatAsService=false: background-only process does NOT count as running (unchanged behavior)");
+            }
+            catch (Exception ex)
+            {
+                Skip("Fix 1 live test", ex.Message);
+            }
+            finally
+            {
+                if (proc != null)
+                {
+                    try { if (!proc.HasExited) proc.Kill(); } catch { }
+                    try { proc.Dispose(); } catch { }
+                }
+            }
+        }
+
+        // ================================================================
+        // FIX 2: StopApplication — fail-closed for watchdog stops on unknown path
+        // ================================================================
+        static void TestFix2_StopApplication_FailClosed()
+        {
+            Section("Fix 2: StopApplication — watchdog fail-closed vs user fail-open on unknown path");
+
+            // --- Part A: real functional check. The new 3-arg overload must still stop a real
+            // process normally when the path IS known and matches ~ failOpenOnUnknownPath is only
+            // consulted when the path is unreadable, so behavior must be identical for both flags
+            // in the known-path case.
+            // Uses a uniquely-named copy of this test exe (see CreateUniqueSelfCopy) rather than the
+            // shared System32\cmd.exe path or notepad.exe (an App Execution Alias stub on modern
+            // Windows that redirects to a packaged app at a different real path) ~ both would either
+            // false-fail this test's own path gate, risk killing unrelated same-path processes on the
+            // machine, or (for a renamed cmd.exe copy) get silently blocked by EDR/Defender heuristics.
+            Process proc = null;
+            string uniqueExe = null;
+            try
+            {
+                uniqueExe = CreateUniqueSelfCopy();
+
+                proc = Process.Start(new ProcessStartInfo
+                {
+                    FileName = uniqueExe,
+                    Arguments = "--sleep-child",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                });
+                System.Threading.Thread.Sleep(800);
+
+                if (proc == null || proc.HasExited)
+                {
+                    Skip("Fix 2 live stop test", "Could not start windowless test process");
+                }
+                else
+                {
+                    var settings = new SettingsService();
+                    var pm = new ProcessManager(settings);
+                    var app = new ManagedApplication { Index = 9101, AppName = "TestSelfCopyFix2", Directory = uniqueExe };
+
+                    int? exitCode;
+                    bool stopped = pm.StopApplication(app, out exitCode, false); // watchdog-style call
+                    Assert(stopped, "StopApplication(failOpenOnUnknownPath: false): known matching path still stops the process");
+
+                    System.Threading.Thread.Sleep(300);
+                    Assert(proc.HasExited, "Process actually terminated after watchdog-style stop");
+                }
+            }
+            catch (Exception ex)
+            {
+                Skip("Fix 2 live stop test", ex.Message);
+            }
+            finally
+            {
+                if (proc != null)
+                {
+                    try { if (!proc.HasExited) proc.Kill(); } catch { }
+                    try { proc.Dispose(); } catch { }
+                }
+                DeleteTestFile(uniqueExe);
+            }
+
+            // --- Part B: decision predicate. Mirrors the exact fail-safe branch added to the top
+            // of the StopApplication kill loop (ProcessManager.cs, Fix 2): unknown path + watchdog
+            // stop = skip; unknown path + user stop = proceed (fail-open, unchanged); a known path
+            // is never affected by this flag either way. A genuine access-denied path is impractical
+            // to construct deterministically in an automated test (would require a protected/elevated
+            // target process), so this replicates the real decision exactly rather than exercising it
+            // through a live access-denied handle.
+            Assert(ShouldSkipUnknownPath("(unknown)", false), "Watchdog stop + unknown path = SKIP (fail-closed, Fix 2)");
+            Assert(!ShouldSkipUnknownPath("(unknown)", true), "User stop + unknown path = proceed (fail-open, unchanged)");
+            Assert(!ShouldSkipUnknownPath(@"C:\Real\app.exe", false), "Watchdog stop + known path = not skipped by this gate");
+            Assert(!ShouldSkipUnknownPath(@"C:\Real\app.exe", true), "User stop + known path = not skipped by this gate");
+        }
+
+        // Mirrors the unknown-path fail-safe check added at the top of the StopApplication kill
+        // loop (ProcessManager.cs, Fix 2): only the "(unknown)" branch is gated by the flag.
+        static bool ShouldSkipUnknownPath(string imagePath, bool failOpenOnUnknownPath)
+        {
+            return imagePath == "(unknown)" && !failOpenOnUnknownPath;
         }
 
         // ================================================================
@@ -530,9 +786,20 @@ namespace IMEE.Tests
         // ================================================================
         static int Main(string[] args)
         {
+            // Child-process mode used by the live StopApplication tests (Fix 2, Patch 5): a
+            // uniquely-named copy of this exe is spawned with this flag so it just sits idle,
+            // windowless, and killable ~ without impersonating a system binary like cmd.exe
+            // (renaming/copying system LOLBins into %TEMP% trips EDR/Defender heuristics and gets
+            // silently blocked) and without colliding with the parent test process's own name.
+            if (args.Length > 0 && args[0] == "--sleep-child")
+            {
+                System.Threading.Thread.Sleep(120000);
+                return 0;
+            }
+
             Console.WriteLine("+" + new string('-', 60) + "+");
             Console.WriteLine("|  IMEE Comprehensive Patch & Gap Verification Tests         |");
-            Console.WriteLine("|  Patches 0-5 + 5 Gap Fixes + Edge Cases + Regression       |");
+            Console.WriteLine("|  Patches 0-5 + 5 Gap Fixes + Fix 1/2 + Edge Cases + Regr.  |");
             Console.WriteLine("+" + new string('-', 60) + "+");
 
             TestPatch0_TryGetProcessPath();
@@ -548,6 +815,9 @@ namespace IMEE.Tests
             TestGap3_RunningInstanceCountPathFilter();
             TestGap4_StartupTerminationEnforcement();
             TestGap5_EnforcementEnabledUI();
+
+            TestFix1_TreatAsServiceLiveness_RealProcess();
+            TestFix2_StopApplication_FailClosed();
 
             TestIntegration_KillPathCoverage();
             TestIntegration_DetectionCoverage();
